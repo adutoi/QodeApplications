@@ -1,0 +1,9 @@
+biorthogonal semi-MO frozen-core FCI energy =  -14.569073392630342
+                  MO frozen-core FCI energy =  -14.569073392630335
+   => Loading Basis Set <=
+
+    Name: ANONYMOUS989337DB
+    Role: ORBITAL
+    Keyword: None
+    atoms 1 entry BE         line     3 inputblock custombasis 
+

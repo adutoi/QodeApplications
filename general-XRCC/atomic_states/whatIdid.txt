@@ -1,0 +1,15 @@
+source activate Psi4
+
+python basis.py 2.0
+python basis.py 3.0
+python basis.py 3.5
+python basis.py 4.0
+python basis.py 4.5
+
+./run.csh 2.0 16-115-550 thresh=1e-6
+./run.csh 3.0 16-115-550 thresh=1e-6
+./run.csh 3.5 16-115-550 thresh=1e-6
+./run.csh 4.0 16-115-550 thresh=1e-6
+./run.csh 4.5 16-115-550 thresh=1e-6
+
+./run.csh 4.5 16-115-550 nstates=100

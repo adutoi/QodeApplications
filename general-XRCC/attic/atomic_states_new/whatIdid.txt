@@ -1,0 +1,5 @@
+source activate Psi4
+
+python basis.py 4.5
+
+./run.csh 4.5 4-6-4 thresh=1e-100

@@ -1,0 +1,16 @@
+#!/bin/bash
+
+#conda activate Psi4
+
+# Example usage:  ./plots/curve  2  thresh=1e-6/common-1e-5  0-all-all-all-0  >& std.out &
+# ... will compute dimer energy, looking for atomic states in atomic_states/H/16-115-550/thresh=1e-6/common-1e-5, and taking all neutral and singly ionic states
+
+mkdir -p plots/data/raw/$2/$3/Be$1
+
+for i in 4 3 5 6 7
+do
+  for j in 0 1 2 3 4 5 6 7 8 9
+  do
+    python -u test_H.py $1 $i.$j $2 $3 >& plots/data/raw/$2/$3/Be$1/$i.$j.out 
+  done
+done

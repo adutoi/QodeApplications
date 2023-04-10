@@ -1,0 +1,116 @@
+All energies are in Hartree, A = Angstrom
+
+Be2	4.5 A	6-31G	FCI		frozen-core	-29.2258053560890
+Be2	4.5 A	6-31G	FCI (projected)	frozen-core	-29.225804814520817	(projected)  = energy of conventional frozen-core FCI ground state, projected into space spanned by tensor product of almost all atomic states (and renormalized).**
+Be2	4.5 A	6-31G	FCI (compressed)frozen-core	-29.225803430049154	(compressed) = diagonalization of conventional frozen-core FCI, projected into non-ON basis of tensor products of most important (via threshold) atomic states, with BO complements restricted to that space.**
+Be2	4.5 A	6-31G	XR2-CCSD* (hack)frozen-core	-29.2258034218		(hack) = couplings from compressed Hamiltonian described above
+Be2	4.5 A	6-31G	XR2-CCSD*	frozen-core	-29.22577249369345	couplings as prescribed in publications using same tensor-pdt ket space as above, but differing in definition of BO complements (complements in full supersystem Fock space).**
+*  Equivalent to XR-FCI for dimers
+** It is worth noting that only singly cationic/anionic states of the atoms were considered.
+
+The data above shows two attempts to reproduce the exact result (the first entry).  The first attempt (fourth entry) was published, with sort of an apology that I was not doing things
+"the right way", but gives a good result (error = 2e-6).  This error is not noticeable on the scale of the frozen-core-FCI/6-31G Be2 binding energy.  However, when I do things
+the "right way" (fifth entry), the results are worse (error = 3e-5), which is a visibly noticable discrepancy (though small).
+
+Trimers ...
+
+The questions that then arise are:
+1. Is this just a bug?  That is, is the fifth entry meaningful, and faithful to its purported theory.
+2. Is it an effect of core polarization being accounted for in the fourth entry, but not in the fifth?
+3. Is this some side-effect of using BO complements not limited to the model space?
+	(a). Can this be remedied just by using larger singly ionic states?
+	(b). Are doubly ionic states necessary to fix this?  (since AOs on different sites overlap, double-charge-transfer states will have some overlap with non-double-charge-transfer states)
+	(c). Do we need to allow correlated core electrons to fix this?  (again, because of overlapping AOs, some core-excited states will overlap non-core-excited states)
+
+The first question of whether it is a bug can pretty much only be answered definitively by excluding the other options.  That is to say that, if we can find a set of states, etc,
+that reliably reproduces exact results, or if we can crush a small problem by going to the exact limit and reproduce exact results, we can be reasonably assured that there is no bug.
+In the case of the lack of the former, the latter is necessary, in which case we can be assured that there is a bug if we cannot reproduce exact results.  So the following work-flow was
+followed (somewhat circuitously, in practice, but this abstracted idealization suffices).  It should be noted in advance that question 2 is very hard to probe because we would
+either need to freeze something other than the usual lowest MOs in a traditional FCI calculations (possible in theory at least) or provide polarized core orbitals to the XR2-CCSD calculations.
+The latter is ill defined since the polarized cores may make use of orbitals on other sites, which violates the whole XR principle.  We could force this for debugging purposes, by changing our
+notion of which orbitals belong to which sites (allowing such small infections of orbitals on one site with AOs from another site), but then we would have to change the other (non-core) semi-MOs
+on each site to be orthogonalized to those, or not, since the formalism is biorthogonal anyway; but that is exactly the point, there are several choices and since the BO complements will depend
+on this, they will give different answers, so this is not a viable debugging route (there will always be small errors of unknown size and origin).  Therefore, we start with queston 3.
+
+	I. Try to answer question 3(a) just by taking larger and larger spaces, or different and better spaces for the present 6-31G model.
+
+Suffice it to say, I tried a lot of things, the details of which shall not be recorded here, and I never did much better (if at all) than -29.22577249369345.  In fact,
+this limit was so stubbornly consistent (I never did much worse either), that I came to the conclusion that we really were in some way "converged" with respect
+the the neutral + singly-ionic spaces being used.
+
+So the answer to 3(a) seems to be: No. (assuming no bugs)
+
+	II. To lock down this answer to 3(a) and probe questions 3(b), I decided I needed a model that I could crush numerically and so I deleted all p orbitals from the 6-31G basis,
+	    this will henceforth be called 6-31G-* (opposite of adding polarization functions)
+
+Be2	4.5 A	6-31G-*	FCI		no frozen-core		-29.137795837795093
+Be2	4.5 A	6-31G-*	FCI		frozen-core		-29.137714167688674
+Be2	4.5 A	6-31G-* FCI (projected)	frozen-core		-29.13771388043844	used all singly ionic states
+Be2	4.5 A	6-31G-* FCI (compressed)frozen-core		-29.13771388055623	threshold set to zero, so effectively uncompressed
+Be2	4.5 A	6-31G-* XR2-CCSD	frozen-core		-29.137713073520597	using same states as projected/compressed above, but couplings as prescribed in publications
+Be2	4.5 A	6-31G-* XR2-CCSD	frozen-core		-29.13770979815283	used same states as above, but also admitted doubly ionic states (only one of each for frozen core)
+
+The first five entries are as expected.  The energy goes up a bit if you freeze the core (second), and up a little more if you do not allow doubly ionic states (third).
+Then since no actual compression is used, the fourth entry is almost identical to the third (and give us a sense of the "noise" involved in our transformations).
+Indeed, the fifth entry is different than the fourth, indicating that even when all singly ionic states are used, we do not recover the exact answer (for the model space).
+So either there is an issue having to do with freezing the core [questions 2 and 3(c)], or double excitations (or there is a bug).
+
+The sixth entry was generated by allowing the doubly-ionic states into the model space, and the result gets worse.
+So the answer to 3(b) also seems to be: No. (assuming no bugs)
+And the answer to 3(a) is definitely: No. (assuming no bugs)
+
+	III. So we are now down to dealing with the core [2 and 3(c)] and so it seemed like a more powerful approach was needed, which would also allow confirmation of no bugs.
+	     So an independent FCI code was written that could operate using frozen cores either in an MO basis or on atomic sites, and which could also use biorthgonal field operators directly.
+	     This code (FCI_tests/hard_way.py) made no use of any component used to generate the above numbers, except the integrals code and the semi-MO coefficients for Be atoms were copied over.
+
+Be2	4.5 A	6-31G-*	FCI (MO)	frozen-core		-29.137714167688745
+Be2	4.5 A	6-31G-*	FCI (semiMO)	frozen-core		-29.137709805548237***
+Be2	4.5 A	6-31G-*	FCI(orth semiMO)frozen-core		-29.137713718199343
+*** The majority of the discrepency between this value and the last value of the forgoing table appears to be from slightly different values of a0 in the nuclear repulsion energy, when only the electronic energies are compared, they differ by 1.5e-13
+
+The nearly exact agreement of the first entry of this table with the second entry of the one before it (computed by Psi4) assures us that our independent FCI code is sane
+(and the agreement is so good because we use Psi4 for the AOints).  The nearly exact agreement between the second entry of this table and the last entry of the one before
+it further convinces us that there are no bugs in either code.  The answer is apparently sensitive to everything we do to the model spaces, and all modules of the coupling
+computation code in the XR scheme would have been run in this process (furthermore, other tests comparing XR-CC to actual XR-FCI pass to all digits).
+
+The third entry was generated by freezing the same atomic core orbitals as are frozen in a semi-MO calculation, but otherwise allowing all other configurations
+(worth noting that the code for this is super dirty and even hard-codes some dimensions of this problem).  The fact that this number changes so little from 
+the regular MO-FCI value tells us that core polarization plays only a minor role, and that the majority of the discrepency is due to biorthogonalization (question 3, probably 3(c)).
+
+So the answer to 2 is: yes, but it is a minor factor. (and we are convinced of no bugs now)
+
+So we are now convinced that there are no bugs [question 1], and that the discrepency due to core polarization is a minor factor [question 2], but we have already allowed all possible
+valence excitions, including all singly and doubly charged states (with the core frozen, higher charges are not possible in this basis).  The only thing left to do is to allow the
+core to be correlated, in that case all three ways of doing things in the forgoing table should give the same result as the first entry in the table above that, and, indeed,
+that is what we get.
+
+Be2	4.5 A	6-31G-*	FCI (MO)	no frozen-core		-29.137795837795334
+Be2	4.5 A	6-31G-*	FCI (semiMO)	no frozen-core		-29.13779583779515
+Be2	4.5 A	6-31G-*	FCI(orth semiMO)no frozen-core		-29.137795837795416
+
+So, in conclusion, it seems that, of the (bug-free) discrepency of 4e-6 between FCI and XR-CCSD (frozen-core 6-31G-*), only 4e-7 may be attributed to missing core
+polarization, and the rest may be accounted for by biorthogonalization error resulting from not including core correlations.  Interestingly, this error
+is reduced to 1e-6 by only allowing singly ionic states into the model space (but this methodology gives a 3e-5 error for the larger basis).
+
+	IV. Testing solutions to the problem
+
+Be2	4.5 A	6-31G-*	FCI (MO)	frozen-core		-29.137714167688745	trivial removal of unused integrals
+Be2	4.5 A	6-31G-*	FCI (semiMO)	frozen-core		-29.137709805548347	trivial removal of unused integrals
+Be2	4.5 A	6-31G-*	FCI (semiMO)	frozen-core		-29.137751373814254	removal of suspected problematic integrals before biorthogonalization
+Be2	4.5 A	6-31G-*	FCI (semiMO)	frozen-core		-29.13771371819925	transformation of proper core-restricted Hamiltonian
+
+In the following, the words, "the previous table" actually means the one before the one directly above, in which the core is frozen.
+The latter three entries were obtained with rm_core.py, rm_core2.py, rm_core3.py, respectively, all of which agreed for the first entry (for which the same thing was done each time).
+
+Since the core is frozen in the many-body calculations, it should be possible to set certain integrals (corresponding to field-operator strings that leave the
+a core vacancy) equal to zero and get the same result.  If this is done directly in the orthonormal MO basis or the biorthogonal semiMO basis, then indeed we
+get the same result (the first two entries) as in (the first two entries of) the previous table.
+
+The third entry was something of an off-the-cuff ill fated attempt to fix the biorthogonalization error by setting the analogous integrals to zero before biorthogonalizing them.
+I'm not sure how I came up with with hair-brained idea, probably born of desperation.
+
+Clarity finally arrived when it occured to me that I should first build the integrals in a completely orthogonal basis that included a subset that exactly spanned
+the sitewise cores of the semiMO basis.  Then I should set the core-vacting integrals in this basis equal to zero, since this corresponds to a proper, Hermitian,
+core-restricted Hamiltonian.  Then this can be transformed to the bbiorthogonal semiMO basis.  This gives the fourth and final entry which is the ame as the 
+last entry of the previous table, which is a victory because that calculation is a proper Hermitian energy, but for a system with the same site-wise frozen core;
+so at least the descrepency from FCI is physical and not artefactual.
