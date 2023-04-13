@@ -16,7 +16,7 @@
 #    along with Qode.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-import numpy
+from tendot_wrapper import tendot
 
 class _empty(object):  pass    # Basically just a dictionary
 
@@ -106,8 +106,8 @@ class body_2(object):
         if X.Dchg_1==-1 and X.Dchg_2==+1:
             prefactor = (-1)**(X.n_i2 + X.p)
             def diagram(i1,i2,j1,j2):
-                partial =          numpy.tensordot(X.c1[i1][j1], X.sig12,      axes=([0],[0]))
-                return prefactor * numpy.tensordot(partial,      X.a2[i2][j2], axes=([0],[0]))
+                partial =          tendot(X.c1[i1][j1], X.sig12,      axes=([0],[0]))
+                return prefactor * tendot(partial,      X.a2[i2][j2], axes=([0],[0]))
             return diagram, permutation
         else:
             return None, None
@@ -119,9 +119,9 @@ class body_2(object):
         if X.Dchg_1==0 and X.Dchg_2==0:
             prefactor = -1
             def diagram(i1,i2,j1,j2):
-                partial =          numpy.tensordot(X.ca1[i1][j1], X.sig12,       axes=([0],[0]))
-                partial =          numpy.tensordot(partial,       X.sig21,       axes=([0],[1]))
-                return prefactor * numpy.tensordot(partial,       X.ca2[i2][j2], axes=([0,1],[1,0]))
+                partial =          tendot(X.ca1[i1][j1], X.sig12,       axes=([0],[0]))
+                partial =          tendot(partial,       X.sig21,       axes=([0],[1]))
+                return prefactor * tendot(partial,       X.ca2[i2][j2], axes=([0,1],[1,0]))
             return [(diagram, (0,1))]
         else:
             return [(None, None)]
@@ -138,9 +138,9 @@ class body_2(object):
         if X.Dchg_1==-2 and X.Dchg_2==+2:
             prefactor = 1/2.
             def diagram(i1,i2,j1,j2):
-                partial =          numpy.tensordot(X.cc1[i1][j1], X.sig12,       axes=([0],[0]))
-                partial =          numpy.tensordot(partial,       X.sig12,       axes=([0],[0]))
-                return prefactor * numpy.tensordot(partial,       X.aa2[i2][j2], axes=([0,1],[1,0]))
+                partial =          tendot(X.cc1[i1][j1], X.sig12,       axes=([0],[0]))
+                partial =          tendot(partial,       X.sig12,       axes=([0],[0]))
+                return prefactor * tendot(partial,       X.aa2[i2][j2], axes=([0,1],[1,0]))
             return diagram, permutation
         else:
             return None, None
@@ -157,10 +157,10 @@ class body_2(object):
         if X.Dchg_1==-1 and X.Dchg_2==+1:
             prefactor = (-1)**(X.n_i2 + X.p + 1) / 2.
             def diagram(i1,i2,j1,j2):
-                partial =          numpy.tensordot(X.cca1[i1][j1], X.sig12,        axes=([0],[0]))
-                partial =          numpy.tensordot(partial,        X.sig12,        axes=([0],[0]))
-                partial =          numpy.tensordot(partial,        X.sig21,        axes=([0],[1]))
-                return prefactor * numpy.tensordot(partial,        X.caa2[i2][j2], axes=([0,1,2],[2,1,0]))
+                partial =          tendot(X.cca1[i1][j1], X.sig12,        axes=([0],[0]))
+                partial =          tendot(partial,        X.sig12,        axes=([0],[0]))
+                partial =          tendot(partial,        X.sig21,        axes=([0],[1]))
+                return prefactor * tendot(partial,        X.caa2[i2][j2], axes=([0,1,2],[2,1,0]))
             return diagram, permutation
         else:
             return None, None
@@ -172,11 +172,11 @@ class body_2(object):
         if X.Dchg_1==0 and X.Dchg_2==0:
             prefactor = 1/4.
             def diagram(i1,i2,j1,j2):
-                partial =          numpy.tensordot(X.ccaa1[i1][j1], X.sig12,         axes=([0],[0]))
-                partial =          numpy.tensordot(partial,         X.sig12,         axes=([0],[0]))
-                partial =          numpy.tensordot(partial,         X.sig21,         axes=([0],[1]))
-                partial =          numpy.tensordot(partial,         X.sig21,         axes=([0],[1]))
-                return prefactor * numpy.tensordot(partial,         X.ccaa2[i2][j2], axes=([0,1,2,3],[3,2,1,0]))
+                partial =          tendot(X.ccaa1[i1][j1], X.sig12,         axes=([0],[0]))
+                partial =          tendot(partial,         X.sig12,         axes=([0],[0]))
+                partial =          tendot(partial,         X.sig21,         axes=([0],[1]))
+                partial =          tendot(partial,         X.sig21,         axes=([0],[1]))
+                return prefactor * tendot(partial,         X.ccaa2[i2][j2], axes=([0,1,2,3],[3,2,1,0]))
             return [(diagram, (0,1))]
         else:
             return [(None, None)]
@@ -193,11 +193,11 @@ class body_2(object):
         if X.Dchg_1==-2 and X.Dchg_2==+2:
             prefactor = -1 / 6.
             def diagram(i1,i2,j1,j2):
-                partial =          numpy.tensordot(X.ccca1[i1][j1], X.sig12,         axes=([0],[0]))
-                partial =          numpy.tensordot(partial,         X.sig12,         axes=([0],[0]))
-                partial =          numpy.tensordot(partial,         X.sig12,         axes=([0],[0]))
-                partial =          numpy.tensordot(partial,         X.sig21,         axes=([0],[1]))
-                return prefactor * numpy.tensordot(partial,         X.caaa2[i2][j2], axes=([0,1,2,3],[3,2,1,0]))
+                partial =          tendot(X.ccca1[i1][j1], X.sig12,         axes=([0],[0]))
+                partial =          tendot(partial,         X.sig12,         axes=([0],[0]))
+                partial =          tendot(partial,         X.sig12,         axes=([0],[0]))
+                partial =          tendot(partial,         X.sig21,         axes=([0],[1]))
+                return prefactor * tendot(partial,         X.caaa2[i2][j2], axes=([0,1,2,3],[3,2,1,0]))
             return diagram, permutation
         else:
             return None, None
