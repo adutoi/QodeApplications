@@ -32,7 +32,8 @@ def transformation_mat(s01, s10, thresh=1e-5):
     # fragment dimers only!!!
     s00_proj = s01 @ s10
     s11_proj = s10 @ s01
-    # this is probably a little faster with an actual eigenvalue decomposition function
+    # this is probably a little faster with an actual eigenvalue decomposition function,
+    # but it produced the same result
     s00_proj_eigs = tl.decomposition.parafac(s00_proj, len(s00_proj[0]), normalize_factors=True)
     s11_proj_eigs = tl.decomposition.parafac(s11_proj, len(s11_proj[0]), normalize_factors=True)
     # 0 and 1 spaces can be different after treshholding

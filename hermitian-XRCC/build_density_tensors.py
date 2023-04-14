@@ -54,10 +54,7 @@ def numpy_storage_to_lists(nparray_1d, n_bra, n_ket, n_spin_orbs, n_ops):
 
 
 
-def build_density_tensors(z_lists, n_orbs, n_core, n_threads=1):
-	# Target
-	densities = { 'n_elec':{}, 'n_states':{}, 'aa':{}, 'caaa':{}, 'a':{}, 'caa':{}, 'ccaaa':{}, 'ca':{}, 'ccaa':{}, 'c':{}, 'cca':{}, 'cccaa':{}, 'cc':{}, 'ccca':{} }
-
+def build_density_tensors(z_lists, n_orbs, Vints, n_core, n_threads=1):
 	# Admin
 	n_chg_states = len(z_lists)
 	n_spin_orbs  = 2 * n_orbs
@@ -72,20 +69,17 @@ def build_density_tensors(z_lists, n_orbs, n_core, n_threads=1):
 	z_coeffs        = []
 	combo_mat_list  = []
 	for i,(chg,states) in enumerate(z_lists.items()):
-		# Store also for use at higher levels
-		densities['n_states'][chg] = states.coeffs.shape[0]
-		densities['n_elec'  ][chg] = states.configs.shape[1]
-		#
 		idx[chg]        = i
-		n_elec[i]       = densities['n_elec'  ][chg]
+		n_elec[i]       = states.configs.shape[1]
 		n_configs[i]    = states.configs.shape[0]
-		n_states[i]     = densities['n_states'][chg]
+		n_states[i]     = states.coeffs.shape[0]
 		z_configs      += [numpy.array(     states.configs, dtype=BigInt.numpy)]   	# Makes copy (to enforce data type) ... would be better if original were numpy array, then just:  z_configs += [states.configs]
 		z_coeffs       += [numpy.array(list(states.coeffs), dtype=Double.numpy)]	# Makes copy (to forces physical storage to align with logical indexing) ... would be better if original were single numpy array, then just:  z_coeffss += [states.coeffs]
 		combo_mat_list += [FCIcomboMat(n_elec[i]-n_core_elec, n_spin_orbs-n_core_elec)]
 
 	# Compute density tensors
 	total_size = 0
+	densities = { 'aa':{}, 'a':{}, 'caa':{}, 'ca':{}, 'ccaa':{}, 'c':{}, 'cca':{}, 'cc':{} }
 	for bra_chg in z_lists:
 		for ket_chg in z_lists:
 			n_bra_states = z_lists[bra_chg].coeffs.shape[0]
@@ -100,13 +94,6 @@ def build_density_tensors(z_lists, n_orbs, n_core, n_threads=1):
 				result = numpy.zeros(allocation, dtype=Double.numpy)
 				build.aa_tensor(result, idx[bra_chg], idx[ket_chg], n_elec, n_states, z_coeffs, n_configs, z_configs, n_orbs, n_core, combo_mat_list, n_threads)
 				densities['aa'][bra_chg,ket_chg] = numpy_storage_to_lists(result, n_bra_states, n_ket_states, n_spin_orbs, n_ops)
-				total_size += allocation
-				# caaa
-				n_ops = 4
-				allocation = n_tensors*(n_spin_orbs**n_ops)
-				result = numpy.zeros(allocation, dtype=Double.numpy)
-				build.caaa_tensor(result, idx[bra_chg], idx[ket_chg], n_elec, n_states, z_coeffs, n_configs, z_configs, n_orbs, n_core, combo_mat_list, n_threads)
-				densities['caaa'][bra_chg,ket_chg] = numpy_storage_to_lists(result, n_bra_states, n_ket_states, n_spin_orbs, n_ops)
 				total_size += allocation
 			if chg_diff==+1:
 				# a
@@ -123,13 +110,6 @@ def build_density_tensors(z_lists, n_orbs, n_core, n_threads=1):
 				build.caa_tensor(result, idx[bra_chg], idx[ket_chg], n_elec, n_states, z_coeffs, n_configs, z_configs, n_orbs, n_core, combo_mat_list, n_threads)
 				densities['caa'][bra_chg,ket_chg] = numpy_storage_to_lists(result, n_bra_states, n_ket_states, n_spin_orbs, n_ops)
 				total_size += allocation
-				# ccaaa
-				n_ops = 5
-				allocation = n_tensors*(n_spin_orbs**n_ops)
-				result = numpy.zeros(allocation, dtype=Double.numpy)
-				build.ccaaa_tensor(result, idx[bra_chg], idx[ket_chg], n_elec, n_states, z_coeffs, n_configs, z_configs, n_orbs, n_core, combo_mat_list, n_threads)
-				densities['ccaaa'][bra_chg,ket_chg] = numpy_storage_to_lists(result, n_bra_states, n_ket_states, n_spin_orbs, n_ops)
-				total_size += allocation
 			if chg_diff==0:
 				# Identity not needed since constants removed from calculation at a higher level (because result is trivial too)
 				# ca
@@ -145,7 +125,13 @@ def build_density_tensors(z_lists, n_orbs, n_core, n_threads=1):
 				result = numpy.zeros(allocation, dtype=Double.numpy)
 				build.ccaa_tensor(result, idx[bra_chg], idx[ket_chg], n_elec, n_states, z_coeffs, n_configs, z_configs, n_orbs, n_core, combo_mat_list, n_threads)
 				densities['ccaa'][bra_chg,ket_chg] = numpy_storage_to_lists(result, n_bra_states, n_ket_states, n_spin_orbs, n_ops)
-				total_size += allocation
+				### A waste to store ^^this^^ when each tensor can be replaced by a single number
+				#for i in range(n_bra_states):
+				#	for j in range(n_ket_states):
+				#		R = densities['ccaa'][bra_chg,ket_chg][i][j]
+				#		densities['ccaa'][bra_chg,ket_chg][i][j] = contract.monomer_2e(n_spin_orbs, R, Vints)
+				###
+				total_size += n_tensors
 			if chg_diff==-1:
 				# c
 				n_ops = 1
@@ -161,13 +147,6 @@ def build_density_tensors(z_lists, n_orbs, n_core, n_threads=1):
 				build.cca_tensor(result, idx[bra_chg], idx[ket_chg], n_elec, n_states, z_coeffs, n_configs, z_configs, n_orbs, n_core, combo_mat_list, n_threads)
 				densities['cca'][bra_chg,ket_chg] = numpy_storage_to_lists(result, n_bra_states, n_ket_states, n_spin_orbs, n_ops)
 				total_size += allocation
-				# cccaa
-				n_ops = 5
-				allocation = n_tensors*(n_spin_orbs**n_ops)
-				result = numpy.zeros(allocation, dtype=Double.numpy)
-				build.cccaa_tensor(result, idx[bra_chg], idx[ket_chg], n_elec, n_states, z_coeffs, n_configs, z_configs, n_orbs, n_core, combo_mat_list, n_threads)
-				densities['cccaa'][bra_chg,ket_chg] = numpy_storage_to_lists(result, n_bra_states, n_ket_states, n_spin_orbs, n_ops)
-				total_size += allocation
 			if chg_diff==-2:
 				# cc
 				n_ops = 2
@@ -175,13 +154,6 @@ def build_density_tensors(z_lists, n_orbs, n_core, n_threads=1):
 				result = numpy.zeros(allocation, dtype=Double.numpy)
 				build.cc_tensor(result, idx[bra_chg], idx[ket_chg], n_elec, n_states, z_coeffs, n_configs, z_configs, n_orbs, n_core, combo_mat_list, n_threads)
 				densities['cc'][bra_chg,ket_chg] = numpy_storage_to_lists(result, n_bra_states, n_ket_states, n_spin_orbs, n_ops)
-				total_size += allocation
-				# ccca
-				n_ops = 4
-				allocation = n_tensors*(n_spin_orbs**n_ops)
-				result = numpy.zeros(allocation, dtype=Double.numpy)
-				build.ccca_tensor(result, idx[bra_chg], idx[ket_chg], n_elec, n_states, z_coeffs, n_configs, z_configs, n_orbs, n_core, combo_mat_list, n_threads)
-				densities['ccca'][bra_chg,ket_chg] = numpy_storage_to_lists(result, n_bra_states, n_ket_states, n_spin_orbs, n_ops)
 				total_size += allocation
 
 	# Return density tensors

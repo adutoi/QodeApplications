@@ -48,10 +48,9 @@ def _build_block(diagram_term, n_states, permutation):
 ##########
 
 class _charges(object):
-    def __init__(self, densities, integrals, subsystem, charges, diagrams):
+    def __init__(self, densities, integrals, charges, diagrams):
         self._densities = densities
         self._integrals = integrals
-        self._subsystem = subsystem
         self._charges   = charges
         self._diagrams  = diagrams
         self._results   = {}
@@ -60,14 +59,14 @@ class _charges(object):
         n_states_j = []
         for m in permutation:
             chg_i, chg_j = self._charges[m]
-            n_states_i += [self._densities[self._subsystem[m]]['n_states'][chg_i]]
-            n_states_j += [self._densities[self._subsystem[m]]['n_states'][chg_j]]
+            n_states_i += [self._densities[m]['n_states'][chg_i]]
+            n_states_j += [self._densities[m]['n_states'][chg_j]]
         return n_states_i, n_states_j
     def __getitem__(self, label):
         if label not in self._results:
-            frag_order = len(self._subsystem)
+            frag_order = len(self._densities)
             try:
-                terms = self._diagrams.catalog[frag_order][label](self._densities, self._integrals, self._subsystem, self._charges)
+                terms = self._diagrams.catalog[frag_order][label](self._densities, self._integrals, self._charges)
             except:
                 raise NotImplementedError("diagram \'{}\' not implemented for {} bodies".format(label, frag_order))
             else:
@@ -79,18 +78,17 @@ class _charges(object):
                         else:                             self._results[label] += result
         return self._results[label]
 
-class _subsystem(object):
-    def __init__(self, densities, integrals, subsystem, diagrams):
+class _group(object):  # subsystem
+    def __init__(self, densities, integrals, diagrams):
         self._densities = densities
         self._integrals = integrals
-        self._subsystem = subsystem
         self._diagrams  = diagrams
         self._items = {}
     def __getitem__(self, charges):
         if charges is None:  charges = tuple()    # just to make top-level syntax prettier
         charges = tuple(charges)                  # dict index must be hashable
         if charges not in self._items:
-            self._items[charges] = _charges(self._densities, self._integrals, self._subsystem, charges, self._diagrams)
+            self._items[charges] = _charges(self._densities, self._integrals, charges, self._diagrams)
         return self._items[charges]
 
 class blocks(object):
@@ -99,9 +97,11 @@ class blocks(object):
         self._integrals = integrals
         self._diagrams  = diagrams
         self._items = {}
-    def __getitem__(self, subsystem):
-        if subsystem is None:  subsystem = tuple()        # just to make top-level syntax prettier
-        subsystem = tuple(subsystem)                      # dict index must be hashable
-        if subsystem not in self._items:
-            self._items[subsystem] = _subsystem(self.densities, self._integrals, subsystem, self._diagrams)
-        return self._items[subsystem]
+    def __getitem__(self, group):
+        if group is None:  group = tuple()        # just to make top-level syntax prettier
+        group = tuple(group)                      # dict index must be hashable
+        if group not in self._items:
+            densities = [self.densities[m] for m in group]
+            integrals = self._diagrams.prune_integrals(self._integrals, group)
+            self._items[group] = _group(densities, integrals, self._diagrams)
+        return self._items[group]
