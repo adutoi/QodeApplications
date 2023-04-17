@@ -1,19 +1,19 @@
 #    (C) Copyright 2023 Anthony D. Dutoi
 # 
-#    This file is part of Qode.
+#    This file is part of QodeApplications.
 # 
-#    Qode is free software: you can redistribute it and/or modify
+#    QodeApplications is free software: you can redistribute it and/or modify
 #    it under the terms of the GNU General Public License as published by
 #    the Free Software Foundation, either version 3 of the License, or
 #    (at your option) any later version.
 # 
-#    Qode is distributed in the hope that it will be useful,
+#    QodeApplications is distributed in the hope that it will be useful,
 #    but WITHOUT ANY WARRANTY; without even the implied warranty of
 #    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 #    GNU General Public License for more details.
 # 
 #    You should have received a copy of the GNU General Public License
-#    along with Qode.  If not, see <http://www.gnu.org/licenses/>.
+#    along with QodeApplications.  If not, see <http://www.gnu.org/licenses/>.
 #
 
 import numpy
@@ -78,7 +78,7 @@ class _charges(object):
                         else:                             self._results[label] += result
         return self._results[label]
 
-class _group(object):  # subsystem
+class _subsystem(object):
     def __init__(self, densities, integrals, diagrams):
         self._densities = densities
         self._integrals = integrals
@@ -97,11 +97,11 @@ class blocks(object):
         self._integrals = integrals
         self._diagrams  = diagrams
         self._items = {}
-    def __getitem__(self, group):
-        if group is None:  group = tuple()        # just to make top-level syntax prettier
-        group = tuple(group)                      # dict index must be hashable
-        if group not in self._items:
-            densities = [self.densities[m] for m in group]
-            integrals = self._diagrams.prune_integrals(self._integrals, group)
-            self._items[group] = _group(densities, integrals, self._diagrams)
-        return self._items[group]
+    def __getitem__(self, subsystem):
+        if subsystem is None:  subsystem = tuple()        # just to make top-level syntax prettier
+        subsystem = tuple(subsystem)                      # dict index must be hashable
+        if subsystem not in self._items:
+            densities = [self.densities[m] for m in subsystem]
+            integrals = self._diagrams.prune_integrals(self._integrals, subsystem)
+            self._items[subsystem] = _subsystem(densities, integrals, self._diagrams)
+        return self._items[subsystem]

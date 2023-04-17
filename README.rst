@@ -8,10 +8,10 @@
 .. role::  raw-html(raw)
     :format: html
 
-Qode Applications
+QodeApplications
 ================================================================================
 
-*Qode Applications* contains some quantum chemistry experiments built on the *Qode* library base. 
+*QodeApplications* contains some quantum chemistry experiments built on the *Qode* library base. 
 
 
 

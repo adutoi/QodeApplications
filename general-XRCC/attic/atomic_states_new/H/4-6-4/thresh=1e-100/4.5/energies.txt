@@ -1,8 +1,0 @@
-
-    Total CI energy =     -31.019233131564228
-E_gs =                    -31.019233131564267
-Energy after projection = -31.019232844313994
-E_gs  =                   -31.019232844431784  [compressed H]
-FCI Energy =              -31.0192328444
-CCSD Energy =             -31.0192328444 Hartree
-

@@ -1,19 +1,19 @@
 #    (C) Copyright 2019 Anthony D. Dutoi
 # 
-#    This file is part of Qode.
+#    This file is part of QodeApplications.
 # 
-#    Qode is free software: you can redistribute it and/or modify
+#    QodeApplications is free software: you can redistribute it and/or modify
 #    it under the terms of the GNU General Public License as published by
 #    the Free Software Foundation, either version 3 of the License, or
 #    (at your option) any later version.
 # 
-#    Qode is distributed in the hope that it will be useful,
+#    QodeApplications is distributed in the hope that it will be useful,
 #    but WITHOUT ANY WARRANTY; without even the implied warranty of
 #    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 #    GNU General Public License for more details.
 # 
 #    You should have received a copy of the GNU General Public License
-#    along with Qode.  If not, see <http://www.gnu.org/licenses/>.
+#    along with QodeApplications.  If not, see <http://www.gnu.org/licenses/>.
 #
 import numpy
 from build_density_tensors import build_density_tensors
@@ -62,7 +62,7 @@ class monomer_data(object):
         self.basis.AOcode = "6-31G"
         self.basis.MOcoeffs = numpy.load("atomic_states/integrals/Be_C.npy")[:self.basis.n_spatial_orb,:self.basis.n_spatial_orb]	# top-left block because rest of code is for spin-restriced orbitals
         self.basis.core = [0]	# indices of spatial MOs to freeze
-    def load_states(self, states_location, Vints, n_states, ref_state=(0,0)):
+    def load_states(self, states_location, n_states, ref_state=(0,0)):
         # Load descriptions of the fragment many-electron states.  Then process them (using build_density_tensors) to arrive at
         # quantities suitable for contracting with the integrals.  In a supersystem, any given fragment may be found as neutral
         # or with an extra or missing electron (anionic or cationic, respectively).  The data structures inside the states dictionary
@@ -75,7 +75,7 @@ class monomer_data(object):
             data = _load_states(val_e, n_st, states_location)
             if data is not None:  states[chg] = data		# Collect together all the states for the different allowed (relative) charges
 
-        self.rho, mem_use = build_density_tensors(states, self.basis.n_spatial_orb, Vints, n_core=len(self.basis.core))  # Compute the density tensors (n_core is the number of uncorrelated/frozen orbitals)
+        self.rho, mem_use = build_density_tensors(states, self.basis.n_spatial_orb, n_core=len(self.basis.core))  # Compute the density tensors (n_core is the number of uncorrelated/frozen orbitals)
 
         ref_chg, ref_idx = ref_state
         self.state_indices = [(ref_chg,ref_idx)]                                                       # List of all charge and state indices, reference state needs to be first, but otherwise irrelevant order
