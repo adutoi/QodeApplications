@@ -18,7 +18,7 @@
 
 import math
 import numpy
-from   QodeApplications.util.PyC import import_C, Double, BigInt
+from   qode.util.PyC import import_C, Double, BigInt
 
 build    = import_C("density_tensors", flags="-O2")
 contract = import_C("H_contractions",  flags="-O2")
