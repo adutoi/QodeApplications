@@ -1,6 +1,5 @@
 Differ from Tony's version (roughly in order of difficulty):
 
-XR_term.py
 diagrammatic_expansion.py
 
 SH_diagrams.py

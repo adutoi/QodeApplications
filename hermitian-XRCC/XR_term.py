@@ -84,7 +84,7 @@ def monomer_matrix(op_blocks, active_diagrams, subsys_index, charge_blocks):
 
 def dimer_matrix(op_blocks, active_diagrams, subsys_indices, charge_blocks):
     # This code is restricted specifically to dimer (sub)systems
-    rho1, rho2 = op_blocks.densities
+    rho1, rho2 = (op_blocks.densities[m] for m in subsys_indices)
     dim = sum(rho1['n_states'][chg1]*rho2['n_states'][chg2] for chg1,chg2 in charge_blocks)
     Matrix = numpy.zeros((dim,dim))
     #
