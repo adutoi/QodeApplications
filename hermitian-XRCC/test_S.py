@@ -24,10 +24,10 @@ import diagrammatic_expansion   # defines information structure for housing resu
 import XR_term                  # knows how to use ^this information to pack a matrix for use in XR model
 import S_diagrams               # contains definitions of actual diagrams needed for S operator in BO rep
 import SH_diagrams
-import torch
+##ADD import torch
 from orb_projection import transformation_mat, orb_proj_ints, orb_proj_density
 
-torch.set_num_threads(4)  # here we set the number of the CPU cores, even though pytorch is not used yet
+##ADD torch.set_num_threads(4)  # here we set the number of the CPU cores, even though pytorch is not used yet
 
 #tl.set_backend("pytorch")
 
@@ -40,7 +40,7 @@ displacement = sys.argv[1]
 Be = Be631g.monomer_data(None)
 n_orb = Be.basis.n_spatial_orb  # number of spatial orbitals for one atom
 C     = Be.basis.MOcoeffs       # n_orb x n_orb for restricted orbitals
-Be.load_states("load=states:16-115-550:thresh=1e-6:4.5:u.pickle/4.5", None, ("all","all","all","all","all"))
+Be.load_states("load=states:16-115-550:thresh=1e-6:4.5:u.pickle/4.5", ("all","all","all","all","all"))
 
 S_2 = np.load("atomic_states/integrals/Be2_{}_S.npy".format(displacement))
 sig01 = C.T @ S_2[0:n_orb,n_orb:2*n_orb] @ C
@@ -54,8 +54,6 @@ overlaps[0,1][n_orb:,n_orb:] = sig01
 overlaps[1,0][:n_orb,:n_orb] = sig01.T
 overlaps[1,0][n_orb:,n_orb:] = sig01.T
 
-Be.rho['n_states'] = {+1:4, 0:11, -1:8}     # monkey patch! (do at lower level)
-Be.rho['n_elec']   = {+1:3, 0:4,  -1:5}     # monkey patch! (do at lower level)
 BeN_rho = [Be.rho, Be.rho]
 
 #########
@@ -198,7 +196,7 @@ SH_integrals_fock["h"] = fock_ints
 SH_integrals["s"] = overlaps
 SH_integrals_fock["s"] = overlaps
 
-tl.set_backend("pytorch")
+##ADD tl.set_backend("pytorch")
 # here we changed the backend, so everything, which shall be handled by anything involving
 # a tensorly object, needs to be tl.tensor
 # overlaps is not tl.tensor, while densities are already tl.tensor (list of list of tl.tensor),

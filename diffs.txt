@@ -1,20 +1,7 @@
+Differ from Tony's version (roughly in order of difficulty):
 
-Differ from Tony's version:
-
-Be631g.py
-SH_diagrams.py
-S_diagrams.py
 XR_term.py
-build_density_tensors.py
-density_tensors.c
 diagrammatic_expansion.py
 
-
-
-Only in Marco's version
-
-cache.py
-orb_projection.py
-tendot_wrapper.py
-test_S.py
-
+SH_diagrams.py
+S_diagrams.py
