@@ -78,7 +78,7 @@ class _charges(object):
                         else:                             self._results[label] += result
         return self._results[label]
 
-class _group(object):  # subsystem
+class _subsystem(object):
     def __init__(self, densities, integrals, diagrams):
         self._densities = densities
         self._integrals = integrals
@@ -97,11 +97,11 @@ class blocks(object):
         self._integrals = integrals
         self._diagrams  = diagrams
         self._items = {}
-    def __getitem__(self, group):
-        if group is None:  group = tuple()        # just to make top-level syntax prettier
-        group = tuple(group)                      # dict index must be hashable
-        if group not in self._items:
-            densities = [self.densities[m] for m in group]
-            integrals = self._diagrams.prune_integrals(self._integrals, group)
-            self._items[group] = _group(densities, integrals, self._diagrams)
-        return self._items[group]
+    def __getitem__(self, subsystem):
+        if subsystem is None:  subsystem = tuple()        # just to make top-level syntax prettier
+        subsystem = tuple(subsystem)                      # dict index must be hashable
+        if subsystem not in self._items:
+            densities = [self.densities[m] for m in subsystem]
+            integrals = self._diagrams.prune_integrals(self._integrals, subsystem)
+            self._items[subsystem] = _subsystem(densities, integrals, self._diagrams)
+        return self._items[subsystem]

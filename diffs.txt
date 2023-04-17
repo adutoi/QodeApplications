@@ -5,3 +5,6 @@ diagrammatic_expansion.py
 
 SH_diagrams.py
 S_diagrams.py
+
+=-=-=-=
+test_S.py vs test_SH.py
