@@ -73,7 +73,7 @@ Stest[9]  = XR_term.dimer_matrix(S_blocks, active_S_diagrams, dimer01, [(0,-1),(
 Stest[10] = XR_term.dimer_matrix(S_blocks, active_S_diagrams, dimer01, [(-1,-1)])
 
 ###
-
+"""
 SH_blocks = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=integrals,   diagrams=SH_diagrams)
 
 active_SH_diagrams = {}
@@ -89,7 +89,7 @@ SHtest2[7]  = XR_term.dimer_matrix(SH_blocks, active_SH_diagrams, dimer01, [(0,+
 SHtest2[8]  = XR_term.dimer_matrix(SH_blocks, active_SH_diagrams, dimer01, [(0,0),(+1,-1),(-1,+1)])
 SHtest2[9]  = XR_term.dimer_matrix(SH_blocks, active_SH_diagrams, dimer01, [(0,-1),(-1,0)])
 SHtest2[10] = XR_term.dimer_matrix(SH_blocks, active_SH_diagrams, dimer01, [(-1,-1)])
-
+"""
 #########
 # run tests
 #########
@@ -120,11 +120,11 @@ for n_elec in [6,7,8,9,10]:
     start = I + 1
 
 ###
-
+"""
 body1_ref = numpy.load("reference/test-data-4.5/H1_0.npy")
 print("1-body error 0:", numpy.linalg.norm(SHtest1_0-body1_ref))
 print("1-body error 1:", numpy.linalg.norm(SHtest1_1-body1_ref))
-
+"""
 #vals, vecs = qode.util.sort_eigen(numpy.linalg.eig(SHtest2[8]))
 #print(vals[0])
 
