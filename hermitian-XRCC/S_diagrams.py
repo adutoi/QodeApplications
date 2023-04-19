@@ -35,42 +35,42 @@ def _parameters2(densities, overlaps, subsystem, charges, permutation):
         (chg_i2,chg_j2), (chg_i1,chg_j1) = (chg_i1,chg_j1), (chg_i2,chg_j2)
         p = 1
     data = _empty()
+    data.n_i2   = n_i2%2
+    data.p      = p
     data.Dchg_1 = chg_i1 - chg_j1
     data.Dchg_2 = chg_i2 - chg_j2
     if data.Dchg_1==0:
-        data.ca1    = tensorly.tensor(densities[m1]['ca'  ][chg_i1,chg_j1])
-        data.ccaa1  = tensorly.tensor(densities[m1]['ccaa'][chg_i1,chg_j1])
+        data.ca_1   = tensorly.tensor(densities[m1]['ca'  ][chg_i1,chg_j1])
+        data.ccaa_1 = tensorly.tensor(densities[m1]['ccaa'][chg_i1,chg_j1])
     if data.Dchg_1==-1:
-        data.c1     = tensorly.tensor(densities[m1]['c'   ][chg_i1,chg_j1])
-        data.cca1   = tensorly.tensor(densities[m1]['cca' ][chg_i1,chg_j1])
+        data.c_1    = tensorly.tensor(densities[m1]['c'   ][chg_i1,chg_j1])
+        data.cca_1  = tensorly.tensor(densities[m1]['cca' ][chg_i1,chg_j1])
     if data.Dchg_1==+1:
-        data.a1     = tensorly.tensor(densities[m1]['a'   ][chg_i1,chg_j1])
-        data.caa1   = tensorly.tensor(densities[m1]['caa' ][chg_i1,chg_j1])
+        data.a_1    = tensorly.tensor(densities[m1]['a'   ][chg_i1,chg_j1])
+        data.caa_1  = tensorly.tensor(densities[m1]['caa' ][chg_i1,chg_j1])
     if data.Dchg_1==-2:
-        data.cc1    = tensorly.tensor(densities[m1]['cc'  ][chg_i1,chg_j1])
-        data.ccca1  = tensorly.tensor(densities[m1]['ccca'][chg_i1,chg_j1])
+        data.cc_1   = tensorly.tensor(densities[m1]['cc'  ][chg_i1,chg_j1])
+        data.ccca_1 = tensorly.tensor(densities[m1]['ccca'][chg_i1,chg_j1])
     if data.Dchg_1==+2:
-        data.aa1    = tensorly.tensor(densities[m1]['aa'  ][chg_i1,chg_j1])
-        data.caaa1  = tensorly.tensor(densities[m1]['caaa'][chg_i1,chg_j1])
+        data.aa_1   = tensorly.tensor(densities[m1]['aa'  ][chg_i1,chg_j1])
+        data.caaa_1 = tensorly.tensor(densities[m1]['caaa'][chg_i1,chg_j1])
     if data.Dchg_2==0:
-        data.ca2    = tensorly.tensor(densities[m2]['ca'  ][chg_i2,chg_j2])
-        data.ccaa2  = tensorly.tensor(densities[m2]['ccaa'][chg_i2,chg_j2])
+        data.ca_2   = tensorly.tensor(densities[m2]['ca'  ][chg_i2,chg_j2])
+        data.ccaa_2 = tensorly.tensor(densities[m2]['ccaa'][chg_i2,chg_j2])
     if data.Dchg_2==-1:
-        data.c2     = tensorly.tensor(densities[m2]['c'   ][chg_i2,chg_j2])
-        data.cca2   = tensorly.tensor(densities[m2]['cca' ][chg_i2,chg_j2])
+        data.c_2    = tensorly.tensor(densities[m2]['c'   ][chg_i2,chg_j2])
+        data.cca_2  = tensorly.tensor(densities[m2]['cca' ][chg_i2,chg_j2])
     if data.Dchg_2==+1:
-        data.a2     = tensorly.tensor(densities[m2]['a'   ][chg_i2,chg_j2])
-        data.caa2   = tensorly.tensor(densities[m2]['caa' ][chg_i2,chg_j2])
+        data.a_2    = tensorly.tensor(densities[m2]['a'   ][chg_i2,chg_j2])
+        data.caa_2  = tensorly.tensor(densities[m2]['caa' ][chg_i2,chg_j2])
     if data.Dchg_2==-2:
-        data.cc2    = tensorly.tensor(densities[m2]['cc'  ][chg_i2,chg_j2])
-        data.ccca2  = tensorly.tensor(densities[m2]['ccca'][chg_i2,chg_j2])
+        data.cc_2   = tensorly.tensor(densities[m2]['cc'  ][chg_i2,chg_j2])
+        data.ccca_2 = tensorly.tensor(densities[m2]['ccca'][chg_i2,chg_j2])
     if data.Dchg_2==+2:
-        data.aa2    = tensorly.tensor(densities[m2]['aa'  ][chg_i2,chg_j2])
-        data.caaa2  = tensorly.tensor(densities[m2]['caaa'][chg_i2,chg_j2])
-    data.sig12  = tensorly.tensor(overlaps[m1,m2])
-    data.sig21  = tensorly.tensor(overlaps[m2,m1])
-    data.n_i2   = n_i2%2
-    data.p      = p
+        data.aa_2   = tensorly.tensor(densities[m2]['aa'  ][chg_i2,chg_j2])
+        data.caaa_2 = tensorly.tensor(densities[m2]['caaa'][chg_i2,chg_j2])
+    data.S_12 = tensorly.tensor(overlaps[m1,m2])
+    data.S_21 = tensorly.tensor(overlaps[m2,m1])
     return data
 
 
@@ -108,8 +108,8 @@ class body_2(object):
             prefactor = (-1)**(X.n_i2 + X.p)
             def diagram(i1,i2,j1,j2):
                 #return prefactor * np.einsum("pq,p,q->", sig12, c1[i1][j1], a2[i2][j2])
-                partial =          tendot(X.c1[i1][j1], X.sig12,      axes=([0],[0]))
-                return prefactor * tendot(partial,      X.a2[i2][j2], axes=([0],[0]))
+                partial =          tendot(X.c_1[i1][j1], X.S_12,        axes=([0],[0]))
+                return prefactor * tendot(partial,       X.a_2[i2][j2], axes=([0],[0]))
             return diagram, permutation
         else:
             return None, None
@@ -122,9 +122,9 @@ class body_2(object):
             prefactor = -1
             def diagram(i1,i2,j1,j2):
                 #return prefactor * np.einsum("qs,sq->", np.einsum("pq,ps->qs", sig12, ca1[i1][j1]), np.einsum("rs,rq->sq", sig21, ca2[i2][j2]))
-                partial =          tendot(X.ca1[i1][j1], X.sig12,       axes=([0],[0]))
-                partial =          tendot(partial,       X.sig21,       axes=([0],[1]))
-                return prefactor * tendot(partial,       X.ca2[i2][j2], axes=([0,1],[1,0]))
+                partial =          tendot(X.ca_1[i1][j1], X.S_12,         axes=([0],[0]))
+                partial =          tendot(partial,        X.S_21,         axes=([0],[1]))
+                return prefactor * tendot(partial,        X.ca_2[i2][j2], axes=([0,1],[1,0]))
             return [(diagram, (0,1))]
         else:
             return [(None, None)]
@@ -142,9 +142,9 @@ class body_2(object):
             prefactor = 1/2.
             def diagram(i1,i2,j1,j2):
                 #return prefactor * np.einsum("qr,rq->", np.einsum("pq,pr->qr", sig12, cc1[i1][j1]), np.einsum("rs,sq->rq", sig12, aa2[i2][j2]))
-                partial =          tendot(X.cc1[i1][j1], X.sig12,       axes=([0],[0]))
-                partial =          tendot(partial,       X.sig12,       axes=([0],[0]))
-                return prefactor * tendot(partial,       X.aa2[i2][j2], axes=([0,1],[1,0]))
+                partial =          tendot(X.cc_1[i1][j1], X.S_12,         axes=([0],[0]))
+                partial =          tendot(partial,        X.S_12,         axes=([0],[0]))
+                return prefactor * tendot(partial,        X.aa_2[i2][j2], axes=([0,1],[1,0]))
             return diagram, permutation
         else:
             return None, None
@@ -161,10 +161,10 @@ class body_2(object):
         if X.Dchg_1==-1 and X.Dchg_2==+1:
             prefactor = (-1)**(X.n_i2 + X.p + 1) / 2.
             def diagram(i1,i2,j1,j2):
-                partial =          tendot(X.cca1[i1][j1], X.sig12,        axes=([0],[0]))
-                partial =          tendot(partial,        X.sig12,        axes=([0],[0]))
-                partial =          tendot(partial,        X.sig21,        axes=([0],[1]))
-                return prefactor * tendot(partial,        X.caa2[i2][j2], axes=([0,1,2],[2,1,0]))
+                partial =          tendot(X.cca_1[i1][j1], X.S_12,          axes=([0],[0]))
+                partial =          tendot(partial,         X.S_12,          axes=([0],[0]))
+                partial =          tendot(partial,         X.S_21,          axes=([0],[1]))
+                return prefactor * tendot(partial,         X.caa_2[i2][j2], axes=([0,1,2],[2,1,0]))
             return diagram, permutation
         else:
             return None, None
@@ -176,11 +176,11 @@ class body_2(object):
         if X.Dchg_1==0 and X.Dchg_2==0:
             prefactor = 1/4.
             def diagram(i1,i2,j1,j2):
-                partial =          tendot(X.ccaa1[i1][j1], X.sig12,         axes=([0],[0]))
-                partial =          tendot(partial,         X.sig12,         axes=([0],[0]))
-                partial =          tendot(partial,         X.sig21,         axes=([0],[1]))
-                partial =          tendot(partial,         X.sig21,         axes=([0],[1]))
-                return prefactor * tendot(partial,         X.ccaa2[i2][j2], axes=([0,1,2,3],[3,2,1,0]))
+                partial =          tendot(X.ccaa_1[i1][j1], X.S_12,           axes=([0],[0]))
+                partial =          tendot(partial,          X.S_12,           axes=([0],[0]))
+                partial =          tendot(partial,          X.S_21,           axes=([0],[1]))
+                partial =          tendot(partial,          X.S_21,           axes=([0],[1]))
+                return prefactor * tendot(partial,          X.ccaa_2[i2][j2], axes=([0,1,2,3],[3,2,1,0]))
             return [(diagram, (0,1))]
         else:
             return [(None, None)]
@@ -197,11 +197,11 @@ class body_2(object):
         if X.Dchg_1==-2 and X.Dchg_2==+2:
             prefactor = -1 / 6.
             def diagram(i1,i2,j1,j2):
-                partial =          tendot(X.ccca1[i1][j1], X.sig12,         axes=([0],[0]))
-                partial =          tendot(partial,         X.sig12,         axes=([0],[0]))
-                partial =          tendot(partial,         X.sig12,         axes=([0],[0]))
-                partial =          tendot(partial,         X.sig21,         axes=([0],[1]))
-                return prefactor * tendot(partial,         X.caaa2[i2][j2], axes=([0,1,2,3],[3,2,1,0]))
+                partial =          tendot(X.ccca_1[i1][j1], X.S_12,           axes=([0],[0]))
+                partial =          tendot(partial,          X.S_12,           axes=([0],[0]))
+                partial =          tendot(partial,          X.S_12,           axes=([0],[0]))
+                partial =          tendot(partial,          X.S_21,           axes=([0],[1]))
+                return prefactor * tendot(partial,          X.caaa_2[i2][j2], axes=([0,1,2,3],[3,2,1,0]))
             return diagram, permutation
         else:
             return None, None
@@ -211,24 +211,23 @@ class body_2(object):
 ##########
 # A dictionary catalog.  the string association lets users specify active diagrams at the top level.
 # would like to build automatically, but more difficult than expected to get function references correct
+# e.g., does not work
+#catalog[2] = {}
+#for k,v in body_2.__dict__.items():
+#    catalog[2][k] = v
 ##########
 
 catalog = {}
 
 catalog[0] = {
-"identity": body_0.identity
+    "identity": body_0.identity
 }
 
 catalog[2] = {
-"order1_CT1": body_2.order1_CT1,
-"order2_CT0": body_2.order2_CT0,
-"order2_CT2": body_2.order2_CT2,
-"order3_CT1": body_2.order3_CT1,
-"order4_CT0": body_2.order4_CT0,
-"order4_CT2": body_2.order4_CT2
+    "order1_CT1": body_2.order1_CT1,
+    "order2_CT0": body_2.order2_CT0,
+    "order2_CT2": body_2.order2_CT2,
+    "order3_CT1": body_2.order3_CT1,
+    "order4_CT0": body_2.order4_CT0,
+    "order4_CT2": body_2.order4_CT2
 }
-
-# e.g., does not work
-#catalog[2] = {}
-#for k,v in body_2.__dict__.items():
-#    catalog[2][k] = v
