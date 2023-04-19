@@ -1,6 +1,5 @@
 To Do:
 
-1. Restore my SH_diagrams.py temporarily, just for the sake of getting it working with my driver (test_SH.py).
-2. Morph this into Marco's code (ie, more diagrams), but in my "style".
-3. Run with Marco's driver (test_S.py) and make sure still working.
-4. Merge my test_SH.py with Marco's test_S.py
+X 1. Restore my SH_diagrams.py temporarily, just for the sake of getting it working with my driver (test_SH.py).
+  2. Morph this into Marco's code (ie, more diagrams), but in my "style".  Run with Marco's driver (test_S.py) and make sure still working.
+  3. Merge my test_SH.py with Marco's test_S.py
