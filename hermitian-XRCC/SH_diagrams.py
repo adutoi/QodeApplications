@@ -20,20 +20,21 @@ import numpy as np
 import tensorly as tl
 from tendot_wrapper import tendot
 
-def prune_integrals(integrals, group):
+def prune_integrals(integrals, subsystem):
     ret = {}
     for key in integrals:
         #print(key)
         if key == "v":
-            ret[key] = {(m1_,m2_,m3_,m4_):integrals[key][m1,m2,m3,m4] for m4_,m4 in enumerate(group)
-                        for m3_,m3 in enumerate(group) for m2_,m2 in enumerate(group) for m1_,m1 in enumerate(group)}
+            ret[key] = {(m1_,m2_,m3_,m4_):integrals[key][m1,m2,m3,m4] for m4_,m4 in enumerate(subsystem)
+                        for m3_,m3 in enumerate(subsystem) for m2_,m2 in enumerate(subsystem) for m1_,m1 in enumerate(subsystem)}
         else:
-            ret[key] = {(m1_,m2_):integrals[key][m1,m2] for m2_,m2 in enumerate(group) for m1_,m1 in enumerate(group)}
+            ret[key] = {(m1_,m2_):integrals[key][m1,m2] for m2_,m2 in enumerate(subsystem) for m1_,m1 in enumerate(subsystem)}
     return ret
 
-def _parameters2(densities, charges, permutation):
+def _parameters2(densities, subsystem, charges, permutation):
     # helper functions to do repetitive manipulations of data passed from above
     # needs to be generalized (should not be hard) and have "2" removed from its name ... or maybe it is better this way
+    densities = [densities[m] for m in subsystem]
     m1, m2 = 0, 1  # perm (0, 0) and (1, 1) can be handled like this as well
     (chg_i1,chg_j1), (chg_i2,chg_j2) = charges
     n_i2 = densities[m2]['n_elec'][chg_i2]
@@ -46,7 +47,8 @@ def _parameters2(densities, charges, permutation):
     rho2 = densities[m2]
     return rho1, rho2, n_i2%2, p, (chg_i1,chg_j1), (chg_i2,chg_j2)
 
-def _ints2(permutation, integrals, key_list):
+def _ints2(subsystem, permutation, integrals, key_list):
+    integrals = prune_integrals(integrals, subsystem)
     m1, m2 = 0, 1  # perm (0, 0) and (1, 1) can be handled like this as well
     if permutation == (1, 0):
         m1, m2 = 1, 0
@@ -66,7 +68,7 @@ def _ints2(permutation, integrals, key_list):
 
 ##########
 # Here are the implementations of the actual diagrams.
-# The public @staticmethods must take the arguments (densities, integrals, charges), but after that, it is up to you.
+# The public @staticmethods must take the arguments (densities, integrals, subsystem, charges), but after that, it is up to you.
 # It should return a list of kernels that takes state indices (for specified fragment charges) their relevant permutations.
 # Don't forget to update the "catalog" dictionary at the end.
 ##########
@@ -85,16 +87,16 @@ class body_2(object):
     # We include them in this class for now, even though they are one-body terms
 
     @staticmethod
-    def H1(densities, integrals, charges):
-        result00 = body_2._H1_one_body00(densities, integrals, charges, permutation=(0,1))
-        result01 = body_2._H1(densities, integrals, charges, permutation=(0,1))
-        result10 = body_2._H1(densities, integrals, charges, permutation=(1,0))
-        result11 = body_2._H1_one_body00(densities, integrals, charges, permutation=(1,0))
+    def H1(densities, integrals, subsystem, charges):
+        result00 = body_2._H1_one_body00(densities, integrals, subsystem, charges, permutation=(0,1))
+        result01 = body_2._H1(densities, integrals, subsystem, charges, permutation=(0,1))
+        result10 = body_2._H1(densities, integrals, subsystem, charges, permutation=(1,0))
+        result11 = body_2._H1_one_body00(densities, integrals, subsystem, charges, permutation=(1,0))
         return [result00, result01, result10, result11]
     @staticmethod
-    def _H1(densities, integrals, charges, permutation):
-        rho1, rho2, n_i2, p, (chg_i1,chg_j1), (chg_i2,chg_j2) = _parameters2(densities, charges, permutation)
-        h01 = _ints2(permutation, integrals, ["h01"])
+    def _H1(densities, integrals, subsystem, charges, permutation):
+        rho1, rho2, n_i2, p, (chg_i1,chg_j1), (chg_i2,chg_j2) = _parameters2(densities, subsystem, charges, permutation)
+        h01 = _ints2(subsystem, permutation, integrals, ["h01"])
         prefactor = (-1)**(n_i2 + p)
         if chg_i1==chg_j1-1 and chg_i2==chg_j2+1:
             c1 = rho1['c'][chg_i1,chg_j1]
@@ -107,10 +109,10 @@ class body_2(object):
         else:
             return None, None
     @staticmethod
-    def _H1_one_body00(densities, integrals, charges, permutation):
-        rho1, rho2, n_i2, p, (chg_i1,chg_j1), (chg_i2,chg_j2) = _parameters2(densities, charges, permutation)
+    def _H1_one_body00(densities, integrals, subsystem, charges, permutation):
+        rho1, rho2, n_i2, p, (chg_i1,chg_j1), (chg_i2,chg_j2) = _parameters2(densities, subsystem, charges, permutation)
         if chg_i1==chg_j1 and chg_i2==chg_j2:
-            h00 = _ints2(permutation, integrals, ["h00"])
+            h00 = _ints2(subsystem, permutation, integrals, ["h00"])
             ca1 = rho1["ca"][chg_i1,chg_j1]
             def diagram(i1,i2,j1,j2):
                 if i2==j2:
@@ -125,26 +127,26 @@ class body_2(object):
     #@staticmethod
     # this is not true, since one would lack the contributions from the nuclear attraction
     # integrals between different fragments
-    #def H1_pure_2_body(densities, integrals, charges):
-    #    result01 = body_2._H1(densities, integrals, charges, permutation=(0,1))
-    #    result10 = body_2._H1(densities, integrals, charges, permutation=(1,0))
+    #def H1_pure_2_body(densities, integrals, subsystem, charges):
+    #    result01 = body_2._H1(densities, integrals, subsystem, charges, permutation=(0,1))
+    #    result10 = body_2._H1(densities, integrals, subsystem, charges, permutation=(1,0))
     #    return [result01, result10]
     
     @staticmethod
-    def H2(densities, integrals, charges):
-        result0000 = body_2._H2_one_body00(densities, integrals, charges, permutation=(0,1))
-        result0001_CT1 = body_2._H2_0001_CT1(densities, integrals, charges, permutation=(0,1))
-        result0111_CT1 = body_2._H2_0001_CT1(densities, integrals, charges, permutation=(1,0))
-        result0011_CT0 = body_2._H2_0011_CT0(densities, integrals, charges, permutation=(0,1))
-        result0011_CT2_1 = body_2._H2_0011_CT2(densities, integrals, charges, permutation=(0,1))
-        result0011_CT2_2 = body_2._H2_0011_CT2(densities, integrals, charges, permutation=(1,0))
-        result1111 = body_2._H2_one_body00(densities, integrals, charges, permutation=(1,0))
+    def H2(densities, integrals, subsystem, charges):
+        result0000 = body_2._H2_one_body00(densities, integrals, subsystem, charges, permutation=(0,1))
+        result0001_CT1 = body_2._H2_0001_CT1(densities, integrals, subsystem, charges, permutation=(0,1))
+        result0111_CT1 = body_2._H2_0001_CT1(densities, integrals, subsystem, charges, permutation=(1,0))
+        result0011_CT0 = body_2._H2_0011_CT0(densities, integrals, subsystem, charges, permutation=(0,1))
+        result0011_CT2_1 = body_2._H2_0011_CT2(densities, integrals, subsystem, charges, permutation=(0,1))
+        result0011_CT2_2 = body_2._H2_0011_CT2(densities, integrals, subsystem, charges, permutation=(1,0))
+        result1111 = body_2._H2_one_body00(densities, integrals, subsystem, charges, permutation=(1,0))
         return [result0000, result0001_CT1, result0011_CT0, result0011_CT2_1, result0011_CT2_2, result0111_CT1, result1111]
     @staticmethod
-    def _H2_one_body00(densities, integrals, charges, permutation):
-        rho1, rho2, n_i2, p, (chg_i1,chg_j1), (chg_i2,chg_j2) = _parameters2(densities, charges, permutation)
+    def _H2_one_body00(densities, integrals, subsystem, charges, permutation):
+        rho1, rho2, n_i2, p, (chg_i1,chg_j1), (chg_i2,chg_j2) = _parameters2(densities, subsystem, charges, permutation)
         if chg_i1==chg_j1 and chg_i2==chg_j2:
-            v0000 = _ints2(permutation, integrals, ["v0000"])
+            v0000 = _ints2(subsystem, permutation, integrals, ["v0000"])
             ccaa1 = rho1["ccaa"][chg_i1,chg_j1]
             def diagram(i1,i2,j1,j2):
                 if i2==j2:
@@ -156,10 +158,10 @@ class body_2(object):
         else:
             return None, None
     @staticmethod
-    def _H2_0001_CT1(densities, integrals, charges, permutation):
-        rho1, rho2, n_i2, p, (chg_i1,chg_j1), (chg_i2,chg_j2) = _parameters2(densities, charges, permutation)
+    def _H2_0001_CT1(densities, integrals, subsystem, charges, permutation):
+        rho1, rho2, n_i2, p, (chg_i1,chg_j1), (chg_i2,chg_j2) = _parameters2(densities, subsystem, charges, permutation)
         prefactor = 2 * (-1)**(n_i2 + p)
-        v0010, v0100 = _ints2(permutation, integrals, ["v0010", "v0100"])
+        v0010, v0100 = _ints2(subsystem, permutation, integrals, ["v0010", "v0100"])
         if chg_i1==chg_j1-1 and chg_i2==chg_j2+1:
             cca1 = rho1["cca"][chg_i1,chg_j1]
             a2 = rho2["a"][chg_i2,chg_j2]
@@ -181,10 +183,10 @@ class body_2(object):
         else:
             return None, None
     @staticmethod
-    def _H2_0011_CT0(densities, integrals, charges, permutation):
-        rho1, rho2, n_i2, p, (chg_i1,chg_j1), (chg_i2,chg_j2) = _parameters2(densities, charges, permutation)
+    def _H2_0011_CT0(densities, integrals, subsystem, charges, permutation):
+        rho1, rho2, n_i2, p, (chg_i1,chg_j1), (chg_i2,chg_j2) = _parameters2(densities, subsystem, charges, permutation)
         if chg_i1==chg_j1 and chg_i2==chg_j2:
-            v0101 = _ints2(permutation, integrals, ["v0101"])
+            v0101 = _ints2(subsystem, permutation, integrals, ["v0101"])
             ca1 = rho1["ca"][chg_i1,chg_j1]
             ca2 = rho2["ca"][chg_i2,chg_j2]
             def diagram(i1,i2,j1,j2):
@@ -196,10 +198,10 @@ class body_2(object):
         else:
             return None, None
     @staticmethod
-    def _H2_0011_CT2(densities, integrals, charges, permutation):
-        rho1, rho2, n_i2, p, (chg_i1,chg_j1), (chg_i2,chg_j2) = _parameters2(densities, charges, permutation)
+    def _H2_0011_CT2(densities, integrals, subsystem, charges, permutation):
+        rho1, rho2, n_i2, p, (chg_i1,chg_j1), (chg_i2,chg_j2) = _parameters2(densities, subsystem, charges, permutation)
         if chg_i1==chg_j1-2 and chg_i2==chg_j2+2:
-            v0011 = _ints2(permutation, integrals, ["v0011"])
+            v0011 = _ints2(subsystem, permutation, integrals, ["v0011"])
             cc1 = rho1["cc"][chg_i1,chg_j1]
             aa2 = rho2["aa"][chg_i2,chg_j2]
             def diagram(i1,i2,j1,j2):
@@ -212,29 +214,29 @@ class body_2(object):
             return None, None
         
     #@staticmethod
-    #def H2_pure_2_body(densities, integrals, charges):
-    #    result0001_CT1 = body_2._H2_0001_CT1(densities, integrals, charges, permutation=(0,1))
-    #    result0111_CT1 = body_2._H2_0001_CT1(densities, integrals, charges, permutation=(1,0))
-    #    result0011_CT0 = body_2._H2_0011_CT0(densities, integrals, charges, permutation=(0,1))
-    #    result0011_CT2_1 = body_2._H2_0011_CT2(densities, integrals, charges, permutation=(0,1))
-    #    result0011_CT2_2 = body_2._H2_0011_CT2(densities, integrals, charges, permutation=(1,0))
+    #def H2_pure_2_body(densities, integrals, subsystem, charges):
+    #    result0001_CT1 = body_2._H2_0001_CT1(densities, integrals, subsystem, charges, permutation=(0,1))
+    #    result0111_CT1 = body_2._H2_0001_CT1(densities, integrals, subsystem, charges, permutation=(1,0))
+    #    result0011_CT0 = body_2._H2_0011_CT0(densities, integrals, subsystem, charges, permutation=(0,1))
+    #    result0011_CT2_1 = body_2._H2_0011_CT2(densities, integrals, subsystem, charges, permutation=(0,1))
+    #    result0011_CT2_2 = body_2._H2_0011_CT2(densities, integrals, subsystem, charges, permutation=(1,0))
     #    return [result0001_CT1, result0011_CT0, result0011_CT2_1, result0011_CT2_2, result0111_CT1]
     
     @staticmethod
-    def S1H1(densities, integrals, charges):
-        result0001_CT1 = body_2._S1H1_0001_CT1(densities, integrals, charges, permutation=(0,1))
-        result0111_CT1 = body_2._S1H1_0001_CT1(densities, integrals, charges, permutation=(1,0))
-        result0011_CT0_1 = body_2._S1H1_0011_CT0(densities, integrals, charges, permutation=(0,1))
-        result0011_CT0_2 = body_2._S1H1_0011_CT0(densities, integrals, charges, permutation=(1,0))
-        result0011_CT2_1 = body_2._S1H1_0011_CT2(densities, integrals, charges, permutation=(0,1))
-        result0011_CT2_2 = body_2._S1H1_0011_CT2(densities, integrals, charges, permutation=(1,0))
+    def S1H1(densities, integrals, subsystem, charges):
+        result0001_CT1 = body_2._S1H1_0001_CT1(densities, integrals, subsystem, charges, permutation=(0,1))
+        result0111_CT1 = body_2._S1H1_0001_CT1(densities, integrals, subsystem, charges, permutation=(1,0))
+        result0011_CT0_1 = body_2._S1H1_0011_CT0(densities, integrals, subsystem, charges, permutation=(0,1))
+        result0011_CT0_2 = body_2._S1H1_0011_CT0(densities, integrals, subsystem, charges, permutation=(1,0))
+        result0011_CT2_1 = body_2._S1H1_0011_CT2(densities, integrals, subsystem, charges, permutation=(0,1))
+        result0011_CT2_2 = body_2._S1H1_0011_CT2(densities, integrals, subsystem, charges, permutation=(1,0))
         return [result0001_CT1, result0011_CT0_1, result0011_CT0_2, result0011_CT2_1, result0011_CT2_2, result0111_CT1]
     @staticmethod
-    def _S1H1_0001_CT1(densities, integrals, charges, permutation):
-        rho1, rho2, n_i2, p, (chg_i1,chg_j1), (chg_i2,chg_j2) = _parameters2(densities, charges, permutation)
+    def _S1H1_0001_CT1(densities, integrals, subsystem, charges, permutation):
+        rho1, rho2, n_i2, p, (chg_i1,chg_j1), (chg_i2,chg_j2) = _parameters2(densities, subsystem, charges, permutation)
         prefactor = (-1)**(n_i2 + p)
         if chg_i1==chg_j1-1 and chg_i2==chg_j2+1:
-            s01, h00 = _ints2(permutation, integrals, ["s01", "h00"])
+            s01, h00 = _ints2(subsystem, permutation, integrals, ["s01", "h00"])
             cca1 = rho1["cca"][chg_i1,chg_j1]
             a2 = rho2["a"][chg_i2,chg_j2]
             def diagram(i1,i2,j1,j2):
@@ -245,7 +247,7 @@ class body_2(object):
                 return prefactor * tendot(partial, tl.tensor(a2[i2][j2]), axes=([0], [0]))
             return diagram, permutation
         elif chg_i1==chg_j1+1 and chg_i2==chg_j2-1:
-            s10, h00 = _ints2(permutation, integrals, ["s10", "h00"])
+            s10, h00 = _ints2(subsystem, permutation, integrals, ["s10", "h00"])
             caa1 = rho1["caa"][chg_i1,chg_j1]
             c2 = rho2["c"][chg_i2,chg_j2]
             def diagram(i1,i2,j1,j2):
@@ -258,11 +260,11 @@ class body_2(object):
         else:
             return None, None
     @staticmethod
-    def _S1H1_0011_CT0(densities, integrals, charges, permutation):
-        rho1, rho2, n_i2, p, (chg_i1,chg_j1), (chg_i2,chg_j2) = _parameters2(densities, charges, permutation)
+    def _S1H1_0011_CT0(densities, integrals, subsystem, charges, permutation):
+        rho1, rho2, n_i2, p, (chg_i1,chg_j1), (chg_i2,chg_j2) = _parameters2(densities, subsystem, charges, permutation)
         prefactor = -1
         if chg_i1==chg_j1 and chg_i2==chg_j2:
-            s10, h01 = _ints2(permutation, integrals, ["s10", "h01"])
+            s10, h01 = _ints2(subsystem, permutation, integrals, ["s10", "h01"])
             ca1 = rho1["ca"][chg_i1,chg_j1]
             ca2 = rho2["ca"][chg_i2,chg_j2]
             def diagram(i1,i2,j1,j2):
@@ -275,10 +277,10 @@ class body_2(object):
         else:
             return None, None
     @staticmethod
-    def _S1H1_0011_CT2(densities, integrals, charges, permutation):
-        rho1, rho2, n_i2, p, (chg_i1,chg_j1), (chg_i2,chg_j2) = _parameters2(densities, charges, permutation)
+    def _S1H1_0011_CT2(densities, integrals, subsystem, charges, permutation):
+        rho1, rho2, n_i2, p, (chg_i1,chg_j1), (chg_i2,chg_j2) = _parameters2(densities, subsystem, charges, permutation)
         if chg_i1==chg_j1-2 and chg_i2==chg_j2+2:
-            s01, h01 = _ints2(permutation, integrals, ["s01", "h01"])
+            s01, h01 = _ints2(subsystem, permutation, integrals, ["s01", "h01"])
             cc1 = rho1["cc"][chg_i1,chg_j1]
             aa2 = rho2["aa"][chg_i2,chg_j2]
             def diagram(i1,i2,j1,j2):
@@ -292,23 +294,23 @@ class body_2(object):
             return None, None
         
     @staticmethod
-    def S1H2(densities, integrals, charges):
-        #ret_000011_CT2 = body_2._S1H2_000011_CT2(densities, integrals, charges, permutation=(0,1))
-        #ret_110000_CT2 = body_2._S1H2_000011_CT2(densities, integrals, charges, permutation=(1,0))
-        ret_000011_CT0 = body_2._S1H2_000011_CT0(densities, integrals, charges, permutation=(0,1))
-        ret_110000_CT0 = body_2._S1H2_000011_CT0(densities, integrals, charges, permutation=(1,0))
-        #ret_000111_CT3 = body_2._S1H2_000111_CT3(densities, integrals, charges, permutation=(0,1))
-        #ret_111000_CT3 = body_2._S1H2_000111_CT3(densities, integrals, charges, permutation=(1,0))
-        ret_000111_CT1 = body_2._S1H2_000111_CT1(densities, integrals, charges, permutation=(0,1))
-        ret_111000_CT1 = body_2._S1H2_000111_CT1(densities, integrals, charges, permutation=(1,0))
-        #ret_000001_CT1 = body_2._S1H2_000001_CT1(densities, integrals, charges, permutation=(0,1))
-        #ret_111110_CT1 = body_2._S1H2_000001_CT1(densities, integrals, charges, permutation=(1,0))
+    def S1H2(densities, integrals, subsystem, charges):
+        #ret_000011_CT2 = body_2._S1H2_000011_CT2(densities, integrals, subsystem, charges, permutation=(0,1))
+        #ret_110000_CT2 = body_2._S1H2_000011_CT2(densities, integrals, subsystem, charges, permutation=(1,0))
+        ret_000011_CT0 = body_2._S1H2_000011_CT0(densities, integrals, subsystem, charges, permutation=(0,1))
+        ret_110000_CT0 = body_2._S1H2_000011_CT0(densities, integrals, subsystem, charges, permutation=(1,0))
+        #ret_000111_CT3 = body_2._S1H2_000111_CT3(densities, integrals, subsystem, charges, permutation=(0,1))
+        #ret_111000_CT3 = body_2._S1H2_000111_CT3(densities, integrals, subsystem, charges, permutation=(1,0))
+        ret_000111_CT1 = body_2._S1H2_000111_CT1(densities, integrals, subsystem, charges, permutation=(0,1))
+        ret_111000_CT1 = body_2._S1H2_000111_CT1(densities, integrals, subsystem, charges, permutation=(1,0))
+        #ret_000001_CT1 = body_2._S1H2_000001_CT1(densities, integrals, subsystem, charges, permutation=(0,1))
+        #ret_111110_CT1 = body_2._S1H2_000001_CT1(densities, integrals, subsystem, charges, permutation=(1,0))
         return [ret_000011_CT0, ret_110000_CT0, ret_000111_CT1, ret_111000_CT1]
     @staticmethod
-    def _S1H2_000011_CT2(densities, integrals, charges, permutation):
-        rho1, rho2, n_i2, p, (chg_i1,chg_j1), (chg_i2,chg_j2) = _parameters2(densities, charges, permutation)
+    def _S1H2_000011_CT2(densities, integrals, subsystem, charges, permutation):
+        rho1, rho2, n_i2, p, (chg_i1,chg_j1), (chg_i2,chg_j2) = _parameters2(densities, subsystem, charges, permutation)
         if chg_i1==chg_j1-2 and chg_i2==chg_j2+2:
-            s01, s10, v0010, v0100 = _ints2(permutation, integrals, ["s01", "s10", "v0010", "v0100"])
+            s01, s10, v0010, v0100 = _ints2(subsystem, permutation, integrals, ["s01", "s10", "v0010", "v0100"])
             ccca1 = rho1["ccca"][chg_i1,chg_j1]
             caaa1 = rho1["caaa"][chg_i1,chg_j1]
             aa2 = rho2["aa"][chg_i2,chg_j2]
@@ -320,10 +322,10 @@ class body_2(object):
         else:
             return None, None
     @staticmethod
-    def _S1H2_000011_CT0(densities, integrals, charges, permutation):
-        rho1, rho2, n_i2, p, (chg_i1,chg_j1), (chg_i2,chg_j2) = _parameters2(densities, charges, permutation)
+    def _S1H2_000011_CT0(densities, integrals, subsystem, charges, permutation):
+        rho1, rho2, n_i2, p, (chg_i1,chg_j1), (chg_i2,chg_j2) = _parameters2(densities, subsystem, charges, permutation)
         if chg_i1==chg_j1 and chg_i2==chg_j2:
-            s01, s10, v0010, v0100 = _ints2(permutation, integrals, ["s01", "s10", "v0010", "v0100"])
+            s01, s10, v0010, v0100 = _ints2(subsystem, permutation, integrals, ["s01", "s10", "v0010", "v0100"])
             ccaa1 = rho1["ccaa"][chg_i1,chg_j1]
             ca2 = rho2["ca"][chg_i2,chg_j2]
             def diagram(i1,i2,j1,j2):
@@ -340,11 +342,11 @@ class body_2(object):
         else:
             return None, None
     @staticmethod
-    def _S1H2_000111_CT3(densities, integrals, charges, permutation):
-        rho1, rho2, n_i2, p, (chg_i1,chg_j1), (chg_i2,chg_j2) = _parameters2(densities, charges, permutation)
+    def _S1H2_000111_CT3(densities, integrals, subsystem, charges, permutation):
+        rho1, rho2, n_i2, p, (chg_i1,chg_j1), (chg_i2,chg_j2) = _parameters2(densities, subsystem, charges, permutation)
         prefactor = (-1)**(n_i2 + p)
         if chg_i1==chg_j1-3 and chg_i2==chg_j2+3:
-            s01, v0011 = _ints2(permutation, integrals, ["s01", "v0011"])
+            s01, v0011 = _ints2(subsystem, permutation, integrals, ["s01", "v0011"])
             ccc1 = rho1["ccc"][chg_i1,chg_j1]
             aaa2 = rho2["aaa"][chg_i2,chg_j2]
             def diagram(i1,i2,j1,j2):
@@ -353,11 +355,11 @@ class body_2(object):
         else:
             return None, None
     @staticmethod
-    def _S1H2_000111_CT1(densities, integrals, charges, permutation):
-        rho1, rho2, n_i2, p, (chg_i1,chg_j1), (chg_i2,chg_j2) = _parameters2(densities, charges, permutation)
+    def _S1H2_000111_CT1(densities, integrals, subsystem, charges, permutation):
+        rho1, rho2, n_i2, p, (chg_i1,chg_j1), (chg_i2,chg_j2) = _parameters2(densities, subsystem, charges, permutation)
         prefactor = (-1)**(n_i2 + p)
         if chg_i1==chg_j1-1 and chg_i2==chg_j2+1:
-            s01, s10, v0101, v0011 = _ints2(permutation, integrals, ["s01", "s10", "v0101", "v0011"])
+            s01, s10, v0101, v0011 = _ints2(subsystem, permutation, integrals, ["s01", "s10", "v0101", "v0011"])
             cca1 = rho1["cca"][chg_i1,chg_j1]
             caa2 = rho2["caa"][chg_i2,chg_j2]
             def diagram(i1,i2,j1,j2):
@@ -374,11 +376,11 @@ class body_2(object):
         else:
             return None, None
     @staticmethod
-    def _S1H2_000001_CT1(densities, integrals, charges, permutation):
-        rho1, rho2, n_i2, p, (chg_i1,chg_j1), (chg_i2,chg_j2) = _parameters2(densities, charges, permutation)
+    def _S1H2_000001_CT1(densities, integrals, subsystem, charges, permutation):
+        rho1, rho2, n_i2, p, (chg_i1,chg_j1), (chg_i2,chg_j2) = _parameters2(densities, subsystem, charges, permutation)
         prefactor = (-1)**(n_i2 + p)
         if chg_i1==chg_j1-1 and chg_i2==chg_j2+1:
-            s01, s10, v0000 = _ints2(permutation, integrals, ["s01", "s10", "v0000"])
+            s01, s10, v0000 = _ints2(subsystem, permutation, integrals, ["s01", "s10", "v0000"])
             cccaa1 = rho1["cccaa"][chg_i1,chg_j1]
             ccaaa1 = rho1["ccaaa"][chg_i1,chg_j1]
             a2 = rho2["a"][chg_i2,chg_j2]
@@ -391,21 +393,21 @@ class body_2(object):
             return None, None
         
     @staticmethod
-    def S2H1(densities, integrals, charges):
-        ret_000011_CT2 = body_2._S2H1_000011_CT2(densities, integrals, charges, permutation=(0,1))
-        ret_110000_CT2 = body_2._S2H1_000011_CT2(densities, integrals, charges, permutation=(1,0))
-        ret_000011_CT0 = body_2._S2H1_000011_CT0(densities, integrals, charges, permutation=(0,1))
-        ret_110000_CT0 = body_2._S2H1_000011_CT0(densities, integrals, charges, permutation=(1,0))
-        ret_000111_CT1 = body_2._S2H1_000111_CT1(densities, integrals, charges, permutation=(0,1))
-        ret_111000_CT1 = body_2._S2H1_000111_CT1(densities, integrals, charges, permutation=(1,0))
-        ret_000111_CT3 = body_2._S2H1_000111_CT3(densities, integrals, charges, permutation=(0,1))
-        ret_111000_CT3 = body_2._S2H1_000111_CT3(densities, integrals, charges, permutation=(1,0))
+    def S2H1(densities, integrals, subsystem, charges):
+        ret_000011_CT2 = body_2._S2H1_000011_CT2(densities, integrals, subsystem, charges, permutation=(0,1))
+        ret_110000_CT2 = body_2._S2H1_000011_CT2(densities, integrals, subsystem, charges, permutation=(1,0))
+        ret_000011_CT0 = body_2._S2H1_000011_CT0(densities, integrals, subsystem, charges, permutation=(0,1))
+        ret_110000_CT0 = body_2._S2H1_000011_CT0(densities, integrals, subsystem, charges, permutation=(1,0))
+        ret_000111_CT1 = body_2._S2H1_000111_CT1(densities, integrals, subsystem, charges, permutation=(0,1))
+        ret_111000_CT1 = body_2._S2H1_000111_CT1(densities, integrals, subsystem, charges, permutation=(1,0))
+        ret_000111_CT3 = body_2._S2H1_000111_CT3(densities, integrals, subsystem, charges, permutation=(0,1))
+        ret_111000_CT3 = body_2._S2H1_000111_CT3(densities, integrals, subsystem, charges, permutation=(1,0))
         return [ret_000011_CT2, ret_110000_CT2, ret_000011_CT0, ret_110000_CT0, ret_000111_CT1, ret_111000_CT1, ret_000111_CT3, ret_111000_CT3]
     @staticmethod
-    def _S2H1_000011_CT2(densities, integrals, charges, permutation):
-        rho1, rho2, n_i2, p, (chg_i1,chg_j1), (chg_i2,chg_j2) = _parameters2(densities, charges, permutation)
+    def _S2H1_000011_CT2(densities, integrals, subsystem, charges, permutation):
+        rho1, rho2, n_i2, p, (chg_i1,chg_j1), (chg_i2,chg_j2) = _parameters2(densities, subsystem, charges, permutation)
         if chg_i1==chg_i2-2 and chg_i2==chg_j2+2:
-            s01, h00 = _ints2(permutation, integrals, ["s01", "h00"])
+            s01, h00 = _ints2(subsystem, permutation, integrals, ["s01", "h00"])
             ccca1 = rho1["ccca"][chg_i1,chg_j1]
             aa2 = rho2["aa"][chg_i2,chg_j2]
             def diagram(i1,i2,j1,j2):
@@ -413,7 +415,7 @@ class body_2(object):
                 return 0.5 * np.einsum("qr,rq->", np.einsum("pq,pr->qr", s01, np.einsum("ij,iprj->pr", h00, ccca1[i1][j1])), np.einsum("rs,sq->rq", s01, aa2[i2][j2]))
             return diagram, permutation
         elif chg_i1==chg_j1+2 and chg_i2==chg_j2-2:
-            s10, h00 = _ints2(permutation, integrals, ["s10", "h00"])
+            s10, h00 = _ints2(subsystem, permutation, integrals, ["s10", "h00"])
             caaa1 = rho1["caaa"][chg_i1,chg_j1]
             cc2 = rho2["cc"][chg_i2,chg_j2]
             def diagram(i1,i2,j1,j2):
@@ -423,10 +425,10 @@ class body_2(object):
         else:
             return None, None
     @staticmethod
-    def _S2H1_000011_CT0(densities, integrals, charges, permutation):
-        rho1, rho2, n_i2, p, (chg_i1,chg_j1), (chg_i2,chg_j2) = _parameters2(densities, charges, permutation)
+    def _S2H1_000011_CT0(densities, integrals, subsystem, charges, permutation):
+        rho1, rho2, n_i2, p, (chg_i1,chg_j1), (chg_i2,chg_j2) = _parameters2(densities, subsystem, charges, permutation)
         if chg_i1==chg_i2 and chg_i2==chg_j2:
-            s01, s10, h00 = _ints2(permutation, integrals, ["s01", "s10", "h00"])
+            s01, s10, h00 = _ints2(subsystem, permutation, integrals, ["s01", "s10", "h00"])
             ccaa1 = rho1["ccaa"][chg_i1,chg_j1]
             ca2 = rho2["ca"][chg_i2,chg_j2]
             def diagram(i1,i2,j1,j2):
@@ -438,11 +440,11 @@ class body_2(object):
         else:
             return None, None
     @staticmethod
-    def _S2H1_000111_CT3(densities, integrals, charges, permutation):
-        rho1, rho2, n_i2, p, (chg_i1,chg_j1), (chg_i2,chg_j2) = _parameters2(densities, charges, permutation)
+    def _S2H1_000111_CT3(densities, integrals, subsystem, charges, permutation):
+        rho1, rho2, n_i2, p, (chg_i1,chg_j1), (chg_i2,chg_j2) = _parameters2(densities, subsystem, charges, permutation)
         prefactor = 0.5 * (-1)**(n_i2 + p)
         if chg_i1==chg_i2-3 and chg_i2==chg_j2+3:
-            s01, h01 = _ints2(permutation, integrals, ["s01", "h01"])
+            s01, h01 = _ints2(subsystem, permutation, integrals, ["s01", "h01"])
             ccc1 = rho1["ccc"][chg_i1,chg_j1]
             aaa2 = rho2["aaa"][chg_i2,chg_j2]
             def diagram(i1,i2,j1,j2):
@@ -452,11 +454,11 @@ class body_2(object):
         else:
             return None, None
     @staticmethod
-    def _S2H1_000111_CT1(densities, integrals, charges, permutation):
-        rho1, rho2, n_i2, p, (chg_i1,chg_j1), (chg_i2,chg_j2) = _parameters2(densities, charges, permutation)
+    def _S2H1_000111_CT1(densities, integrals, subsystem, charges, permutation):
+        rho1, rho2, n_i2, p, (chg_i1,chg_j1), (chg_i2,chg_j2) = _parameters2(densities, subsystem, charges, permutation)
         prefactor = 0.5 * (-1)**(n_i2 + p)
         if chg_i1==chg_i2-3 and chg_i2==chg_j2+3:
-            s01, s10, h01, h10 = _ints2(permutation, integrals, ["s01", "s10", "h01", "h10"])
+            s01, s10, h01, h10 = _ints2(subsystem, permutation, integrals, ["s01", "s10", "h01", "h10"])
             cca1 = rho1["cca"][chg_i1,chg_j1]
             caa2 = rho2["caa"][chg_i2,chg_j2]
             def diagram(i1,i2,j1,j2):
