@@ -54,7 +54,7 @@ def _parameters1(densities, integrals, subsystem, charges):
     data.V_1111 = tensorly.tensor(V[m1,m1,m1,m1])
     return data
 
-def _parameters2(densities, integrals, subsystem, charges, permutation, key_list):
+def _parameters2(densities, integrals, subsystem, charges, permutation):
     # helper functions to do repetitive manipulations of data passed from above
     # needs to be generalized (should not be hard) and have "2" removed from its name ... or maybe it is better this way
     densities = [densities[m] for m in subsystem]
@@ -68,56 +68,35 @@ def _parameters2(densities, integrals, subsystem, charges, permutation, key_list
             pruned[key] = {(m1_,m2_):integrals[key][m1,m2] for m2_,m2 in enumerate(subsystem) for m1_,m1 in enumerate(subsystem)}
     integrals = pruned
     #
-    m1, m2 = 0, 1
-    (chg_i1,chg_j1), (chg_i2,chg_j2) = charges
-    n_i2 = densities[m2]['n_elec'][chg_i2]
-    p = 0
-    if permutation==(1,0):
-        m1, m2 = 1, 0
-        (chg_i2,chg_j2), (chg_i1,chg_j1) = (chg_i1,chg_j1), (chg_i2,chg_j2)
-        p = 1
     data = _empty()
-    data.n_i2   = n_i2%2
-    data.p      = p
-    data.Dchg_1 = chg_i1 - chg_j1
-    data.Dchg_2 = chg_i2 - chg_j2
-    if data.Dchg_1==0:
-        data.ca_1   = tensorly.tensor(densities[m1]['ca'  ][chg_i1,chg_j1])
-        data.ccaa_1 = tensorly.tensor(densities[m1]['ccaa'][chg_i1,chg_j1])
-    if data.Dchg_1==-1:
-        data.c_1    = tensorly.tensor(densities[m1]['c'   ][chg_i1,chg_j1])
-        data.cca_1  = tensorly.tensor(densities[m1]['cca' ][chg_i1,chg_j1])
-    if data.Dchg_1==+1:
-        data.a_1    = tensorly.tensor(densities[m1]['a'   ][chg_i1,chg_j1])
-        data.caa_1  = tensorly.tensor(densities[m1]['caa' ][chg_i1,chg_j1])
-    if data.Dchg_1==-2:
-        data.cc_1   = tensorly.tensor(densities[m1]['cc'  ][chg_i1,chg_j1])
-    if data.Dchg_1==+2:
-        data.aa_1   = tensorly.tensor(densities[m1]['aa'  ][chg_i1,chg_j1])
-    if data.Dchg_2==0:
-        data.ca_2   = tensorly.tensor(densities[m2]['ca'  ][chg_i2,chg_j2])
-        data.ccaa_2 = tensorly.tensor(densities[m2]['ccaa'][chg_i2,chg_j2])
-    if data.Dchg_2==-1:
-        data.c_2    = tensorly.tensor(densities[m2]['c'   ][chg_i2,chg_j2])
-        data.cca_2  = tensorly.tensor(densities[m2]['cca' ][chg_i2,chg_j2])
-    if data.Dchg_2==+1:
-        data.a_2    = tensorly.tensor(densities[m2]['a'   ][chg_i2,chg_j2])
-        data.caa_2  = tensorly.tensor(densities[m2]['caa' ][chg_i2,chg_j2])
-    if data.Dchg_2==-2:
-        data.cc_2   = tensorly.tensor(densities[m2]['cc'  ][chg_i2,chg_j2])
-    if data.Dchg_2==+2:
-        data.aa_2   = tensorly.tensor(densities[m2]['aa'  ][chg_i2,chg_j2])
+    data.P = 0 if permutation==(0,1) else 1    # This line of code is still specific to two fragments
     #
-    map_dict = {"0": m1, "1": m2}
-    for elem in key_list:
-        elems = [*elem]
-        newelem = elem[0] + "_" + "".join(elems[1:])
-        if elems[0] == "v" and len(elems) == 5:
-            data.__dict__[newelem] = integrals[elems[0]][map_dict[elems[1]], map_dict[elems[2]], map_dict[elems[3]], map_dict[elems[4]]]
-        elif elems[0] in ["h", "s"] and len(elems) == 3:
-            data.__dict__[newelem] = integrals[elems[0]][map_dict[elems[1]], map_dict[elems[2]]]
-        else:
-            raise NotImplementedError(f"input string {elems} couldn't be formatted")
+    Dchg_rhos = {+2:["aa"], +1:["a","caa"], 0:["ca","ccaa"], -1:["c","cca"], -2:["cc"]}
+    n_i = 0
+    n_i_label = ""
+    for m1,m1_ in reversed(list(enumerate(permutation))):
+        m1_str = str(m1)
+        m1_str_tony = str(m1+1)
+        n_i_label = m1_str_tony + n_i_label
+        chg_i_m1 , chg_j_m1  = charges[m1]
+        chg_i_m1_, chg_j_m1_ = charges[m1_]
+        Dchg_m1_ = chg_i_m1_ - chg_j_m1_
+        n_i += densities[m1]['n_elec'][chg_i_m1]    # this is not an error!
+        data.__dict__["Dchg_"+m1_str_tony] = Dchg_m1_
+        data.__dict__["n_i"+n_i_label] = n_i%2
+        for Dchg,rhos in Dchg_rhos.items():
+            if Dchg==Dchg_m1_:
+                for rho in rhos:
+                    data.__dict__[rho+"_"+m1_str_tony] = tensorly.tensor(densities[m1_][rho][chg_i_m1_,chg_j_m1_])
+        for m2,m2_ in enumerate(permutation):
+            m12_str = m1_str + str(m2)
+            data.__dict__["h_"+m12_str] = integrals["h"][m1_,m2_]
+            data.__dict__["s_"+m12_str] = integrals["s"][m1_,m2_]
+            for m3,m3_ in enumerate(permutation):
+                m123_str = m12_str + str(m3)
+                for m4,m4_ in enumerate(permutation):
+                    m1234_str = m123_str + str(m4)
+                    data.__dict__["v_"+m1234_str] = integrals["v"][m1_,m2_,m3_,m4_]
     return data
 
 ##########
@@ -169,9 +148,9 @@ class body_2(object):
         return [result00, result01, result10, result11]
     @staticmethod
     def _H1(densities, integrals, subsystem, charges, permutation):
-        X = _parameters2(densities, integrals, subsystem, charges, permutation, ["h01"])
+        X = _parameters2(densities, integrals, subsystem, charges, permutation)
         if X.Dchg_1==-1 and X.Dchg_2==+1:
-            prefactor = (-1)**(X.n_i2 + X.p)
+            prefactor = (-1)**(X.n_i2 + X.P)
             def diagram(i1,i2,j1,j2):
                 #return prefactor * numpy.einsum("pq,p,q->", h01, X.c_1[i1][j1], X.a_2[i2][j2])
                 partial =          tendot(X.h_01,  X.c_1[i1][j1], axes=([0], [0]))
@@ -181,7 +160,7 @@ class body_2(object):
             return None, None
     @staticmethod
     def _H1_one_body00(densities, integrals, subsystem, charges, permutation):
-        X = _parameters2(densities, integrals, subsystem, charges, permutation, ["h00"])
+        X = _parameters2(densities, integrals, subsystem, charges, permutation)
         if X.Dchg_1==0 and X.Dchg_2==0:
             prefactor = 1
             def diagram(i1,i2,j1,j2):
@@ -214,7 +193,7 @@ class body_2(object):
         return [result0000, result0001_CT1, result0011_CT0, result0011_CT2_1, result0011_CT2_2, result0111_CT1, result1111]
     @staticmethod
     def _H2_one_body00(densities, integrals, subsystem, charges, permutation):
-        X = _parameters2(densities, integrals, subsystem, charges, permutation, ["v0000"])
+        X = _parameters2(densities, integrals, subsystem, charges, permutation)
         if X.Dchg_1==0 and X.Dchg_2==0:
             prefactor = 1
             def diagram(i1,i2,j1,j2):
@@ -228,9 +207,9 @@ class body_2(object):
             return None, None
     @staticmethod
     def _H2_0001_CT1(densities, integrals, subsystem, charges, permutation):
-        X = _parameters2(densities, integrals, subsystem, charges, permutation, ["v0010", "v0100"])
+        X = _parameters2(densities, integrals, subsystem, charges, permutation)
         if X.Dchg_1==-1 and X.Dchg_2==+1:
-            prefactor = 2 * (-1)**(X.n_i2 + X.p)
+            prefactor = 2 * (-1)**(X.n_i2 + X.P)
             def diagram(i1,i2,j1,j2):
                 #return prefactor * numpy.einsum("pqsr,pqr,s->", v_0010, X.cca_1[i1][j1], X.a_2[i2][j2])
                 #return prefactor * numpy.einsum("pqr,pqr->", numpy.einsum("pqsr,s->pqr", v_0010, X.a_2[i2][j2]), X.cca_1[i1][j1])
@@ -238,7 +217,7 @@ class body_2(object):
                 return prefactor * tendot(partial,  X.cca_1[i1][j1], axes=([0, 1, 2], [0, 1, 2]))
             return diagram, permutation
         if X.Dchg_1==+1 and X.Dchg_2==-1:
-            prefactor = 2 * (-1)**(X.n_i2 + X.p)
+            prefactor = 2 * (-1)**(X.n_i2 + X.P)
             def diagram(i1,i2,j1,j2):
                 #return prefactor * numpy.einsum("psrq,pqr,s->", v_0100, X.caa_1[i1][j1], X.c_2[i2][j2])
                 #return prefactor * numpy.einsum("prq,pqr->", numpy.einsum("psrq,s->prq", v_0100, X.c_2[i2][j2]), X.caa_1[i1][j1])
@@ -249,7 +228,7 @@ class body_2(object):
             return None, None
     @staticmethod
     def _H2_0011_CT0(densities, integrals, subsystem, charges, permutation):
-        X = _parameters2(densities, integrals, subsystem, charges, permutation, ["v0101"])
+        X = _parameters2(densities, integrals, subsystem, charges, permutation)
         if X.Dchg_1==0 and X.Dchg_2==0:
             prefactor = 4
             def diagram(i1,i2,j1,j2):
@@ -262,7 +241,7 @@ class body_2(object):
             return None, None
     @staticmethod
     def _H2_0011_CT2(densities, integrals, subsystem, charges, permutation):
-        X = _parameters2(densities, integrals, subsystem, charges, permutation, ["v0011"])
+        X = _parameters2(densities, integrals, subsystem, charges, permutation)
         if X.Dchg_1==-2 and X.Dchg_2==+2:
             prefactor = 1
             def diagram(i1,i2,j1,j2):
@@ -294,9 +273,9 @@ class body_2(object):
         return [result0001_CT1, result0011_CT0_1, result0011_CT0_2, result0011_CT2_1, result0011_CT2_2, result0111_CT1]
     @staticmethod
     def _S1H1_0001_CT1(densities, integrals, subsystem, charges, permutation):
-        X = _parameters2(densities, integrals, subsystem, charges, permutation, ["s01", "s10", "h00"])
+        X = _parameters2(densities, integrals, subsystem, charges, permutation)
         if X.Dchg_1==-1 and X.Dchg_2==+1:
-            prefactor = (-1)**(X.n_i2 + X.p)
+            prefactor = (-1)**(X.n_i2 + X.P)
             def diagram(i1,i2,j1,j2):
                 #return numpy.einsum("pq,rs,prs,q->", s01, h00, X.cca_1[i1][j1], X.a_2[i2][j2])
                 #return prefactor * numpy.einsum("pq,p,q->", s01, numpy.einsum("rs,prs->p", h00, X.cca_1[i1][j1]), X.a_2[i2][j2])
@@ -305,7 +284,7 @@ class body_2(object):
                 return prefactor * tendot(partial, X.a_2[i2][j2],   axes=([0], [0]))
             return diagram, permutation
         if X.Dchg_1==+1 and X.Dchg_2==-1:
-            prefactor = (-1)**(X.n_i2 + X.p)
+            prefactor = (-1)**(X.n_i2 + X.P)
             def diagram(i1,i2,j1,j2):
                 #return numpy.einsum("pq,rs,rqs,p->", s10, h00, X.caa_1[i1][j1], X.c_2[i2][j2])
                 #return prefactor * numpy.einsum("pq,q,p->", s10, numpy.einsum("rs,rqs->q", h00, X.caa_1[i1][j1]), X.c_2[i2][j2])
@@ -317,7 +296,7 @@ class body_2(object):
             return None, None
     @staticmethod
     def _S1H1_0011_CT0(densities, integrals, subsystem, charges, permutation):
-        X = _parameters2(densities, integrals, subsystem, charges, permutation, ["s10", "h01"])
+        X = _parameters2(densities, integrals, subsystem, charges, permutation)
         if X.Dchg_1==0 and X.Dchg_2==0:
             prefactor = -1
             def diagram(i1,i2,j1,j2):
@@ -331,7 +310,7 @@ class body_2(object):
             return None, None
     @staticmethod
     def _S1H1_0011_CT2(densities, integrals, subsystem, charges, permutation):
-        X = _parameters2(densities, integrals, subsystem, charges, permutation, ["s01", "h01"])
+        X = _parameters2(densities, integrals, subsystem, charges, permutation)
         if X.Dchg_1==-2 and X.Dchg_2==+2:
             prefactor = 1
             def diagram(i1,i2,j1,j2):
@@ -359,7 +338,7 @@ class body_2(object):
         return [ret_000011_CT0, ret_110000_CT0, ret_000111_CT1, ret_111000_CT1]
     @staticmethod
     def _S1H2_000011_CT2(densities, integrals, subsystem, charges, permutation):
-        X = _parameters2(densities, integrals, subsystem, charges, permutation, ["s01", "s10", "v0010", "v0100"])
+        X = _parameters2(densities, integrals, subsystem, charges, permutation)
         if X.Dchg_1==-2 and X.Dchg_2==+2:
             prefactor = 2
             def diagram(i1,i2,j1,j2):
@@ -370,7 +349,7 @@ class body_2(object):
             return None, None
     @staticmethod
     def _S1H2_000011_CT0(densities, integrals, subsystem, charges, permutation):
-        X = _parameters2(densities, integrals, subsystem, charges, permutation, ["s01", "s10", "v0010", "v0100"])
+        X = _parameters2(densities, integrals, subsystem, charges, permutation)
         if X.Dchg_1==0 and X.Dchg_2==0:
             prefactor = 2
             def diagram(i1,i2,j1,j2):
@@ -388,9 +367,9 @@ class body_2(object):
             return None, None
     @staticmethod
     def _S1H2_000111_CT3(densities, integrals, subsystem, charges, permutation):
-        X = _parameters2(densities, integrals, subsystem, charges, permutation, ["s01", "v0011"])
+        X = _parameters2(densities, integrals, subsystem, charges, permutation)
         if X.Dchg_1==-3 and X.Dchg_2==+3:
-            prefactor = (-1)**(X.n_i2 + X.p)
+            prefactor = (-1)**(X.n_i2 + X.P)
             def diagram(i1,i2,j1,j2):
                 return prefactor * numpy.einsum("ij,pqsr,pqi,jrs->", X.s_01, X.v_0011, X.ccc_1[i1][j1], X.aaa_2[i2][j2])
             return diagram, permutation
@@ -398,9 +377,9 @@ class body_2(object):
             return None, None
     @staticmethod
     def _S1H2_000111_CT1(densities, integrals, subsystem, charges, permutation):
-        X = _parameters2(densities, integrals, subsystem, charges, permutation, ["s01", "s10", "v0101", "v0011"])
+        X = _parameters2(densities, integrals, subsystem, charges, permutation)
         if X.Dchg_1==-1 and X.Dchg_2==+1:
-            prefactor = (-1)**(X.n_i2 + X.p)
+            prefactor = (-1)**(X.n_i2 + X.P)
             def diagram(i1,i2,j1,j2):
                 #return prefactor * (4 * numpy.einsum("ij,prqs,piq,rjs->", s01, v_0101, X.cca_1[i1][j1], X.caa_2[i2][j2])
                 #                    + numpy.einsum("ij,pqsr,qpj,irs->", s10, v_0011, X.cca_1[i1][j1], X.caa_2[i2][j2]))
@@ -416,9 +395,9 @@ class body_2(object):
             return None, None
     @staticmethod
     def _S1H2_000001_CT1(densities, integrals, subsystem, charges, permutation):
-        X = _parameters2(densities, integrals, subsystem, charges, permutation, ["s01", "s10", "v0000"])
+        X = _parameters2(densities, integrals, subsystem, charges, permutation)
         if X.Dchg_1==-1 and X.Dchg_2==+1:
-            prefactor = (-1)**(X.n_i2 + X.p)
+            prefactor = (-1)**(X.n_i2 + X.P)
             def diagram(i1,i2,j1,j2):
                 return prefactor * (numpy.einsum(  "ij,pqrs,pqisr,j->", X.s_01, X.v_0000, X.cccaa_1[i1][j1], X.a_2[i2][j2])
                                     + numpy.einsum("ij,pqrs,pqjrs,i->", X.s_10, X.v_0000, X.ccaaa_1[i1][j1], X.c_2[i2][j2]))
@@ -439,7 +418,7 @@ class body_2(object):
         return [ret_000011_CT2, ret_110000_CT2, ret_000011_CT0, ret_110000_CT0, ret_000111_CT1, ret_111000_CT1, ret_000111_CT3, ret_111000_CT3]
     @staticmethod
     def _S2H1_000011_CT2(densities, integrals, subsystem, charges, permutation):
-        X = _parameters2(densities, integrals, subsystem, charges, permutation, ["s01", "h00"])
+        X = _parameters2(densities, integrals, subsystem, charges, permutation)
         if X.Dchg_1==-2 and X.Dchg_2==+2:
             prefactor = 1/2.
             def diagram(i1,i2,j1,j2):
@@ -456,7 +435,7 @@ class body_2(object):
             return None, None
     @staticmethod
     def _S2H1_000011_CT0(densities, integrals, subsystem, charges, permutation):
-        X = _parameters2(densities, integrals, subsystem, charges, permutation, ["s01", "s10", "h00"])
+        X = _parameters2(densities, integrals, subsystem, charges, permutation)
         if X.Dchg_1==0 and X.Dchg_2==0:
             prefactor = -1/2.
             def diagram(i1,i2,j1,j2):
@@ -469,9 +448,9 @@ class body_2(object):
             return None, None
     @staticmethod
     def _S2H1_000111_CT3(densities, integrals, subsystem, charges, permutation):
-        X = _parameters2(densities, integrals, subsystem, charges, permutation, ["s01", "h01"])
+        X = _parameters2(densities, integrals, subsystem, charges, permutation)
         if X.Dchg_1==-3 and X.Dchg_2==+3:
-            prefactor = (-1)**(X.n_i2 + X.p) / 2.
+            prefactor = (-1)**(X.n_i2 + X.P) / 2.
             def diagram(i1,i2,j1,j2):
                 #return prefactor * numpy.einsum("pq,rs,ij,ipr,sqj->", s01, s01, h01, X.ccc_1[i1][j1], X.aaa_2[i2][j2])
                 return prefactor * numpy.einsum("jqr,rqj->", numpy.einsum("pq,jpr->jqr", X.s_01, numpy.einsum("ij,ipr->jpr", X.h_01, X.ccc_1[i1][j1])), numpy.einsum("rs,sqj->rqj", X.s_01, X.aaa_2[i2][j2]))
@@ -480,9 +459,9 @@ class body_2(object):
             return None, None
     @staticmethod
     def _S2H1_000111_CT1(densities, integrals, subsystem, charges, permutation):
-        X = _parameters2(densities, integrals, subsystem, charges, permutation, ["s01", "s10", "h01", "h10"])
+        X = _parameters2(densities, integrals, subsystem, charges, permutation)
         if X.Dchg_1==-3 and X.Dchg_2==+3:
-            prefactor = (-1)**(X.n_i2 + X.p + 1) / 2.
+            prefactor = (-1)**(X.n_i2 + X.P + 1) / 2.
             def diagram(i1,i2,j1,j2):
                 #return prefactor * (numpy.einsum("pq,rs,ij,prj,isq->", s01, s01, h10, X.cca_1[i1][j1], X.caa_2[i2][j2])
                 #                      + numpy.einsum("pq,rs,ij,ips,rqj->", s01, s10, h01, X.cca_1[i1][j1], X.caa_2[i2][j2])
