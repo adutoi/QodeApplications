@@ -68,25 +68,27 @@ def _parameters(densities, integrals, subsystem, charges, permutation=(0,)):
         for m1,m1_ in enumerate(permutation):
             m01_str = m0_str + str(m1)
             if hasattr(integrals, "s"):
-                data.__dict__["s_"+m01_str] = s_ints[m0_,m1_]
+                data.__dict__["s_"+m01_str] = tensorly.tensor(s_ints[m0_,m1_])
             if hasattr(integrals, "S"):
-                data.__dict__["S_"+m01_str] = S[m0_,m1_]
+                data.__dict__["S_"+m01_str] = tensorly.tensor(S[m0_,m1_])
             if hasattr(integrals, "h"):
-                data.__dict__["h_"+m01_str] = h_ints[m0_,m1_]
+                data.__dict__["h_"+m01_str] = tensorly.tensor(h_ints[m0_,m1_])
             if hasattr(integrals, "T"):
-                data.__dict__["T_"+m01_str] = T[m0_,m1_]
+                data.__dict__["T_"+m01_str] = tensorly.tensor(T[m0_,m1_])
             for m2,m2_ in enumerate(permutation):
                 m012_str  = m01_str + str(m2)
                 m2_01_str = str(m2) + "_" + m01_str
                 if hasattr(integrals, "U"):
-                    data.__dict__["U_"+m2_01_str] = U[m2_,m0_,m1_]
+                    data.__dict__["U_"+m2_01_str] = tensorly.tensor(U[m2_,m0_,m1_])
                 for m3,m3_ in enumerate(permutation):
                     m0123_str = m012_str + str(m3)
                     if hasattr(integrals, "v"):
-                        data.__dict__["v_"+m0123_str] = v_ints[m0_,m1_,m2_,m3_]
+                        data.__dict__["v_"+m0123_str] = tensorly.tensor(v_ints[m0_,m1_,m2_,m3_])
                     if hasattr(integrals, "V"):
-                        data.__dict__["V_"+m0123_str] = V[m0_,m1_,m2_,m3_]
+                        data.__dict__["V_"+m0123_str] = tensorly.tensor(V[m0_,m1_,m2_,m3_])
     return data
+
+
 
 ##########
 # Here are the implementations of the actual diagrams.
