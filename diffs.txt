@@ -1,7 +1,0 @@
-To Do:
-
-X 1. remove extra argument in _parameters2 call
-X 2. rewrite _parameters2 by looping
-X 3. fix 01 12 discrepencies
-X 4. pass all ints as structure (not dict)
-  5. merge together _parameters1 and _parameters2
