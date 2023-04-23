@@ -58,15 +58,10 @@ def _parameters2(densities, integrals, subsystem, charges, permutation):
     # helper functions to do repetitive manipulations of data passed from above
     # needs to be generalized (should not be hard) and have "2" removed from its name ... or maybe it is better this way
     densities = [densities[m] for m in subsystem]
-    pruned = {}
-    for key in integrals:
-        #print(key)
-        if key == "v":
-            pruned[key] = {(m0_,m1_,m2_,m3_):integrals[key][m0,m1,m2,m3] for m3_,m3 in enumerate(subsystem)
-                        for m2_,m2 in enumerate(subsystem) for m1_,m1 in enumerate(subsystem) for m0_,m0 in enumerate(subsystem)}
-        else:
-            pruned[key] = {(m0_,m1_):integrals[key][m0,m1] for m1_,m1 in enumerate(subsystem) for m0_,m0 in enumerate(subsystem)}
-    integrals = pruned
+    s_ints = {(m0_,m1_):integrals.s[m0,m1] for m1_,m1 in enumerate(subsystem) for m0_,m0 in enumerate(subsystem)}
+    h_ints = {(m0_,m1_):integrals.h[m0,m1] for m1_,m1 in enumerate(subsystem) for m0_,m0 in enumerate(subsystem)}
+    v_ints = {(m0_,m1_,m2_,m3_):integrals.v[m0,m1,m2,m3] for m3_,m3 in enumerate(subsystem)
+              for m2_,m2 in enumerate(subsystem) for m1_,m1 in enumerate(subsystem) for m0_,m0 in enumerate(subsystem)}
     #
     data = _empty()
     data.P = 0 if permutation==(0,1) else 1    # This line of code is still specific to two fragments
@@ -89,13 +84,13 @@ def _parameters2(densities, integrals, subsystem, charges, permutation):
                     data.__dict__[rho+"_"+m0_str] = tensorly.tensor(densities[m0_][rho][chg_i_m0_,chg_j_m0_])
         for m1,m1_ in enumerate(permutation):
             m01_str = m0_str + str(m1)
-            data.__dict__["h_"+m01_str] = integrals["h"][m0_,m1_]
-            data.__dict__["s_"+m01_str] = integrals["s"][m0_,m1_]
+            data.__dict__["h_"+m01_str] = h_ints[m0_,m1_]
+            data.__dict__["s_"+m01_str] = s_ints[m0_,m1_]
             for m2,m2_ in enumerate(permutation):
                 m012_str = m01_str + str(m2)
                 for m3,m3_ in enumerate(permutation):
                     m0123_str = m012_str + str(m3)
-                    data.__dict__["v_"+m0123_str] = integrals["v"][m0_,m1_,m2_,m3_]
+                    data.__dict__["v_"+m0123_str] = v_ints[m0_,m1_,m2_,m3_]
     return data
 
 ##########
