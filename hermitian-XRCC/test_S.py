@@ -112,7 +112,9 @@ Stest[10] = XR_term.dimer_matrix(S_blocks, active_diagrams, dimer01, [(-1,-1)])
 # build Hamiltonian matrices (SH)
 #########
 
-SH_integrals = {}
+class _empty(object):  pass    # Basically just a dictionary
+
+SH_integrals = _empty()
 
 h_integrals_ao = np.load(f"atomic_states/integrals/Be2_{displacement}_h_AO.npy")
 v_integrals_ao = np.load(f"atomic_states/integrals/Be2_{displacement}_V_AO.npy")
@@ -130,8 +132,8 @@ h = np.swapaxes(h, 0, 1)
 h = np.swapaxes(h, 3, 4)
 h = h.reshape((2, 2 * n_orb, 2, 2 * n_orb)) # frag spin_orb
 
-SH_integrals["h"] = {(0, 0): h[0, :, 0, :], (0, 1): h[0, :, 1, :],
-                     (1, 0): h[1, :, 0, :], (1, 1): h[1, :, 1, :]}
+SH_integrals.h = {(0, 0): h[0, :, 0, :], (0, 1): h[0, :, 1, :],
+                  (1, 0): h[1, :, 0, :], (1, 1): h[1, :, 1, :]}
 
 # This step can be improved by utilizing the block-diagonal structure of U_h (4 diag blocks in restricted and 2 in unrestricted)
 v = np.einsum("mi,mjkl->ijkl", U_h, np.einsum("nj,mnkl->mjkl", U_h, np.einsum("ok,mnol->mnkl", U_h, np.einsum("pl,mnop->mnol", U_h, v_integrals_ao))))
@@ -147,21 +149,21 @@ v = np.swapaxes(v, 9, 10)
 v = v.reshape((2, 2 * n_orb, 2, 2 * n_orb, 2, 2 * n_orb, 2, 2 * n_orb))
 
 from itertools import product
-SH_integrals["v"] = {(i, j, k, l): v[i, :, j, :, k, :, l, :] for i, j, k, l in product([0, 1], [0, 1], [0, 1], [0, 1])}
+SH_integrals.v = {(i, j, k, l): v[i, :, j, :, k, :, l, :] for i, j, k, l in product([0, 1], [0, 1], [0, 1], [0, 1])}
 
 # exchange terms are always taken care of by antisymmetrization, even if the fragments are different!
-print("norm of v0101(pqrs) + v0110(pqsr)", np.linalg.norm(SH_integrals["v"][0, 1, 0, 1] + np.swapaxes(SH_integrals["v"][0, 1, 1, 0], 2, 3)))
+print("norm of v0101(pqrs) + v0110(pqsr)", np.linalg.norm(SH_integrals.v[0, 1, 0, 1] + np.swapaxes(SH_integrals.v[0, 1, 1, 0], 2, 3)))
 
 # H1 pure/coupling should include diagonal terms, where h consists only of nuclear attraction integrals
 # which are diagonal in their fragments, but exclude the atom number of this specific fragment
 """
-H_integrals = {}
+H_integrals = _empty()
 # "s" is not required for H1 and H2 terms
-H_integrals["h"] = {key:SH_integrals["h"][key] for key in SH_integrals["h"]}#SH_integrals["h"]
-H_integrals["v"] = {key:SH_integrals["v"][key] for key in SH_integrals["v"]}#SH_integrals["v"]
+H_integrals.h = {key:SH_integrals.h[key] for key in SH_integrals.h}#SH_integrals.h
+H_integrals.v = {key:SH_integrals.v[key] for key in SH_integrals.v}#SH_integrals.v
 
-H_integrals["h"][(0, 0)] = np.load(f"test-data-4.5/U_1_0_0.npy")
-H_integrals["h"][(1, 1)] = np.load(f"test-data-4.5/U_0_1_1.npy")
+H_integrals.h[(0, 0)] = np.load(f"test-data-4.5/U_1_0_0.npy")
+H_integrals.h[(1, 1)] = np.load(f"test-data-4.5/U_0_1_1.npy")
 
 H_blocks = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=H_integrals, diagrams=SH_diagrams)
 SH_blocks = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=SH_integrals, diagrams=SH_diagrams)
@@ -179,22 +181,22 @@ D0 = Be.rho["ca"][0,0][0][0]
 D1 = Be.rho["ca"][0,0][0][0]
 
 # exchange terms are always taken care of by antisymmetrization, even if the fragments are different! Therefore give every J term a factor of 2
-two_p_mean_field = {(0, 0): 2 * (np.einsum("sr,prqs->pq", D0, SH_integrals["v"][0, 0, 0, 0])
-                                 + np.einsum("sr,prqs->pq", D1, SH_integrals["v"][0, 1, 0, 1])),
-                    (0, 1): 2 * (np.einsum("sr,prqs->pq", D0, SH_integrals["v"][0, 0, 1, 0])
-                                 + np.einsum("sr,prqs->pq", D1, SH_integrals["v"][0, 1, 1, 1])),
-                    (1, 0): 2 * (np.einsum("sr,prqs->pq", D0, SH_integrals["v"][1, 0, 0, 0])
-                                 + np.einsum("sr,prqs->pq", D1, SH_integrals["v"][1, 1, 0, 1])),
-                    (1, 1): 2 * (np.einsum("sr,prqs->pq", D1, SH_integrals["v"][1, 1, 1, 1])
-                                 + np.einsum("sr,prqs->pq", D0, SH_integrals["v"][1, 0, 1, 0]))}
+two_p_mean_field = {(0, 0): 2 * (np.einsum("sr,prqs->pq", D0, SH_integrals.v[0, 0, 0, 0])
+                                 + np.einsum("sr,prqs->pq", D1, SH_integrals.v[0, 1, 0, 1])),
+                    (0, 1): 2 * (np.einsum("sr,prqs->pq", D0, SH_integrals.v[0, 0, 1, 0])
+                                 + np.einsum("sr,prqs->pq", D1, SH_integrals.v[0, 1, 1, 1])),
+                    (1, 0): 2 * (np.einsum("sr,prqs->pq", D0, SH_integrals.v[1, 0, 0, 0])
+                                 + np.einsum("sr,prqs->pq", D1, SH_integrals.v[1, 1, 0, 1])),
+                    (1, 1): 2 * (np.einsum("sr,prqs->pq", D1, SH_integrals.v[1, 1, 1, 1])
+                                 + np.einsum("sr,prqs->pq", D0, SH_integrals.v[1, 0, 1, 0]))}
 
-fock_ints = {key: SH_integrals["h"][key] + two_p_mean_field[key] for key in SH_integrals["h"]}
+fock_ints = {key: SH_integrals.h[key] + two_p_mean_field[key] for key in SH_integrals.h}
 
-SH_integrals_fock = {}
-SH_integrals_fock["h"] = fock_ints
+SH_integrals_fock = _empty()
+SH_integrals_fock.h = fock_ints
 
-SH_integrals["s"] = overlaps
-SH_integrals_fock["s"] = overlaps
+SH_integrals.s = overlaps
+SH_integrals_fock.s = overlaps
 
 ##ADD tl.set_backend("pytorch")
 # here we changed the backend, so everything, which shall be handled by anything involving
@@ -212,10 +214,11 @@ U0 = tl.tensor(U0)
 U1 = tl.tensor(U1)
 
 # rotate integrals into projected basis and make them tl.tensor
-SH_integrals = {kind:{subblock:orb_proj_ints(U0, U1, subblock, tl.tensor(SH_integrals[kind][subblock]))
-                      for subblock in SH_integrals[kind]} for kind in SH_integrals}
-SH_integrals_fock = {kind:{subblock:orb_proj_ints(U0, U1, subblock, tl.tensor(SH_integrals_fock[kind][subblock]))
-                           for subblock in SH_integrals_fock[kind]} for kind in SH_integrals_fock}
+SH_integrals.s      = {subblock:orb_proj_ints(U0, U1, subblock, tl.tensor(SH_integrals.s[subblock]))      for subblock in SH_integrals.s}
+SH_integrals.h      = {subblock:orb_proj_ints(U0, U1, subblock, tl.tensor(SH_integrals.h[subblock]))      for subblock in SH_integrals.h}
+SH_integrals.v      = {subblock:orb_proj_ints(U0, U1, subblock, tl.tensor(SH_integrals.v[subblock]))      for subblock in SH_integrals.v}
+SH_integrals_fock.s = {subblock:orb_proj_ints(U0, U1, subblock, tl.tensor(SH_integrals_fock.s[subblock])) for subblock in SH_integrals_fock.s}
+SH_integrals_fock.h = {subblock:orb_proj_ints(U0, U1, subblock, tl.tensor(SH_integrals_fock.h[subblock])) for subblock in SH_integrals_fock.h}
 
 
 #TODO: decompose the ERIs and densities with estimated rank from occ orb number
@@ -301,10 +304,10 @@ for i in [0, 1]:
 
 # compare the integrals
 for key in h_ref:
-    print(f"h_me - h_ref for {key}", np.linalg.norm(SH_integrals["h"][key] - h_ref[key]))
+    print(f"h_me - h_ref for {key}", np.linalg.norm(SH_integrals.h[key] - h_ref[key]))
 
 for key in v_ref:
-    print(f"v_me - v_ref for {key}", np.linalg.norm(SH_integrals["v"][key] - v_ref[key]))
+    print(f"v_me - v_ref for {key}", np.linalg.norm(SH_integrals.v[key] - v_ref[key]))
 """
 
 # compare H1 and H2 to XR implementation
