@@ -18,7 +18,7 @@
 
 import numpy
 import tensorly
-from tendot_wrapper import tendot
+from tendot import tendot
 
 
 

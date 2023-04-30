@@ -17,7 +17,7 @@
 #
 
 import tensorly
-from tendot_wrapper import tendot
+from tendot import tendot
 
 class _empty(object):  pass    # Basically just a dictionary
 

@@ -20,7 +20,7 @@
 # fragment
 
 import tensorly as tl
-from tendot_wrapper import tendot
+from tendot import tendot
 #from cache import cached_member_function
 
 # build the transformation matrix
