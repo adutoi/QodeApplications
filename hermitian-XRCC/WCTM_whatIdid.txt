@@ -1,0 +1,2 @@
+python WCTM_data.py 1.5
+convert viz-d.png -scale 300% viz-d-scaled.png
