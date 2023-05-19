@@ -57,31 +57,7 @@ C     = BeN[0].basis.MOcoeffs          # n_orb x n_orb for restricted orbitals
 # build overlap matrices (S)
 #########
 
-# Tensor decompositions scale more or less the same as an orbital rotation,
-# however, we only have to do the rotation step once, while the tensor
-# decomposition requires waaaaaay more steps, so we reduce the dimensions of
-# the tensors, by rotating into a projected basis,
-# before decomposing them, to save a lot of time.
-# This works very well for S, but since h and v can't be truncated in this
-# projected basis, this is not applicable to SH
-
-# get (truncated) orbital rotation matrices
-U0, U1, full_U = transformation_mat(integrals.S[(0, 1)], integrals.S[(1, 0)], thresh=1e-12)
-# rotate overlaps into projected basis and make them tensorly.tensor
-overlaps_for_S = {key:orb_proj_ints(U0, U1, key, tensorly.tensor(integrals.S[key])) for key in [(0,0), (0,1), (1,0), (1,1)]}
-
-# rotate densities into projected basis and make them tensorly.tensor
-# here the tensorly.tensor read in is done in orb_proj_density
-BeN_rho_alt = {}
-BeN_rho_alt[0] = {op_string:{charges:orb_proj_density(U0, BeN_rho[0][op_string][charges])
-                         for charges in BeN_rho[0][op_string]} for op_string in BeN_rho[0] if len(op_string) < 6}
-BeN_rho_alt[1] = {op_string:{charges:orb_proj_density(U1, BeN_rho[1][op_string][charges])
-                         for charges in BeN_rho[1][op_string]} for op_string in BeN_rho[1] if len(op_string) < 6}
-for i in range(len(BeN_rho)):  # reintroduce monkey patch for densities
-    BeN_rho_alt[i]["n_elec"] = BeN_rho[i]["n_elec"]
-    BeN_rho_alt[i]["n_states"] = BeN_rho[i]["n_states"]
-
-S_blocks = diagrammatic_expansion.blocks(densities=BeN_rho_alt, integrals=overlaps_for_S, diagrams=S_diagrams)
+S_blocks = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=integrals.S, diagrams=S_diagrams)
 
 active_diagrams = {}
 active_diagrams[0] = ["identity"]
@@ -121,8 +97,9 @@ SHtest2_Tony[10] = XR_term.dimer_matrix(SH_blocks_Tony, active_SH_diagrams_Tony,
 
 class _empty(object):  pass    # Basically just a dictionary
 
-SH_integrals      = _empty()
-SH_integrals_fock = _empty()
+SH_integrals = _empty()
+
+SH_integrals.s = integrals.S
 
 SH_integrals.h = {}
 SH_integrals.h[(0, 0)] = integrals.T[(0, 0)] + integrals.U[(0, 0, 0)] + integrals.U[(1, 0, 0)]
@@ -139,41 +116,28 @@ for pp in [0,1]:
 
 # correct for diagonals of higher electron orders by building Fock like one-electron integrals
 
+SH_integrals_fock = _empty()
+
+SH_integrals_fock.s = integrals.S
+
 D0 = BeN[0].rho["ca"][0,0][0][0]
 D1 = BeN[0].rho["ca"][0,0][0][0]
-
-# exchange terms are always taken care of by antisymmetrization, even if the fragments are different! Therefore give every J term a factor of 2
-two_p_mean_field = {(0, 0): 2 * (numpy.einsum("sr,prqs->pq", D0, SH_integrals.v[0, 0, 0, 0])
+two_p_mean_field = {(0, 0): 2 * (  numpy.einsum("sr,prqs->pq", D0, SH_integrals.v[0, 0, 0, 0])
                                  + numpy.einsum("sr,prqs->pq", D1, SH_integrals.v[0, 1, 0, 1])),
-                    (0, 1): 2 * (numpy.einsum("sr,prqs->pq", D0, SH_integrals.v[0, 0, 1, 0])
+                    (0, 1): 2 * (  numpy.einsum("sr,prqs->pq", D0, SH_integrals.v[0, 0, 1, 0])
                                  + numpy.einsum("sr,prqs->pq", D1, SH_integrals.v[0, 1, 1, 1])),
-                    (1, 0): 2 * (numpy.einsum("sr,prqs->pq", D0, SH_integrals.v[1, 0, 0, 0])
+                    (1, 0): 2 * (  numpy.einsum("sr,prqs->pq", D0, SH_integrals.v[1, 0, 0, 0])
                                  + numpy.einsum("sr,prqs->pq", D1, SH_integrals.v[1, 1, 0, 1])),
-                    (1, 1): 2 * (numpy.einsum("sr,prqs->pq", D1, SH_integrals.v[1, 1, 1, 1])
-                                 + numpy.einsum("sr,prqs->pq", D0, SH_integrals.v[1, 0, 1, 0]))}
-
+                    (1, 1): 2 * (  numpy.einsum("sr,prqs->pq", D0, SH_integrals.v[1, 0, 1, 0])
+                                 + numpy.einsum("sr,prqs->pq", D1, SH_integrals.v[1, 1, 1, 1]))}
 SH_integrals_fock.h = {key: SH_integrals.h[key] + two_p_mean_field[key] for key in SH_integrals.h}
 
 ##ADD tensorly.set_backend("pytorch")
 # here we changed the backend, so everything, which shall be handled by anything involving
 # a tensorly object, needs to be tensorly.tensor
-# integrals.S is not tensorly.tensor, while densities are already tensorly.tensor (list of list of tensorly.tensor),
-# see how S is evaluated
 
-U0 = tensorly.tensor(U0)
-U1 = tensorly.tensor(U1)
-
-# rotate integrals into projected basis and make them tensorly.tensor
-SH_integrals.s      = {subblock:orb_proj_ints(U0, U1, subblock, tensorly.tensor(integrals.S[subblock]))         for subblock in [(0,0), (0,1), (1,0), (1,1)]}
-SH_integrals.h      = {subblock:orb_proj_ints(U0, U1, subblock, tensorly.tensor(SH_integrals.h[subblock]))      for subblock in SH_integrals.h}
-SH_integrals.v      = {subblock:orb_proj_ints(U0, U1, subblock, tensorly.tensor(SH_integrals.v[subblock]))      for subblock in SH_integrals.v}
-SH_integrals_fock.s = {subblock:orb_proj_ints(U0, U1, subblock, tensorly.tensor(integrals.S[subblock]))         for subblock in [(0,0), (0,1), (1,0), (1,1)]}
-SH_integrals_fock.h = {subblock:orb_proj_ints(U0, U1, subblock, tensorly.tensor(SH_integrals_fock.h[subblock])) for subblock in SH_integrals_fock.h}
-
-
-SH_blocks = diagrammatic_expansion.blocks(densities=BeN_rho_alt, integrals=SH_integrals, diagrams=SH_diagrams)
-
-SH_blocks_fock = diagrammatic_expansion.blocks(densities=BeN_rho_alt, integrals=SH_integrals_fock, diagrams=SH_diagrams)
+SH_blocks      = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=SH_integrals,      diagrams=SH_diagrams)
+SH_blocks_fock = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=SH_integrals_fock, diagrams=SH_diagrams)
 
 H1, H2, S1H1, S1H2 = {}, {}, {}, {}
 H1[2] = ["H1"]
