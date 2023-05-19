@@ -27,11 +27,10 @@ import XR_term                  # knows how to use ^this information to pack a m
 import S_diagrams               # contains definitions of actual diagrams needed for S operator in BO rep
 import SH_diagrams              # contains definitions of actual diagrams needed for SH operator in BO rep
 from   get_ints       import get_ints
-from   orb_projection import transformation_mat, orb_proj_ints, orb_proj_density
 from   Be631g         import monomer_data as Be
 
-##ADD torch.set_num_threads(4)  # here we set the number of the CPU cores, even though pytorch is not used yet
-#tensorly.set_backend("pytorch")
+#torch.set_num_threads(4)
+tensorly.set_backend("pytorch")
 
 #########
 # Load data
@@ -50,8 +49,6 @@ for m,frag in enumerate(BeN):  frag.load_states(states, n_states)
 
 # This should all be done in a better way
 BeN_rho = [frag.rho for frag in BeN]   # diagrammatic_expansion.blocks should take BeN directly? (pull n_states and n_elec out of rho and put one level higher)
-n_orb = BeN[0].basis.n_spatial_orb     # number of spatial orbitals for one atom
-C     = BeN[0].basis.MOcoeffs          # n_orb x n_orb for restricted orbitals
 
 #########
 # build overlap matrices (S)
@@ -131,10 +128,6 @@ two_p_mean_field = {(0, 0): 2 * (  numpy.einsum("sr,prqs->pq", D0, SH_integrals.
                     (1, 1): 2 * (  numpy.einsum("sr,prqs->pq", D0, SH_integrals.v[1, 0, 1, 0])
                                  + numpy.einsum("sr,prqs->pq", D1, SH_integrals.v[1, 1, 1, 1]))}
 SH_integrals_fock.h = {key: SH_integrals.h[key] + two_p_mean_field[key] for key in SH_integrals.h}
-
-##ADD tensorly.set_backend("pytorch")
-# here we changed the backend, so everything, which shall be handled by anything involving
-# a tensorly object, needs to be tensorly.tensor
 
 SH_blocks      = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=SH_integrals,      diagrams=SH_diagrams)
 SH_blocks_fock = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=SH_integrals_fock, diagrams=SH_diagrams)
