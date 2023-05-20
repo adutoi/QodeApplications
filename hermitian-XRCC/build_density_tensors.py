@@ -18,6 +18,7 @@
 
 import math
 import numpy
+import tensorly
 from   qode.util.PyC import import_C, Double, BigInt
 
 build    = import_C("density_tensors", flags="-O2")
@@ -47,7 +48,7 @@ def numpy_storage_to_lists(nparray_1d, n_bra, n_ket, n_spin_orbs, n_ops):
 	idx = 0
 	for i in range(n_bra):
 		for j in range(n_ket):
-			result[i][j] = numpy.array(nparray_1d[idx: idx+tensor_size].reshape(tensor_shape), dtype=Double.numpy)
+			result[i][j] = tensorly.tensor(nparray_1d[idx: idx+tensor_size].reshape(tensor_shape), dtype=tensorly.float64)
 			idx += tensor_size
 	del nparray_1d
 	return result

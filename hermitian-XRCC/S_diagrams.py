@@ -16,7 +16,6 @@
 #    along with QodeApplications.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-import tensorly
 from tendot import tendot
 
 class _empty(object):  pass    # Basically just a dictionary
@@ -45,10 +44,10 @@ def _parameters(densities, overlaps, subsystem, charges, permutation=(0,)):
         for Dchg,rhos in Dchg_rhos.items():
             if Dchg==Dchg_m0_:
                 for rho in rhos:
-                    data.__dict__[rho+"_"+m0_str] = tensorly.tensor(densities[m0_][rho][chg_i_m0_,chg_j_m0_])
+                    data.__dict__[rho+"_"+m0_str] = densities[m0_][rho][chg_i_m0_,chg_j_m0_]
         for m1,m1_ in enumerate(permutation):
             m01_str = m0_str + str(m1)
-            data.__dict__["S_"+m01_str] = tensorly.tensor(overlaps[m0_,m1_])
+            data.__dict__["S_"+m01_str] = overlaps[m0_,m1_]
     return data
 
 

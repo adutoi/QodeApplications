@@ -15,19 +15,16 @@
 #    You should have received a copy of the GNU General Public License
 #    along with QodeApplications.  If not, see <http://www.gnu.org/licenses/>.
 #
-import numpy
-from qode.util.PyC import Double
+import tensorly
 from qode.atoms.integrals.fragments import AO_integrals, semiMO_integrals, spin_orb_integrals, Nuc_repulsion
 
-def Double_array(rule):
+def tensorly_wrapper(rule):
     def wrap_it(*indices):
-        return numpy.array(rule(*indices), dtype=Double.numpy)
+        return tensorly.tensor(rule(*indices))
     return wrap_it
 
 def get_ints(fragments):
-    # More needs to be done regarding the basis to prevent mismatches with the fragment states
     AO_ints     = AO_integrals(fragments)
-    SemiMO_ints = semiMO_integrals(AO_ints, [frag.basis.MOcoeffs for frag in fragments], cache=True)     # Cache because multiple calls to each block during biorthogonalization
-
-    SemiMO_spin_ints = spin_orb_integrals(SemiMO_ints, rule_wrappers=[Double_array])     # no need to cache because each block only called once by contraction code
+    SemiMO_ints = semiMO_integrals(AO_ints, [frag.basis.MOcoeffs for frag in fragments], cache=True)
+    SemiMO_spin_ints = spin_orb_integrals(SemiMO_ints, rule_wrappers=[tensorly_wrapper], cache=True)
     return SemiMO_spin_ints, Nuc_repulsion(fragments)

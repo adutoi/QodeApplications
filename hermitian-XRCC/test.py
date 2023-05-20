@@ -22,15 +22,26 @@ import numpy
 import tensorly
 import torch
 import qode.util
+from   qode.atoms.integrals.fragments import AO_integrals, semiMO_integrals, spin_orb_integrals, Nuc_repulsion
 import diagrammatic_expansion   # defines information structure for housing results of diagram evaluations
 import XR_term                  # knows how to use ^this information to pack a matrix for use in XR model
 import S_diagrams               # contains definitions of actual diagrams needed for S operator in BO rep
 import SH_diagrams              # contains definitions of actual diagrams needed for SH operator in BO rep
-from   get_ints       import get_ints
-from   Be631g         import monomer_data as Be
+from   Be631g import monomer_data as Be
 
 #torch.set_num_threads(4)
-tensorly.set_backend("pytorch")
+#tensorly.set_backend("pytorch")
+
+def tensorly_wrapper(rule):
+    def wrap_it(*indices):
+        return tensorly.tensor(rule(*indices), dtype=tensorly.float64)
+    return wrap_it
+
+def get_ints(fragments):
+    AO_ints     = AO_integrals(fragments)
+    SemiMO_ints = semiMO_integrals(AO_ints, [frag.basis.MOcoeffs for frag in fragments], cache=True)
+    SemiMO_spin_ints = spin_orb_integrals(SemiMO_ints, rule_wrappers=[tensorly_wrapper], cache=True)
+    return SemiMO_spin_ints, Nuc_repulsion(fragments)
 
 #########
 # Load data
