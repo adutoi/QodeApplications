@@ -22,26 +22,24 @@ import numpy
 import tensorly
 import torch
 import qode.util
-from   qode.atoms.integrals.fragments import AO_integrals, semiMO_integrals, spin_orb_integrals, Nuc_repulsion
+from   qode.atoms.integrals.fragments import AO_integrals, semiMO_integrals, spin_orb_integrals
 import diagrammatic_expansion   # defines information structure for housing results of diagram evaluations
 import XR_term                  # knows how to use ^this information to pack a matrix for use in XR model
 import S_diagrams               # contains definitions of actual diagrams needed for S operator in BO rep
 import SH_diagrams              # contains definitions of actual diagrams needed for SH operator in BO rep
 from   Be631g import monomer_data as Be
 
-#torch.set_num_threads(4)
-#tensorly.set_backend("pytorch")
+# Basically just a dictionary
+class _empty(object):  pass
 
+# Helper function passed to integrals engine to get them back as tensorly tensors
 def tensorly_wrapper(rule):
     def wrap_it(*indices):
         return tensorly.tensor(rule(*indices), dtype=tensorly.float64)
     return wrap_it
 
-def get_ints(fragments):
-    AO_ints     = AO_integrals(fragments)
-    SemiMO_ints = semiMO_integrals(AO_ints, [frag.basis.MOcoeffs for frag in fragments], cache=True)
-    SemiMO_spin_ints = spin_orb_integrals(SemiMO_ints, rule_wrappers=[tensorly_wrapper], cache=True)
-    return SemiMO_spin_ints, Nuc_repulsion(fragments)
+#torch.set_num_threads(4)
+#tensorly.set_backend("pytorch")
 
 #########
 # Load data
@@ -55,14 +53,39 @@ n_states     = ("all","all","all","all","all")
 
 # Assemble the supersystem from the displaced fragments
 BeN = [Be((0,0,m*float(displacement))) for m in range(int(n_frag))]
-integrals, nuc_repulsion = get_ints(BeN)
-for m,frag in enumerate(BeN):  frag.load_states(states, n_states)
+for m,frag in enumerate(BeN):  frag.load_states(states, n_states)      # load the density tensors
+BeN_rho = [frag.rho for frag in BeN]                                   # deprecate this:  diagrammatic_expansion.blocks should take BeN directly? (n_states and n_elec one level higher)
 
-# This should all be done in a better way
-BeN_rho = [frag.rho for frag in BeN]   # diagrammatic_expansion.blocks should take BeN directly? (pull n_states and n_elec out of rho and put one level higher)
+# Get the fragment-partitioned integrals
+fragMO_ints = semiMO_integrals(AO_integrals(BeN), [frag.basis.MOcoeffs for frag in BeN], cache=True)    # get AO integrals and transform to frag MO basis
+integrals = spin_orb_integrals(fragMO_ints, rule_wrappers=[tensorly_wrapper], cache=True)               # promote to spin-orbital rep (spin blocked)
+
+integrals.h = {}
+integrals.h[(0, 0)] = integrals.T[(0, 0)] + integrals.U[(0, 0, 0)] + integrals.U[(1, 0, 0)]
+integrals.h[(0, 1)] = integrals.T[(0, 1)] + integrals.U[(0, 0, 1)] + integrals.U[(1, 0, 1)]
+integrals.h[(1, 0)] = integrals.T[(1, 0)] + integrals.U[(0, 1, 0)] + integrals.U[(1, 1, 0)]
+integrals.h[(1, 1)] = integrals.T[(1, 1)] + integrals.U[(0, 1, 1)] + integrals.U[(1, 1, 1)]
+
+# correct for diagonals of higher electron orders by building Fock like one-electron integrals
+SH_integrals_fock = _empty()
+SH_integrals_fock.S = integrals.S
+SH_integrals_fock.T = integrals.T
+SH_integrals_fock.U = integrals.U
+SH_integrals_fock.V = integrals.V
+D0 = BeN[0].rho["ca"][0,0][0][0]
+D1 = BeN[0].rho["ca"][0,0][0][0]
+two_p_mean_field = {(0, 0): 2 * (  numpy.einsum("sr,prqs->pq", D0, integrals.V[0, 0, 0, 0])
+                                 + numpy.einsum("sr,prqs->pq", D1, integrals.V[0, 1, 0, 1])),
+                    (0, 1): 2 * (  numpy.einsum("sr,prqs->pq", D0, integrals.V[0, 0, 1, 0])
+                                 + numpy.einsum("sr,prqs->pq", D1, integrals.V[0, 1, 1, 1])),
+                    (1, 0): 2 * (  numpy.einsum("sr,prqs->pq", D0, integrals.V[1, 0, 0, 0])
+                                 + numpy.einsum("sr,prqs->pq", D1, integrals.V[1, 1, 0, 1])),
+                    (1, 1): 2 * (  numpy.einsum("sr,prqs->pq", D0, integrals.V[1, 0, 1, 0])
+                                 + numpy.einsum("sr,prqs->pq", D1, integrals.V[1, 1, 1, 1]))}
+SH_integrals_fock.h = {key: integrals.h[key] + two_p_mean_field[key] for key in integrals.h}
 
 #########
-# build overlap matrices (S)
+# build matrices
 #########
 
 S_blocks = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=integrals.S, diagrams=S_diagrams)
@@ -99,48 +122,9 @@ SHtest2_Tony[8]  = XR_term.dimer_matrix(SH_blocks_Tony, active_SH_diagrams_Tony,
 SHtest2_Tony[9]  = XR_term.dimer_matrix(SH_blocks_Tony, active_SH_diagrams_Tony, dimer01, [(0,-1),(-1,0)])
 SHtest2_Tony[10] = XR_term.dimer_matrix(SH_blocks_Tony, active_SH_diagrams_Tony, dimer01, [(-1,-1)])
 
-#########
-# build Hamiltonian matrices (SH)
-#########
+#
 
-class _empty(object):  pass    # Basically just a dictionary
-
-SH_integrals = _empty()
-
-SH_integrals.s = integrals.S
-
-SH_integrals.h = {}
-SH_integrals.h[(0, 0)] = integrals.T[(0, 0)] + integrals.U[(0, 0, 0)] + integrals.U[(1, 0, 0)]
-SH_integrals.h[(0, 1)] = integrals.T[(0, 1)] + integrals.U[(0, 0, 1)] + integrals.U[(1, 0, 1)]
-SH_integrals.h[(1, 0)] = integrals.T[(1, 0)] + integrals.U[(0, 1, 0)] + integrals.U[(1, 1, 0)]
-SH_integrals.h[(1, 1)] = integrals.T[(1, 1)] + integrals.U[(0, 1, 1)] + integrals.U[(1, 1, 1)]
-
-SH_integrals.v = {}
-for pp in [0,1]:
-    for qq in [0,1]:
-        for rr in [0,1]:
-            for ss in [0,1]:
-                SH_integrals.v[pp,qq,rr,ss] = (1/4.) * (integrals.V[pp,qq,rr,ss] - numpy.transpose(integrals.V[pp,qq,ss,rr], [0, 1, 3, 2]))
-
-# correct for diagonals of higher electron orders by building Fock like one-electron integrals
-
-SH_integrals_fock = _empty()
-
-SH_integrals_fock.s = integrals.S
-
-D0 = BeN[0].rho["ca"][0,0][0][0]
-D1 = BeN[0].rho["ca"][0,0][0][0]
-two_p_mean_field = {(0, 0): 2 * (  numpy.einsum("sr,prqs->pq", D0, SH_integrals.v[0, 0, 0, 0])
-                                 + numpy.einsum("sr,prqs->pq", D1, SH_integrals.v[0, 1, 0, 1])),
-                    (0, 1): 2 * (  numpy.einsum("sr,prqs->pq", D0, SH_integrals.v[0, 0, 1, 0])
-                                 + numpy.einsum("sr,prqs->pq", D1, SH_integrals.v[0, 1, 1, 1])),
-                    (1, 0): 2 * (  numpy.einsum("sr,prqs->pq", D0, SH_integrals.v[1, 0, 0, 0])
-                                 + numpy.einsum("sr,prqs->pq", D1, SH_integrals.v[1, 1, 0, 1])),
-                    (1, 1): 2 * (  numpy.einsum("sr,prqs->pq", D0, SH_integrals.v[1, 0, 1, 0])
-                                 + numpy.einsum("sr,prqs->pq", D1, SH_integrals.v[1, 1, 1, 1]))}
-SH_integrals_fock.h = {key: SH_integrals.h[key] + two_p_mean_field[key] for key in SH_integrals.h}
-
-SH_blocks      = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=SH_integrals,      diagrams=SH_diagrams)
+SH_blocks      = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=integrals,         diagrams=SH_diagrams)
 SH_blocks_fock = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=SH_integrals_fock, diagrams=SH_diagrams)
 
 H1, H2, S1H1, S1H2 = {}, {}, {}, {}
@@ -152,7 +136,6 @@ SHtest = {}
 SHtest2 = {}
 
 start = time.time()
-
 SHtest[6]  = XR_term.dimer_matrix(SH_blocks, H1, dimer01, [(+1,+1)])
 SHtest[7]  = XR_term.dimer_matrix(SH_blocks, H1, dimer01, [(0,+1),(+1,0)])
 SHtest[8]  = XR_term.dimer_matrix(SH_blocks, H1, dimer01, [(0,0),(+1,-1),(-1,+1)])
@@ -183,9 +166,6 @@ S1H1_time = time.time()
 #SHtest[10] += XR_term.dimer_matrix(SH_blocks, S1H2, dimer01, [(-1,-1)])
 S1H2_time = time.time()
 print("timings: H1, H2, S1H1, S1H2", H1_time - start, H2_time - H1_time, S1H1_time - H2_time, S1H2_time - S1H1_time)
-
-
-# Test against XR code data
 
 #########
 # evaluate against full brute force reference (XR')
