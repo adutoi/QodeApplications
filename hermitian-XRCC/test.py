@@ -119,10 +119,10 @@ SHtest2[10] = XR_term.dimer_matrix(SH_blocks_Tony, active_SH_diagrams, dimer01, 
 SH_blocks_Marco = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=integrals,         diagrams=SH_diagrams)
 SH_blocks_fock  = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=SH_integrals_fock, diagrams=SH_diagrams)
 H1, H2, S1H1, S1H2 = {}, {}, {}, {}
-H1[2]   = ["H1"]
-H2[2]   = ["H2"] # H2_pure_2_body ?
-S1H1[2] = ["S1H1"]
-S1H2[2] = ["S1H2"]
+H1[2]   = ["H1_one_body00", "H1"]
+H2[2]   = ["H2_one_body00", "H2_0011_CT0", "H2_0001_CT1", "H2_0011_CT2"]
+S1H1[2] = ["S1H1_0011_CT0", "S1H1_0001_CT1", "S1H1_0011_CT2"]
+S1H2[2] = ["S1H2_000011_CT0", "S1H2_000111_CT1"]
 SHtest = {}
 start = time.time()
 SHtest[6]    = XR_term.dimer_matrix(SH_blocks_Marco, H1,   dimer01, [(+1,+1)])
