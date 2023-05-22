@@ -59,7 +59,6 @@ BeN_rho = [frag.rho for frag in BeN]                                   # depreca
 # Get the fragment-partitioned integrals
 fragMO_ints = semiMO_integrals(AO_integrals(BeN), [frag.basis.MOcoeffs for frag in BeN], cache=True)    # get AO integrals and transform to frag MO basis
 integrals = spin_orb_integrals(fragMO_ints, rule_wrappers=[tensorly_wrapper], cache=True)               # promote to spin-orbital rep (spin blocked)
-
 integrals.h = {}
 integrals.h[(0, 0)] = integrals.T[(0, 0)] + integrals.U[(0, 0, 0)] + integrals.U[(1, 0, 0)]
 integrals.h[(0, 1)] = integrals.T[(0, 1)] + integrals.U[(0, 0, 1)] + integrals.U[(1, 0, 1)]
@@ -84,86 +83,83 @@ two_p_mean_field = {(0, 0): 2 * (  numpy.einsum("sr,prqs->pq", D0, integrals.V[0
                                  + numpy.einsum("sr,prqs->pq", D1, integrals.V[1, 1, 1, 1]))}
 SH_integrals_fock.h = {key: integrals.h[key] + two_p_mean_field[key] for key in integrals.h}
 
+# In theory, a subsystem of the full system
+dimer01 = (0,1)
+
 #########
 # build matrices
 #########
 
 S_blocks = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=integrals.S, diagrams=S_diagrams)
-
-active_diagrams = {}
-active_diagrams[0] = ["identity"]
-active_diagrams[1] = []
-active_diagrams[2] = ["order1_CT1", "order2_CT0", "order2_CT2", "order3_CT1", "order4_CT0", "order4_CT2"]
-
-dimer01 = (0,1)    # In theory, a subsystem of the full system
-
+active_S_diagrams = {}
+active_S_diagrams[0] = ["identity"]
+active_S_diagrams[1] = []
+active_S_diagrams[2] = ["order1_CT1", "order2_CT0", "order2_CT2", "order3_CT1", "order4_CT0", "order4_CT2"]
 Stest = {}
-Stest[6]  = XR_term.dimer_matrix(S_blocks, active_diagrams, dimer01, [(+1,+1)])
-Stest[7]  = XR_term.dimer_matrix(S_blocks, active_diagrams, dimer01, [(0,+1),(+1,0)])
-Stest[8]  = XR_term.dimer_matrix(S_blocks, active_diagrams, dimer01, [(0,0),(+1,-1),(-1,+1)])
-Stest[9]  = XR_term.dimer_matrix(S_blocks, active_diagrams, dimer01, [(0,-1),(-1,0)])
-Stest[10] = XR_term.dimer_matrix(S_blocks, active_diagrams, dimer01, [(-1,-1)])
-
-#
+Stest[6]  = XR_term.dimer_matrix(S_blocks, active_S_diagrams, dimer01, [(+1,+1)])
+Stest[7]  = XR_term.dimer_matrix(S_blocks, active_S_diagrams, dimer01, [(0,+1),(+1,0)])
+Stest[8]  = XR_term.dimer_matrix(S_blocks, active_S_diagrams, dimer01, [(0,0),(+1,-1),(-1,+1)])
+Stest[9]  = XR_term.dimer_matrix(S_blocks, active_S_diagrams, dimer01, [(0,-1),(-1,0)])
+Stest[10] = XR_term.dimer_matrix(S_blocks, active_S_diagrams, dimer01, [(-1,-1)])
 
 SH_blocks_Tony = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=integrals, diagrams=SH_diagrams)
+active_SH_diagrams = {}
+active_SH_diagrams[0] = []
+active_SH_diagrams[1] = ["order1", "order2"]
+active_SH_diagrams[2] = []
+SHtest2 = {}
+SHtest1_0 = XR_term.monomer_matrix(SH_blocks_Tony, active_SH_diagrams, 0,       [0,+1,-1])
+SHtest1_1 = XR_term.monomer_matrix(SH_blocks_Tony, active_SH_diagrams, 1,       [0,+1,-1])
+SHtest2[6]  = XR_term.dimer_matrix(SH_blocks_Tony, active_SH_diagrams, dimer01, [(+1,+1)])
+SHtest2[7]  = XR_term.dimer_matrix(SH_blocks_Tony, active_SH_diagrams, dimer01, [(0,+1),(+1,0)])
+SHtest2[8]  = XR_term.dimer_matrix(SH_blocks_Tony, active_SH_diagrams, dimer01, [(0,0),(+1,-1),(-1,+1)])
+SHtest2[9]  = XR_term.dimer_matrix(SH_blocks_Tony, active_SH_diagrams, dimer01, [(0,-1),(-1,0)])
+SHtest2[10] = XR_term.dimer_matrix(SH_blocks_Tony, active_SH_diagrams, dimer01, [(-1,-1)])
 
-active_SH_diagrams_Tony = {}
-active_SH_diagrams_Tony[0] = []
-active_SH_diagrams_Tony[1] = ["order1", "order2"]
-active_SH_diagrams_Tony[2] = []
-
-SHtest1_0_Tony = XR_term.monomer_matrix(SH_blocks_Tony, active_SH_diagrams_Tony, 0, [0,+1,-1])
-SHtest1_1_Tony = XR_term.monomer_matrix(SH_blocks_Tony, active_SH_diagrams_Tony, 1, [0,+1,-1])
-SHtest2_Tony = {}
-SHtest2_Tony[6]  = XR_term.dimer_matrix(SH_blocks_Tony, active_SH_diagrams_Tony, dimer01, [(+1,+1)])
-SHtest2_Tony[7]  = XR_term.dimer_matrix(SH_blocks_Tony, active_SH_diagrams_Tony, dimer01, [(0,+1),(+1,0)])
-SHtest2_Tony[8]  = XR_term.dimer_matrix(SH_blocks_Tony, active_SH_diagrams_Tony, dimer01, [(0,0),(+1,-1),(-1,+1)])
-SHtest2_Tony[9]  = XR_term.dimer_matrix(SH_blocks_Tony, active_SH_diagrams_Tony, dimer01, [(0,-1),(-1,0)])
-SHtest2_Tony[10] = XR_term.dimer_matrix(SH_blocks_Tony, active_SH_diagrams_Tony, dimer01, [(-1,-1)])
-
-#
-
-SH_blocks      = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=integrals,         diagrams=SH_diagrams)
-SH_blocks_fock = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=SH_integrals_fock, diagrams=SH_diagrams)
-
+SH_blocks_Marco = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=integrals,         diagrams=SH_diagrams)
+SH_blocks_fock  = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=SH_integrals_fock, diagrams=SH_diagrams)
 H1, H2, S1H1, S1H2 = {}, {}, {}, {}
-H1[2] = ["H1"]
-H2[2] = ["H2"]#_pure_2_body"]
+H1[2]   = ["H1"]
+H2[2]   = ["H2"] # H2_pure_2_body ?
 S1H1[2] = ["S1H1"]
 S1H2[2] = ["S1H2"]
 SHtest = {}
-SHtest2 = {}
-
 start = time.time()
-SHtest[6]  = XR_term.dimer_matrix(SH_blocks, H1, dimer01, [(+1,+1)])
-SHtest[7]  = XR_term.dimer_matrix(SH_blocks, H1, dimer01, [(0,+1),(+1,0)])
-SHtest[8]  = XR_term.dimer_matrix(SH_blocks, H1, dimer01, [(0,0),(+1,-1),(-1,+1)])
-SHtest[9]  = XR_term.dimer_matrix(SH_blocks, H1, dimer01, [(0,-1),(-1,0)])
-SHtest[10] = XR_term.dimer_matrix(SH_blocks, H1, dimer01, [(-1,-1)])
+SHtest[6]    = XR_term.dimer_matrix(SH_blocks_Marco, H1,   dimer01, [(+1,+1)])
+SHtest[7]    = XR_term.dimer_matrix(SH_blocks_Marco, H1,   dimer01, [(0,+1),(+1,0)])
+SHtest[8]    = XR_term.dimer_matrix(SH_blocks_Marco, H1,   dimer01, [(0,0),(+1,-1),(-1,+1)])
+SHtest[9]    = XR_term.dimer_matrix(SH_blocks_Marco, H1,   dimer01, [(0,-1),(-1,0)])
+SHtest[10]   = XR_term.dimer_matrix(SH_blocks_Marco, H1,   dimer01, [(-1,-1)])
 H1_time = time.time()
-#SHtest[6] += XR_term.dimer_matrix(SH_blocks, H2, dimer01, [(+1,+1)])
-#SHtest[7] += XR_term.dimer_matrix(SH_blocks, H2, dimer01, [(0,+1),(+1,0)])
-#SHtest[8] += XR_term.dimer_matrix(SH_blocks, H2, dimer01, [(0,0),(+1,-1),(-1,+1)])
-#SHtest[9] += XR_term.dimer_matrix(SH_blocks, H2, dimer01, [(0,-1),(-1,0)])
-#SHtest[10] += XR_term.dimer_matrix(SH_blocks, H2, dimer01, [(-1,-1)])
+"""
+SHtest[6]   += XR_term.dimer_matrix(SH_blocks_Marco, H2,   dimer01, [(+1,+1)])
+SHtest[7]   += XR_term.dimer_matrix(SH_blocks_Marco, H2,   dimer01, [(0,+1),(+1,0)])
+SHtest[8]   += XR_term.dimer_matrix(SH_blocks_Marco, H2,   dimer01, [(0,0),(+1,-1),(-1,+1)])
+SHtest[9]   += XR_term.dimer_matrix(SH_blocks_Marco, H2,   dimer01, [(0,-1),(-1,0)])
+SHtest[10]  += XR_term.dimer_matrix(SH_blocks_Marco, H2,   dimer01, [(-1,-1)])
+"""
 H2_time = time.time()
-SHtest2[6] = XR_term.dimer_matrix(SH_blocks, S1H1, dimer01, [(+1,+1)])
-SHtest2[7] = XR_term.dimer_matrix(SH_blocks, S1H1, dimer01, [(0,+1),(+1,0)])
-SHtest2[8] = XR_term.dimer_matrix(SH_blocks, S1H1, dimer01, [(0,0),(+1,-1),(-1,+1)])
-SHtest2[9] = XR_term.dimer_matrix(SH_blocks, S1H1, dimer01, [(0,-1),(-1,0)])
-SHtest2[10] = XR_term.dimer_matrix(SH_blocks, S1H1, dimer01, [(-1,-1)])
-#SHtest[6] += XR_term.dimer_matrix(SH_blocks_fock, S1H1, dimer01, [(+1,+1)])
-#SHtest[7] += XR_term.dimer_matrix(SH_blocks_fock, S1H1, dimer01, [(0,+1),(+1,0)])
-#SHtest[8] += XR_term.dimer_matrix(SH_blocks_fock, S1H1, dimer01, [(0,0),(+1,-1),(-1,+1)])
-#SHtest[9] += XR_term.dimer_matrix(SH_blocks_fock, S1H1, dimer01, [(0,-1),(-1,0)])
-#SHtest[10] += XR_term.dimer_matrix(SH_blocks_fock, S1H1, dimer01, [(-1,-1)])
+SHtest11 = {}
+SHtest11[6]  = XR_term.dimer_matrix(SH_blocks_Marco, S1H1, dimer01, [(+1,+1)])
+SHtest11[7]  = XR_term.dimer_matrix(SH_blocks_Marco, S1H1, dimer01, [(0,+1),(+1,0)])
+SHtest11[8]  = XR_term.dimer_matrix(SH_blocks_Marco, S1H1, dimer01, [(0,0),(+1,-1),(-1,+1)])
+SHtest11[9]  = XR_term.dimer_matrix(SH_blocks_Marco, S1H1, dimer01, [(0,-1),(-1,0)])
+SHtest11[10] = XR_term.dimer_matrix(SH_blocks_Marco, S1H1, dimer01, [(-1,-1)])
+"""
+SHtest[6]   += XR_term.dimer_matrix(SH_blocks_fock,  S1H1, dimer01, [(+1,+1)])
+SHtest[7]   += XR_term.dimer_matrix(SH_blocks_fock,  S1H1, dimer01, [(0,+1),(+1,0)])
+SHtest[8]   += XR_term.dimer_matrix(SH_blocks_fock,  S1H1, dimer01, [(0,0),(+1,-1),(-1,+1)])
+SHtest[9]   += XR_term.dimer_matrix(SH_blocks_fock,  S1H1, dimer01, [(0,-1),(-1,0)])
+SHtest[10 ] += XR_term.dimer_matrix(SH_blocks_fock,  S1H1, dimer01, [(-1,-1)])
+"""
 S1H1_time = time.time()
-#SHtest[6] += XR_term.dimer_matrix(SH_blocks, S1H2, dimer01, [(+1,+1)])
-#SHtest[7] += XR_term.dimer_matrix(SH_blocks, S1H2, dimer01, [(0,+1),(+1,0)])
-#SHtest[8] += XR_term.dimer_matrix(SH_blocks, S1H2, dimer01, [(0,0),(+1,-1),(-1,+1)])
-#SHtest[9] += XR_term.dimer_matrix(SH_blocks, S1H2, dimer01, [(0,-1),(-1,0)])
-#SHtest[10] += XR_term.dimer_matrix(SH_blocks, S1H2, dimer01, [(-1,-1)])
+"""
+SHtest[6]  += XR_term.dimer_matrix(SH_blocks_Marco,  S1H2, dimer01, [(+1,+1)])
+SHtest[7]  += XR_term.dimer_matrix(SH_blocks_Marco,  S1H2, dimer01, [(0,+1),(+1,0)])
+SHtest[8]  += XR_term.dimer_matrix(SH_blocks_Marco,  S1H2, dimer01, [(0,0),(+1,-1),(-1,+1)])
+SHtest[9]  += XR_term.dimer_matrix(SH_blocks_Marco,  S1H2, dimer01, [(0,-1),(-1,0)])
+SHtest[10] += XR_term.dimer_matrix(SH_blocks_Marco,  S1H2, dimer01, [(-1,-1)])
+"""
 S1H2_time = time.time()
 print("timings: H1, H2, S1H1, S1H2", H1_time - start, H2_time - H1_time, S1H1_time - H2_time, S1H2_time - S1H1_time)
 
@@ -180,20 +176,20 @@ for n_elec in [6,7,8,9,10]:
     S    -= numpy.identity(dim)
     Sdiff = S-Sref
     print("{:2d} Frobenius norm of Sref:   ".format(n_elec), numpy.linalg.norm(Sref))
-    print("   Frobenius norm of S:      ",                numpy.linalg.norm(S))
-    print("   Frobenius norm of S-Sref: ",                numpy.linalg.norm(Sdiff))
+    print("   Frobenius norm of S:      ",                   numpy.linalg.norm(S))
+    print("   Frobenius norm of S-Sref: ",                   numpy.linalg.norm(Sdiff))
     full_H_ref = numpy.load("atomic_states/states/16-115-550/load=states:16-115-550:thresh=1e-6:4.5:u.pickle/{}/H-{}.npy".format(displacement,n_elec))
     Sref += numpy.identity(dim)
     SH_ref = Sref @ full_H_ref
     SH_diff = SHtest[n_elec] - SH_ref
     print("   Frobenius norm of SH, SHref: ",                numpy.linalg.norm(SHtest[n_elec]), numpy.linalg.norm(SH_ref))
-    print("   Frobenius norm of SH-SHref: ",                numpy.linalg.norm(SH_diff))
+    print("   Frobenius norm of SH-SHref: ",                 numpy.linalg.norm(SH_diff))
     H1_final = SHtest[n_elec]
-    S1H1_final = SHtest2[n_elec]
+    S1H1_final = SHtest11[n_elec]
     S1H1_contracted = numpy.tensordot(S, H1_final, axes=([1], [0]))
     SH_diff = S1H1_contracted - S1H1_final
     print("norms of S1H1_contracted, S1H1, and diff", numpy.linalg.norm(S1H1_contracted), numpy.linalg.norm(S1H1_final), numpy.linalg.norm(SH_diff))
 
 body1_ref = numpy.load("reference/test-data-4.5/H1_0.npy")
-print("1-body error 0:", numpy.linalg.norm(SHtest1_0_Tony - body1_ref))
-print("1-body error 1:", numpy.linalg.norm(SHtest1_1_Tony - body1_ref))
+print("1-body error 0:", numpy.linalg.norm(SHtest1_0 - body1_ref))
+print("1-body error 1:", numpy.linalg.norm(SHtest1_1 - body1_ref))
