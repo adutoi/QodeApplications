@@ -115,6 +115,7 @@ class body_2(object):
             prefactor = 1
             def diagram(i0,i1,j0,j1):
                 if i1==j1:
+                    #return prefactor * numpy.einsum("pq,pq->", X.h_00, X.ca_0[i0][j0])
                     return prefactor * tendot(X.h_00, X.ca_0[i0][j0], axes=([0, 1], [0, 1]))
                 else:
                     return 0
@@ -135,6 +136,7 @@ class body_2(object):
             prefactor = 1
             def diagram(i0,i1,j0,j1):
                 if i1==j1:
+                    #return prefactor * numpy.einsum("pqrs,pqsr->", X.V_0000, X.ccaa_0[i0][j0])
                     return prefactor * tendot(X.V_0000, X.ccaa_0[i0][j0], axes=([0, 1, 2, 3], [0, 1, 3, 2]))
                 else:
                     return 0
@@ -154,6 +156,7 @@ class body_2(object):
         if X.Dchg_0==-1 and X.Dchg_1==+1:
             prefactor = (-1)**(X.n_i1 + X.P)
             def diagram(i0,i1,j0,j1):
+                #return prefactor * numpy.einsum("pq,p,q->", X.h_01, X.c_0[i0][j0], X.a_1[i1][j1])
                 partial =          tendot(X.h_01,  X.c_0[i0][j0], axes=([0], [0]))
                 return prefactor * tendot(partial, X.a_1[i1][j1], axes=([0], [0]))
             return diagram, permutation
@@ -167,6 +170,7 @@ class body_2(object):
         if X.Dchg_0==0 and X.Dchg_1==0:
             prefactor = 4
             def diagram(i0,i1,j0,j1):
+                #return prefactor * numpy.einsum("prqs,pq,rs->", X.V_0101, X.ca_0[i0][j0], X.ca_1[i1][j1])
                 partial =          tendot(X.V_0101, X.ca_0[i0][j0], axes=([0, 2], [0, 1]))
                 return prefactor * tendot(partial,  X.ca_1[i1][j1], axes=([0, 1], [0, 1]))
             return [(diagram, (0,1))]
@@ -186,12 +190,14 @@ class body_2(object):
         if X.Dchg_0==-1 and X.Dchg_1==+1:
             prefactor = 2 * (-1)**(X.n_i1 + X.P)
             def diagram(i0,i1,j0,j1):
+                #return prefactor * numpy.einsum("pqsr,pqr,s->", X.V_0010, X.cca_0[i0][j0], X.a_1[i1][j1])
                 partial =          tendot(X.V_0010, X.a_1[i1][j1],   axes=([2], [0]))
                 return prefactor * tendot(partial,  X.cca_0[i0][j0], axes=([0, 1, 2], [0, 1, 2]))
             return diagram, permutation
         if X.Dchg_0==+1 and X.Dchg_1==-1:
             prefactor = 2 * (-1)**(X.n_i1 + X.P)
             def diagram(i0,i1,j0,j1):
+                #return prefactor * numpy.einsum("psrq,pqr,s->", X.V_0100, X.caa_0[i0][j0], X.c_1[i1][j1])
                 partial =          tendot(X.V_0100, X.c_1[i1][j1],   axes=([1], [0]))
                 return prefactor * tendot(partial,  X.caa_0[i0][j0], axes=([0, 1, 2], [0, 2, 1]))
             return diagram, permutation
@@ -210,6 +216,7 @@ class body_2(object):
         if X.Dchg_0==-2 and X.Dchg_1==+2:
             prefactor = 1
             def diagram(i0,i1,j0,j1):
+                #return prefactor * numpy.einsum("pqsr,pq,rs->", X.V_0011, X.cc_0[i0][j0], aa_1[i1][j1])
                 partial =          tendot(X.V_0011, X.cc_0[i0][j0], axes=([0, 1], [0, 1]))
                 return prefactor * tendot(partial,  X.aa_1[i1][j1], axes=([0, 1], [1, 0]))
             return diagram, permutation
@@ -228,6 +235,7 @@ class body_2(object):
         if X.Dchg_0==0 and X.Dchg_1==0:
             prefactor = -1
             def diagram(i0,i1,j0,j1):
+                #return prefactor * numpy.einsum("pq,rs,rq,ps->", X.S_10, X.h_01, X.ca_0[i0][j0], X.ca_1[i1][j1])
                 partial  =         tendot(X.S_10,   X.ca_0[i0][j0], axes=([1], [1]))
                 partial2 =         tendot(X.h_01,   X.ca_1[i1][j1], axes=([1], [1]))
                 return prefactor * tendot(partial,  partial2,       axes=([0, 1], [1, 0]))
@@ -248,6 +256,7 @@ class body_2(object):
         if X.Dchg_0==-1 and X.Dchg_1==+1:
             prefactor = (-1)**(X.n_i1 + X.P)
             def diagram(i0,i1,j0,j1):
+                #return prefactor * numpy.einsum("pq,rs,prs,q->", X.S_01, X.h_00, X.cca_0[i0][j0], X.a_1[i1][j1])
                 partial =          tendot(X.h_00,  X.cca_0[i0][j0], axes=([0, 1], [1, 2]))
                 partial =          tendot(X.S_01,  partial,         axes=([0], [0]))
                 return prefactor * tendot(partial, X.a_1[i1][j1],   axes=([0], [0]))
@@ -255,6 +264,7 @@ class body_2(object):
         if X.Dchg_0==+1 and X.Dchg_1==-1:
             prefactor = (-1)**(X.n_i1 + X.P)
             def diagram(i0,i1,j0,j1):
+                #return prefactor * numpy.einsum("pq,rs,rqs,p->", X.S_10, X.h_00, X.caa_0[i0][j0], X.c_1[i1][j1])
                 partial =          tendot(X.h_00,   X.caa_0[i0][j0], axes=([0, 1], [0, 2]))
                 partial =          tendot(X.S_10,   partial,         axes=([1], [0]))
                 return prefactor * tendot(partial,  X.c_1[i1][j1],   axes=([0], [0]))
@@ -274,6 +284,7 @@ class body_2(object):
         if X.Dchg_0==-2 and X.Dchg_1==+2:
             prefactor = 1
             def diagram(i0,i1,j0,j1):
+                #return prefactor * numpy.einsum("pq,rs,rp,qs->", X.S_01, X.h_01, X.cc_0[i0][j0], X.aa_1[i1][j1])
                 partial  =         tendot(X.S_01,  X.cc_0[i0][j0], axes=([0], [1]))
                 partial2 =         tendot(X.h_01,  X.aa_1[i1][j1], axes=([1], [1]))
                 return prefactor * tendot(partial, partial2,       axes=([0, 1], [1, 0]))
@@ -294,6 +305,7 @@ class body_2(object):
         if X.Dchg_0==0 and X.Dchg_1==0:
             prefactor = 2
             def diagram(i0,i1,j0,j1):
+                #return prefactor * numpy.einsum("ij,pqsr,pqjr,is->", X.S_10, X.V_0010, X.ccaa_0[i0][j0], X.ca_1[i1][j1]) + numpy.einsum("ij,psrq,pirq,sj->", X.S_01, X.V_0100, X.ccaa_0[i0][j0], X.ca_1[i1][j1])
                 partial  = tendot(X.S_10,           X.ca_1[i1][j1], axes=([0], [0]))
                 partial  = tendot(X.ccaa_0[i0][j0], partial,        axes=([2], [0]))
                 partial2 = tendot(X.S_01,           X.ca_1[i1][j1], axes=([1], [1]))
@@ -316,6 +328,7 @@ class body_2(object):
         if X.Dchg_0==-1 and X.Dchg_1==+1:
             prefactor = (-1)**(X.n_i1 + X.P)
             def diagram(i0,i1,j0,j1):
+                #return prefactor * (4*numpy.einsum("ij,prqs,piq,rjs->", X.S_01, X.V_0101, X.cca_0[i0][j0], X.caa_1[i1][j1])) + numpy.einsum("ij,pqsr,qpj,irs->", X.S_10, X.V_0011, X.cca_0[i0][j0], X.caa_1[i1][j1])
                 partial  = tendot(X.V_0101,        X.cca_0[i0][j0], axes=([0, 2], [0, 2]))
                 partial  = tendot(X.caa_1[i1][j1], partial,         axes=([0, 2], [0, 1]))
                 partial2 = tendot(X.V_0011,        X.cca_0[i0][j0], axes=([0, 1], [1, 0]))
