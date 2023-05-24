@@ -73,12 +73,12 @@ class body_0(object):
 class body_2(object):
 
     @staticmethod
-    def order1_CT1(densities, integrals, subsystem, charges):
-        result01 = body_2._order1_CT1(densities, integrals, subsystem, charges, permutation=(0,1))
-        result10 = body_2._order1_CT1(densities, integrals, subsystem, charges, permutation=(1,0))
+    def s01(densities, integrals, subsystem, charges):
+        result01 = body_2._s01(densities, integrals, subsystem, charges, permutation=(0,1))
+        result10 = body_2._s01(densities, integrals, subsystem, charges, permutation=(1,0))
         return [result01, result10]
     @staticmethod
-    def _order1_CT1(densities, integrals, subsystem, charges, permutation):
+    def _s01(densities, integrals, subsystem, charges, permutation):
         # 1 * 1 * (0)<-(1)
         X = _parameters(densities, integrals, subsystem, charges, permutation)
         if X.Dchg_0==-1 and X.Dchg_1==+1:
@@ -92,7 +92,7 @@ class body_2(object):
             return None, None
 
     @staticmethod
-    def order2_CT0(densities, integrals, subsystem, charges):
+    def s01s10(densities, integrals, subsystem, charges):
         # 1/2! * 1 * (0)<-->(1)
         X = _parameters(densities, integrals, subsystem, charges, permutation=(0,1))
         if X.Dchg_0==0 and X.Dchg_1==0:
@@ -107,12 +107,12 @@ class body_2(object):
             return [(None, None)]
 
     @staticmethod
-    def order2_CT2(densities, integrals, subsystem, charges):
-        result01 = body_2._order2_CT2(densities, integrals, subsystem, charges, permutation=(0,1))
-        result10 = body_2._order2_CT2(densities, integrals, subsystem, charges, permutation=(1,0))
+    def s01s01(densities, integrals, subsystem, charges):
+        result01 = body_2._s01s01(densities, integrals, subsystem, charges, permutation=(0,1))
+        result10 = body_2._s01s01(densities, integrals, subsystem, charges, permutation=(1,0))
         return [result01, result10]
     @staticmethod
-    def _order2_CT2(densities, integrals, subsystem, charges, permutation):
+    def _s01s01(densities, integrals, subsystem, charges, permutation):
         # 1/2! * 1 * (0)<-<-(1)
         X = _parameters(densities, integrals, subsystem, charges, permutation)
         if X.Dchg_0==-2 and X.Dchg_1==+2:
@@ -127,12 +127,12 @@ class body_2(object):
             return None, None
 
     @staticmethod
-    def order3_CT1(densities, integrals, subsystem, charges):
-        result01 = body_2._order3_CT1(densities, integrals, subsystem, charges, permutation=(0,1))
-        result10 = body_2._order3_CT1(densities, integrals, subsystem, charges, permutation=(1,0))
+    def s01s01s10(densities, integrals, subsystem, charges):
+        result01 = body_2._s01s01s10(densities, integrals, subsystem, charges, permutation=(0,1))
+        result10 = body_2._s01s01s10(densities, integrals, subsystem, charges, permutation=(1,0))
         return [result01, result10]
     @staticmethod
-    def _order3_CT1(densities, integrals, subsystem, charges, permutation):
+    def _s01s01s10(densities, integrals, subsystem, charges, permutation):
         # 1/3! * 3 * (0)<-<-->(1)
         X = _parameters(densities, integrals, subsystem, charges, permutation)
         if X.Dchg_0==-1 and X.Dchg_1==+1:
@@ -147,7 +147,7 @@ class body_2(object):
             return None, None
 
     @staticmethod
-    def order4_CT0(densities, integrals, subsystem, charges):
+    def s01s01s10s10(densities, integrals, subsystem, charges):
         # (1/4!) * 3 * (0)<-<-->->(1)
         X = _parameters(densities, integrals, subsystem, charges, permutation=(0,1))
         if X.Dchg_0==0 and X.Dchg_1==0:
@@ -163,12 +163,12 @@ class body_2(object):
             return [(None, None)]
 
     @staticmethod
-    def order4_CT2(densities, integrals, subsystem, charges):
-        result01 = body_2._order4_CT2(densities, integrals, subsystem, charges, permutation=(0,1))
-        result10 = body_2._order4_CT2(densities, integrals, subsystem, charges, permutation=(1,0))
+    def s01s01s01s10(densities, integrals, subsystem, charges):
+        result01 = body_2._s01s01s01s10(densities, integrals, subsystem, charges, permutation=(0,1))
+        result10 = body_2._s01s01s01s10(densities, integrals, subsystem, charges, permutation=(1,0))
         return [result01, result10]
     @staticmethod
-    def _order4_CT2(densities, integrals, subsystem, charges, permutation):
+    def _s01s01s01s10(densities, integrals, subsystem, charges, permutation):
         # 1/4! * 4 * (0)<-<-<-->(1)
         X = _parameters(densities, integrals, subsystem, charges, permutation)
         if X.Dchg_0==-2 and X.Dchg_1==+2:
@@ -201,10 +201,10 @@ catalog[0] = {
 }
 
 catalog[2] = {
-    "order1_CT1": body_2.order1_CT1,
-    "order2_CT0": body_2.order2_CT0,
-    "order2_CT2": body_2.order2_CT2,
-    "order3_CT1": body_2.order3_CT1,
-    "order4_CT0": body_2.order4_CT0,
-    "order4_CT2": body_2.order4_CT2
+    "s01":          body_2.s01,
+    "s01s10":       body_2.s01s10,
+    "s01s01":       body_2.s01s01,
+    "s01s01s10":    body_2.s01s01s10,
+    "s01s01s10s10": body_2.s01s01s10s10,
+    "s01s01s01s10": body_2.s01s01s01s10
 }

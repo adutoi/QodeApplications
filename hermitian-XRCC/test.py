@@ -94,7 +94,7 @@ S_blocks = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=integrals.
 active_S_diagrams = {}
 active_S_diagrams[0] = ["identity"]
 active_S_diagrams[1] = []
-active_S_diagrams[2] = ["order1_CT1", "order2_CT0", "order2_CT2", "order3_CT1", "order4_CT0", "order4_CT2"]
+active_S_diagrams[2] = ["s01", "s01s10", "s01s01", "s01s01s10", "s01s01s10s10", "s01s01s01s10"]
 Stest = {}
 Stest[6]  = XR_term.dimer_matrix(S_blocks, active_S_diagrams, dimer01, [(+1,+1)])
 Stest[7]  = XR_term.dimer_matrix(S_blocks, active_S_diagrams, dimer01, [(0,+1),(+1,0)])
@@ -105,7 +105,7 @@ Stest[10] = XR_term.dimer_matrix(S_blocks, active_S_diagrams, dimer01, [(-1,-1)]
 SH_blocks_Tony = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=integrals, diagrams=SH_diagrams)
 active_SH_diagrams = {}
 active_SH_diagrams[0] = []
-active_SH_diagrams[1] = ["order1", "order2"]
+active_SH_diagrams[1] = ["h00", "v0000"]
 active_SH_diagrams[2] = []
 SHtest2 = {}
 SHtest1_0 = XR_term.monomer_matrix(SH_blocks_Tony, active_SH_diagrams, 0,       [0,+1,-1])
@@ -119,10 +119,10 @@ SHtest2[10] = XR_term.dimer_matrix(SH_blocks_Tony, active_SH_diagrams, dimer01, 
 SH_blocks_Marco = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=integrals,         diagrams=SH_diagrams)
 SH_blocks_fock  = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=SH_integrals_fock, diagrams=SH_diagrams)
 H1, H2, S1H1, S1H2 = {}, {}, {}, {}
-H1[2]   = ["H1_one_body00", "H1"]
-H2[2]   = ["H2_one_body00", "H2_0011_CT0", "H2_0001_CT1", "H2_0011_CT2"]
-S1H1[2] = ["S1H1_0011_CT0", "S1H1_0001_CT1", "S1H1_0011_CT2"]
-S1H2[2] = ["S1H2_000011_CT0", "S1H2_000111_CT1"]
+H1[2]   = ["H1_one_body00", "h01"]
+H2[2]   = ["H2_one_body00", "v0101", "v0010", "v0100", "v0011"]
+S1H1[2] = ["s10h01", "s01h00", "s10h00", "s01h01"]
+S1H2[2] = ["s10v0010", "s01v0100", "s01v0101", "s10v0011"]
 SHtest = {}
 start = time.time()
 SHtest[6]    = XR_term.dimer_matrix(SH_blocks_Marco, H1,   dimer01, [(+1,+1)])
