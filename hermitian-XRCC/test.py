@@ -22,7 +22,7 @@ import numpy
 import tensorly
 import torch
 import qode.util
-from   qode.atoms.integrals.fragments import AO_integrals, semiMO_integrals, spin_orb_integrals
+from   qode.atoms.integrals.fragments import AO_integrals, semiMO_integrals, spin_orb_integrals, Nuc_repulsion
 import diagrammatic_expansion   # defines information structure for housing results of diagram evaluations
 import XR_term                  # knows how to use ^this information to pack a matrix for use in XR model
 import S_diagrams               # contains definitions of actual diagrams needed for S operator in BO rep
@@ -59,18 +59,18 @@ BeN_rho = [frag.rho for frag in BeN]                                   # depreca
 # Get the fragment-partitioned integrals
 fragMO_ints = semiMO_integrals(AO_integrals(BeN), [frag.basis.MOcoeffs for frag in BeN], cache=True)    # get AO integrals and transform to frag MO basis
 integrals = spin_orb_integrals(fragMO_ints, rule_wrappers=[tensorly_wrapper], cache=True)               # promote to spin-orbital rep (spin blocked)
-integrals.h = {}
-integrals.h[(0, 0)] = integrals.T[(0, 0)] + integrals.U[(0, 0, 0)] + integrals.U[(1, 0, 0)]
-integrals.h[(0, 1)] = integrals.T[(0, 1)] + integrals.U[(0, 0, 1)] + integrals.U[(1, 0, 1)]
-integrals.h[(1, 0)] = integrals.T[(1, 0)] + integrals.U[(0, 1, 0)] + integrals.U[(1, 1, 0)]
-integrals.h[(1, 1)] = integrals.T[(1, 1)] + integrals.U[(0, 1, 1)] + integrals.U[(1, 1, 1)]
 
-# correct for diagonals of higher electron orders by building Fock like one-electron integrals
-SH_integrals_fock = _empty()
-SH_integrals_fock.S = integrals.S
-SH_integrals_fock.T = integrals.T
-SH_integrals_fock.U = integrals.U
-SH_integrals_fock.V = integrals.V
+# Add the nuclear repulsion matrix to the integrals
+integrals.N = Nuc_repulsion(BeN)
+
+# Add the summed kinetic and nuclear-attraction integrals (dimer specific)
+integrals.h = {}
+integrals.h[0, 0] = integrals.T[0, 0] + integrals.U[0, 0, 0] + integrals.U[1, 0, 0]
+integrals.h[0, 1] = integrals.T[0, 1] + integrals.U[0, 0, 1] + integrals.U[1, 0, 1]
+integrals.h[1, 0] = integrals.T[1, 0] + integrals.U[0, 1, 0] + integrals.U[1, 1, 0]
+integrals.h[1, 1] = integrals.T[1, 1] + integrals.U[0, 1, 1] + integrals.U[1, 1, 1]
+
+# Add Fock-like one-electron integrals (dimer specific)
 D0 = BeN[0].rho["ca"][0,0][0][0]
 D1 = BeN[0].rho["ca"][0,0][0][0]
 two_p_mean_field = {(0, 0): 2 * (  numpy.einsum("sr,prqs->pq", D0, integrals.V[0, 0, 0, 0])
@@ -81,7 +81,7 @@ two_p_mean_field = {(0, 0): 2 * (  numpy.einsum("sr,prqs->pq", D0, integrals.V[0
                                  + numpy.einsum("sr,prqs->pq", D1, integrals.V[1, 1, 0, 1])),
                     (1, 1): 2 * (  numpy.einsum("sr,prqs->pq", D0, integrals.V[1, 0, 1, 0])
                                  + numpy.einsum("sr,prqs->pq", D1, integrals.V[1, 1, 1, 1]))}
-SH_integrals_fock.h = {key: integrals.h[key] + two_p_mean_field[key] for key in integrals.h}
+integrals.f = {key: integrals.h[key] + two_p_mean_field[key] for key in integrals.h}
 
 # In theory, a subsystem of the full system
 dimer01 = (0,1)
@@ -90,7 +90,9 @@ dimer01 = (0,1)
 # build matrices
 #########
 
-S_blocks = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=integrals.S, diagrams=S_diagrams)
+S_blocks  = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=integrals.S, diagrams=S_diagrams)
+SH_blocks = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=integrals,   diagrams=SH_diagrams)
+
 active_S_diagrams = {}
 active_S_diagrams[0] = ["identity"]
 active_S_diagrams[1] = []
@@ -102,22 +104,19 @@ Stest[8]  = XR_term.dimer_matrix(S_blocks, active_S_diagrams, dimer01, [(0,0),(+
 Stest[9]  = XR_term.dimer_matrix(S_blocks, active_S_diagrams, dimer01, [(0,-1),(-1,0)])
 Stest[10] = XR_term.dimer_matrix(S_blocks, active_S_diagrams, dimer01, [(-1,-1)])
 
-SH_blocks_Tony = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=integrals, diagrams=SH_diagrams)
 active_SH_diagrams = {}
 active_SH_diagrams[0] = []
 active_SH_diagrams[1] = ["h00", "v0000"]
 active_SH_diagrams[2] = []
 SHtest2 = {}
-SHtest1_0 = XR_term.monomer_matrix(SH_blocks_Tony, active_SH_diagrams, 0,       [0,+1,-1])
-SHtest1_1 = XR_term.monomer_matrix(SH_blocks_Tony, active_SH_diagrams, 1,       [0,+1,-1])
-SHtest2[6]  = XR_term.dimer_matrix(SH_blocks_Tony, active_SH_diagrams, dimer01, [(+1,+1)])
-SHtest2[7]  = XR_term.dimer_matrix(SH_blocks_Tony, active_SH_diagrams, dimer01, [(0,+1),(+1,0)])
-SHtest2[8]  = XR_term.dimer_matrix(SH_blocks_Tony, active_SH_diagrams, dimer01, [(0,0),(+1,-1),(-1,+1)])
-SHtest2[9]  = XR_term.dimer_matrix(SH_blocks_Tony, active_SH_diagrams, dimer01, [(0,-1),(-1,0)])
-SHtest2[10] = XR_term.dimer_matrix(SH_blocks_Tony, active_SH_diagrams, dimer01, [(-1,-1)])
+SHtest1_0 = XR_term.monomer_matrix(SH_blocks, active_SH_diagrams, 0,       [0,+1,-1])
+SHtest1_1 = XR_term.monomer_matrix(SH_blocks, active_SH_diagrams, 1,       [0,+1,-1])
+SHtest2[6]  = XR_term.dimer_matrix(SH_blocks, active_SH_diagrams, dimer01, [(+1,+1)])
+SHtest2[7]  = XR_term.dimer_matrix(SH_blocks, active_SH_diagrams, dimer01, [(0,+1),(+1,0)])
+SHtest2[8]  = XR_term.dimer_matrix(SH_blocks, active_SH_diagrams, dimer01, [(0,0),(+1,-1),(-1,+1)])
+SHtest2[9]  = XR_term.dimer_matrix(SH_blocks, active_SH_diagrams, dimer01, [(0,-1),(-1,0)])
+SHtest2[10] = XR_term.dimer_matrix(SH_blocks, active_SH_diagrams, dimer01, [(-1,-1)])
 
-SH_blocks_Marco = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=integrals,         diagrams=SH_diagrams)
-SH_blocks_fock  = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=SH_integrals_fock, diagrams=SH_diagrams)
 H1, H2, S1H1, S1H2 = {}, {}, {}, {}
 H1[2]   = ["H1_one_body00", "h01"]
 H2[2]   = ["H2_one_body00", "v0101", "v0010", "v0100", "v0011"]
@@ -125,40 +124,33 @@ S1H1[2] = ["s10h01", "s01h00", "s10h00", "s01h01"]
 S1H2[2] = ["s10v0010", "s01v0100", "s01v0101", "s10v0011"]
 SHtest = {}
 start = time.time()
-SHtest[6]    = XR_term.dimer_matrix(SH_blocks_Marco, H1,   dimer01, [(+1,+1)])
-SHtest[7]    = XR_term.dimer_matrix(SH_blocks_Marco, H1,   dimer01, [(0,+1),(+1,0)])
-SHtest[8]    = XR_term.dimer_matrix(SH_blocks_Marco, H1,   dimer01, [(0,0),(+1,-1),(-1,+1)])
-SHtest[9]    = XR_term.dimer_matrix(SH_blocks_Marco, H1,   dimer01, [(0,-1),(-1,0)])
-SHtest[10]   = XR_term.dimer_matrix(SH_blocks_Marco, H1,   dimer01, [(-1,-1)])
+SHtest[6]    = XR_term.dimer_matrix(SH_blocks, H1,   dimer01, [(+1,+1)])
+SHtest[7]    = XR_term.dimer_matrix(SH_blocks, H1,   dimer01, [(0,+1),(+1,0)])
+SHtest[8]    = XR_term.dimer_matrix(SH_blocks, H1,   dimer01, [(0,0),(+1,-1),(-1,+1)])
+SHtest[9]    = XR_term.dimer_matrix(SH_blocks, H1,   dimer01, [(0,-1),(-1,0)])
+SHtest[10]   = XR_term.dimer_matrix(SH_blocks, H1,   dimer01, [(-1,-1)])
 H1_time = time.time()
 """
-SHtest[6]   += XR_term.dimer_matrix(SH_blocks_Marco, H2,   dimer01, [(+1,+1)])
-SHtest[7]   += XR_term.dimer_matrix(SH_blocks_Marco, H2,   dimer01, [(0,+1),(+1,0)])
-SHtest[8]   += XR_term.dimer_matrix(SH_blocks_Marco, H2,   dimer01, [(0,0),(+1,-1),(-1,+1)])
-SHtest[9]   += XR_term.dimer_matrix(SH_blocks_Marco, H2,   dimer01, [(0,-1),(-1,0)])
-SHtest[10]  += XR_term.dimer_matrix(SH_blocks_Marco, H2,   dimer01, [(-1,-1)])
+SHtest[6]   += XR_term.dimer_matrix(SH_blocks, H2,   dimer01, [(+1,+1)])
+SHtest[7]   += XR_term.dimer_matrix(SH_blocks, H2,   dimer01, [(0,+1),(+1,0)])
+SHtest[8]   += XR_term.dimer_matrix(SH_blocks, H2,   dimer01, [(0,0),(+1,-1),(-1,+1)])
+SHtest[9]   += XR_term.dimer_matrix(SH_blocks, H2,   dimer01, [(0,-1),(-1,0)])
+SHtest[10]  += XR_term.dimer_matrix(SH_blocks, H2,   dimer01, [(-1,-1)])
 """
 H2_time = time.time()
 SHtest11 = {}
-SHtest11[6]  = XR_term.dimer_matrix(SH_blocks_Marco, S1H1, dimer01, [(+1,+1)])
-SHtest11[7]  = XR_term.dimer_matrix(SH_blocks_Marco, S1H1, dimer01, [(0,+1),(+1,0)])
-SHtest11[8]  = XR_term.dimer_matrix(SH_blocks_Marco, S1H1, dimer01, [(0,0),(+1,-1),(-1,+1)])
-SHtest11[9]  = XR_term.dimer_matrix(SH_blocks_Marco, S1H1, dimer01, [(0,-1),(-1,0)])
-SHtest11[10] = XR_term.dimer_matrix(SH_blocks_Marco, S1H1, dimer01, [(-1,-1)])
-"""
-SHtest[6]   += XR_term.dimer_matrix(SH_blocks_fock,  S1H1, dimer01, [(+1,+1)])
-SHtest[7]   += XR_term.dimer_matrix(SH_blocks_fock,  S1H1, dimer01, [(0,+1),(+1,0)])
-SHtest[8]   += XR_term.dimer_matrix(SH_blocks_fock,  S1H1, dimer01, [(0,0),(+1,-1),(-1,+1)])
-SHtest[9]   += XR_term.dimer_matrix(SH_blocks_fock,  S1H1, dimer01, [(0,-1),(-1,0)])
-SHtest[10 ] += XR_term.dimer_matrix(SH_blocks_fock,  S1H1, dimer01, [(-1,-1)])
-"""
+SHtest11[6]  = XR_term.dimer_matrix(SH_blocks, S1H1, dimer01, [(+1,+1)])
+SHtest11[7]  = XR_term.dimer_matrix(SH_blocks, S1H1, dimer01, [(0,+1),(+1,0)])
+SHtest11[8]  = XR_term.dimer_matrix(SH_blocks, S1H1, dimer01, [(0,0),(+1,-1),(-1,+1)])
+SHtest11[9]  = XR_term.dimer_matrix(SH_blocks, S1H1, dimer01, [(0,-1),(-1,0)])
+SHtest11[10] = XR_term.dimer_matrix(SH_blocks, S1H1, dimer01, [(-1,-1)])
 S1H1_time = time.time()
 """
-SHtest[6]  += XR_term.dimer_matrix(SH_blocks_Marco,  S1H2, dimer01, [(+1,+1)])
-SHtest[7]  += XR_term.dimer_matrix(SH_blocks_Marco,  S1H2, dimer01, [(0,+1),(+1,0)])
-SHtest[8]  += XR_term.dimer_matrix(SH_blocks_Marco,  S1H2, dimer01, [(0,0),(+1,-1),(-1,+1)])
-SHtest[9]  += XR_term.dimer_matrix(SH_blocks_Marco,  S1H2, dimer01, [(0,-1),(-1,0)])
-SHtest[10] += XR_term.dimer_matrix(SH_blocks_Marco,  S1H2, dimer01, [(-1,-1)])
+SHtest[6]  += XR_term.dimer_matrix(SH_blocks,  S1H2, dimer01, [(+1,+1)])
+SHtest[7]  += XR_term.dimer_matrix(SH_blocks,  S1H2, dimer01, [(0,+1),(+1,0)])
+SHtest[8]  += XR_term.dimer_matrix(SH_blocks,  S1H2, dimer01, [(0,0),(+1,-1),(-1,+1)])
+SHtest[9]  += XR_term.dimer_matrix(SH_blocks,  S1H2, dimer01, [(0,-1),(-1,0)])
+SHtest[10] += XR_term.dimer_matrix(SH_blocks,  S1H2, dimer01, [(-1,-1)])
 """
 S1H2_time = time.time()
 print("timings: H1, H2, S1H1, S1H2", H1_time - start, H2_time - H1_time, S1H1_time - H2_time, S1H2_time - S1H1_time)

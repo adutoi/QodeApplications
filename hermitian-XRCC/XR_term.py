@@ -23,6 +23,7 @@ def _evaluate_block(result, op_blocks, frag_order, active_diagrams, subsys_indic
     # Can handle (sub)systems with any number of fragments using diagrams of any fragment order.
     # So can use for trimer_matrix, etc.
     # !!! Phases for some fragment_order < subsystem_size have not yet been coded in (easy)!
+    full = slice(None)
     def ascending(array):
         ascending = True
         if len(array)>1:
@@ -31,10 +32,10 @@ def _evaluate_block(result, op_blocks, frag_order, active_diagrams, subsys_indic
                 if a<=v:  ascending = False
                 v = a
         return ascending
-    full = slice(None)
+    #
     rho = op_blocks.densities
-    n_frag = len(subsys_indices)
     m = subsys_indices    # alias makes code more readable
+    n_frag = len(m)
     n_states_i = [rho[m[x]]['n_states'][chg_i] for x,(chg_i,_) in enumerate(subsys_charges)]
     n_states_j = [rho[m[x]]['n_states'][chg_j] for x,(_,chg_j) in enumerate(subsys_charges)]
     loops = [(m_,range(n_frag)) for m_ in range(frag_order)]
