@@ -61,7 +61,7 @@ fragMO_ints = semiMO_integrals(AO_integrals(BeN), [frag.basis.MOcoeffs for frag 
 integrals = spin_orb_integrals(fragMO_ints, rule_wrappers=[tensorly_wrapper], cache=True)               # promote to spin-orbital rep (spin blocked)
 
 # Add the nuclear repulsion matrix to the integrals
-integrals.N = Nuc_repulsion(BeN)
+integrals.N = Nuc_repulsion(BeN).matrix
 
 # Add the summed kinetic and nuclear-attraction integrals (dimer specific)
 integrals.h = {}
@@ -106,7 +106,7 @@ Stest[10] = XR_term.dimer_matrix(S_blocks, active_S_diagrams, dimer01, [(-1,-1)]
 
 active_SH_diagrams = {}
 active_SH_diagrams[0] = []
-active_SH_diagrams[1] = ["h00", "v0000"]
+active_SH_diagrams[1] = ["n00", "t00", "u000", "v0000"]
 active_SH_diagrams[2] = []
 SHtest2 = {}
 SHtest1_0 = XR_term.monomer_matrix(SH_blocks, active_SH_diagrams, 0,       [0,+1,-1])
@@ -117,11 +117,10 @@ SHtest2[8]  = XR_term.dimer_matrix(SH_blocks, active_SH_diagrams, dimer01, [(0,0
 SHtest2[9]  = XR_term.dimer_matrix(SH_blocks, active_SH_diagrams, dimer01, [(0,-1),(-1,0)])
 SHtest2[10] = XR_term.dimer_matrix(SH_blocks, active_SH_diagrams, dimer01, [(-1,-1)])
 
-H1, H2, S1H1, S1H2 = {}, {}, {}, {}
-H1[2]   = ["H1_one_body00", "h01"]
-H2[2]   = ["H2_one_body00", "v0101", "v0010", "v0100", "v0011"]
-S1H1[2] = ["s10h01", "s01h00", "s10h00", "s01h01"]
-S1H2[2] = ["s10v0010", "s01v0100", "s01v0101", "s10v0011"]
+H1, S1H1 = {}, {}
+H1[1]   = ["t00", "u000"]
+H1[2]   = ["t01", "u001", "u101", "u100"]
+S1H1[2] = ["s10t01", "s10u001", "s10u101", "s01t00", "s01u000", "s01u100", "s10t00", "s10u000", "s10u100", "s01t01", "s01u001", "s01u101"]
 SHtest = {}
 start = time.time()
 SHtest[6]    = XR_term.dimer_matrix(SH_blocks, H1,   dimer01, [(+1,+1)])
@@ -130,13 +129,6 @@ SHtest[8]    = XR_term.dimer_matrix(SH_blocks, H1,   dimer01, [(0,0),(+1,-1),(-1
 SHtest[9]    = XR_term.dimer_matrix(SH_blocks, H1,   dimer01, [(0,-1),(-1,0)])
 SHtest[10]   = XR_term.dimer_matrix(SH_blocks, H1,   dimer01, [(-1,-1)])
 H1_time = time.time()
-"""
-SHtest[6]   += XR_term.dimer_matrix(SH_blocks, H2,   dimer01, [(+1,+1)])
-SHtest[7]   += XR_term.dimer_matrix(SH_blocks, H2,   dimer01, [(0,+1),(+1,0)])
-SHtest[8]   += XR_term.dimer_matrix(SH_blocks, H2,   dimer01, [(0,0),(+1,-1),(-1,+1)])
-SHtest[9]   += XR_term.dimer_matrix(SH_blocks, H2,   dimer01, [(0,-1),(-1,0)])
-SHtest[10]  += XR_term.dimer_matrix(SH_blocks, H2,   dimer01, [(-1,-1)])
-"""
 H2_time = time.time()
 SHtest11 = {}
 SHtest11[6]  = XR_term.dimer_matrix(SH_blocks, S1H1, dimer01, [(+1,+1)])
@@ -145,13 +137,6 @@ SHtest11[8]  = XR_term.dimer_matrix(SH_blocks, S1H1, dimer01, [(0,0),(+1,-1),(-1
 SHtest11[9]  = XR_term.dimer_matrix(SH_blocks, S1H1, dimer01, [(0,-1),(-1,0)])
 SHtest11[10] = XR_term.dimer_matrix(SH_blocks, S1H1, dimer01, [(-1,-1)])
 S1H1_time = time.time()
-"""
-SHtest[6]  += XR_term.dimer_matrix(SH_blocks,  S1H2, dimer01, [(+1,+1)])
-SHtest[7]  += XR_term.dimer_matrix(SH_blocks,  S1H2, dimer01, [(0,+1),(+1,0)])
-SHtest[8]  += XR_term.dimer_matrix(SH_blocks,  S1H2, dimer01, [(0,0),(+1,-1),(-1,+1)])
-SHtest[9]  += XR_term.dimer_matrix(SH_blocks,  S1H2, dimer01, [(0,-1),(-1,0)])
-SHtest[10] += XR_term.dimer_matrix(SH_blocks,  S1H2, dimer01, [(-1,-1)])
-"""
 S1H2_time = time.time()
 print("timings: H1, H2, S1H1, S1H2", H1_time - start, H2_time - H1_time, S1H1_time - H2_time, S1H2_time - S1H1_time)
 
