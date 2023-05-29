@@ -86,87 +86,83 @@ integrals.f = {key: integrals.h[key] + two_p_mean_field[key] for key in integral
 # In theory, a subsystem of the full system
 dimer01 = (0,1)
 
-#########
-# build matrices
-#########
-
+# The engines that build the terms
 S_blocks  = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=integrals.S, diagrams=S_diagrams)
 SH_blocks = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=integrals,   diagrams=SH_diagrams)
 
-active_S_diagrams = {}
-active_S_diagrams[0] = ["identity"]
-active_S_diagrams[1] = []
-active_S_diagrams[2] = ["s01", "s01s10", "s01s01", "s01s01s10", "s01s01s10s10", "s01s01s01s10"]
-Stest = {}
-Stest[6]  = XR_term.dimer_matrix(S_blocks, active_S_diagrams, dimer01, [(+1,+1)])
-Stest[7]  = XR_term.dimer_matrix(S_blocks, active_S_diagrams, dimer01, [(0,+1),(+1,0)])
-Stest[8]  = XR_term.dimer_matrix(S_blocks, active_S_diagrams, dimer01, [(0,0),(+1,-1),(-1,+1)])
-Stest[9]  = XR_term.dimer_matrix(S_blocks, active_S_diagrams, dimer01, [(0,-1),(-1,0)])
-Stest[10] = XR_term.dimer_matrix(S_blocks, active_S_diagrams, dimer01, [(-1,-1)])
+#########
+# build and test
+#########
 
-active_SH_diagrams = {}
-active_SH_diagrams[0] = []
-active_SH_diagrams[1] = ["n00", "t00", "u000", "v0000"]
-active_SH_diagrams[2] = []
-SHtest2 = {}
-SHtest1_0 = XR_term.monomer_matrix(SH_blocks, active_SH_diagrams, 0,       [0,+1,-1])
-SHtest1_1 = XR_term.monomer_matrix(SH_blocks, active_SH_diagrams, 1,       [0,+1,-1])
-SHtest2[6]  = XR_term.dimer_matrix(SH_blocks, active_SH_diagrams, dimer01, [(+1,+1)])
-SHtest2[7]  = XR_term.dimer_matrix(SH_blocks, active_SH_diagrams, dimer01, [(0,+1),(+1,0)])
-SHtest2[8]  = XR_term.dimer_matrix(SH_blocks, active_SH_diagrams, dimer01, [(0,0),(+1,-1),(-1,+1)])
-SHtest2[9]  = XR_term.dimer_matrix(SH_blocks, active_SH_diagrams, dimer01, [(0,-1),(-1,0)])
-SHtest2[10] = XR_term.dimer_matrix(SH_blocks, active_SH_diagrams, dimer01, [(-1,-1)])
+# S
+if True:
+
+    active_S_diagrams = {
+        0:  ["identity"],
+        2:  ["s01", "s01s10", "s01s01", "s01s01s10", "s01s01s10s10", "s01s01s01s10"]
+    }
+    Stest = {}
+    Stest[6]  = XR_term.dimer_matrix(S_blocks, active_S_diagrams, dimer01, [(+1,+1)])
+    Stest[7]  = XR_term.dimer_matrix(S_blocks, active_S_diagrams, dimer01, [(0,+1),(+1,0)])
+    Stest[8]  = XR_term.dimer_matrix(S_blocks, active_S_diagrams, dimer01, [(0,0),(+1,-1),(-1,+1)])
+    Stest[9]  = XR_term.dimer_matrix(S_blocks, active_S_diagrams, dimer01, [(0,-1),(-1,0)])
+    Stest[10] = XR_term.dimer_matrix(S_blocks, active_S_diagrams, dimer01, [(-1,-1)])
+
+    for n_elec in [6,7,8,9,10]:
+        Sref = numpy.load("atomic_states/states/16-115-550/load=states:16-115-550:thresh=1e-6:4.5:u.pickle/{}/S-{}.npy".format(displacement,n_elec))
+        dim, _ = Sref.shape
+        print("{:2d} Frobenius norm of Sref and S:   ".format(n_elec), numpy.linalg.norm(Sref-numpy.identity(dim)), numpy.linalg.norm(Stest[n_elec]-numpy.identity(dim)))
+        print("   Frobenius norm of S-Sref: ", numpy.linalg.norm(Stest[n_elec]-Sref))
+
+# H1
+if True:
+
+    active_H1_diagrams = {
+        1:  ["n00", "t00", "u000", "v0000"]
+    }
+    H1test = {}
+    H1test[0] = XR_term.monomer_matrix(SH_blocks, active_H1_diagrams, 0, [0,+1,-1])
+    H1test[1] = XR_term.monomer_matrix(SH_blocks, active_H1_diagrams, 1, [0,+1,-1])
+
+    body1_ref = numpy.load("reference/test-data-4.5/H1_0.npy")
+    print("1-body error 0:", numpy.linalg.norm(H1test[0] - body1_ref))
+    print("1-body error 1:", numpy.linalg.norm(H1test[1] - body1_ref))
+
+
+
+
+
 
 H1, S1H1 = {}, {}
 H1[1]   = ["t00", "u000"]
 H1[2]   = ["t01", "u001", "u101", "u100"]
 S1H1[2] = ["s10t01", "s10u001", "s10u101", "s01t00", "s01u000", "s01u100", "s10t00", "s10u000", "s10u100", "s01t01", "s01u001", "s01u101"]
+
 SHtest = {}
-start = time.time()
 SHtest[6]    = XR_term.dimer_matrix(SH_blocks, H1,   dimer01, [(+1,+1)])
 SHtest[7]    = XR_term.dimer_matrix(SH_blocks, H1,   dimer01, [(0,+1),(+1,0)])
 SHtest[8]    = XR_term.dimer_matrix(SH_blocks, H1,   dimer01, [(0,0),(+1,-1),(-1,+1)])
 SHtest[9]    = XR_term.dimer_matrix(SH_blocks, H1,   dimer01, [(0,-1),(-1,0)])
 SHtest[10]   = XR_term.dimer_matrix(SH_blocks, H1,   dimer01, [(-1,-1)])
-H1_time = time.time()
-H2_time = time.time()
 SHtest11 = {}
 SHtest11[6]  = XR_term.dimer_matrix(SH_blocks, S1H1, dimer01, [(+1,+1)])
 SHtest11[7]  = XR_term.dimer_matrix(SH_blocks, S1H1, dimer01, [(0,+1),(+1,0)])
 SHtest11[8]  = XR_term.dimer_matrix(SH_blocks, S1H1, dimer01, [(0,0),(+1,-1),(-1,+1)])
 SHtest11[9]  = XR_term.dimer_matrix(SH_blocks, S1H1, dimer01, [(0,-1),(-1,0)])
 SHtest11[10] = XR_term.dimer_matrix(SH_blocks, S1H1, dimer01, [(-1,-1)])
-S1H1_time = time.time()
-S1H2_time = time.time()
-print("timings: H1, H2, S1H1, S1H2", H1_time - start, H2_time - H1_time, S1H1_time - H2_time, S1H2_time - S1H1_time)
-
-#########
-# evaluate against full brute force reference (XR')
-#########
 
 start = 0
 for n_elec in [6,7,8,9,10]:
     Sref = numpy.load("atomic_states/states/16-115-550/load=states:16-115-550:thresh=1e-6:4.5:u.pickle/{}/S-{}.npy".format(displacement,n_elec))
-    S = Stest[n_elec] 
-    dim, _ = S.shape
-    Sref -= numpy.identity(dim)
-    S    -= numpy.identity(dim)
-    Sdiff = S-Sref
-    print("{:2d} Frobenius norm of Sref:   ".format(n_elec), numpy.linalg.norm(Sref))
-    print("   Frobenius norm of S:      ",                   numpy.linalg.norm(S))
-    print("   Frobenius norm of S-Sref: ",                   numpy.linalg.norm(Sdiff))
+    dim, _ = Sref.shape
     full_H_ref = numpy.load("atomic_states/states/16-115-550/load=states:16-115-550:thresh=1e-6:4.5:u.pickle/{}/H-{}.npy".format(displacement,n_elec))
-    Sref += numpy.identity(dim)
     SH_ref = Sref @ full_H_ref
     SH_diff = SHtest[n_elec] - SH_ref
     print("   Frobenius norm of SH, SHref: ",                numpy.linalg.norm(SHtest[n_elec]), numpy.linalg.norm(SH_ref))
     print("   Frobenius norm of SH-SHref: ",                 numpy.linalg.norm(SH_diff))
     H1_final = SHtest[n_elec]
     S1H1_final = SHtest11[n_elec]
-    S1H1_contracted = numpy.tensordot(S, H1_final, axes=([1], [0]))
+    S1H1_contracted = numpy.tensordot(Stest[n_elec]-numpy.identity(dim), H1_final, axes=([1], [0]))
     SH_diff = S1H1_contracted - S1H1_final
     print("norms of S1H1_contracted, S1H1, and diff", numpy.linalg.norm(S1H1_contracted), numpy.linalg.norm(S1H1_final), numpy.linalg.norm(SH_diff))
 
-body1_ref = numpy.load("reference/test-data-4.5/H1_0.npy")
-print("1-body error 0:", numpy.linalg.norm(SHtest1_0 - body1_ref))
-print("1-body error 1:", numpy.linalg.norm(SHtest1_1 - body1_ref))
