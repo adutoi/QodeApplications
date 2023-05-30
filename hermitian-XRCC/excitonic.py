@@ -54,7 +54,8 @@ def ccsd(H, out, resources, diis_start=0):
 
 
 def fci(H, out):
-	monomer_Hamiltonians, _, _ = H
+	#monomer_Hamiltonians, _, _ = H
+	monomer_Hamiltonians, _ = H
 	N_frag = len(monomer_Hamiltonians)
 	states_per_frag = monomer_Hamiltonians[0].shape[0]
 	for h in monomer_Hamiltonians:

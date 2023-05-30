@@ -22,7 +22,8 @@ def _ket_loop(Hmat, bra_states, I, ket_states_now, J, N_frag, states_per_frag, H
 	n = len(ket_states_now) + 1
 	ket_states_next = list(ket_states_now) + [None]
 	if n==N_frag:
-		monomer_Hamiltonians, dimer_Couplings, trimer_Couplings = H
+		#monomer_Hamiltonians, dimer_Couplings, trimer_Couplings = H
+		monomer_Hamiltonians, dimer_Couplings = H
 		ket_states = ket_states_next
 		for i in range(states_per_frag):
 			ket_states[-1] = i
@@ -45,15 +46,15 @@ def _ket_loop(Hmat, bra_states, I, ket_states_now, J, N_frag, states_per_frag, H
 			if len(transitions)==2:
 				(M, Mb, Mk),(N, Nb, Nk) = transitions
 				Hmat[I,J] += dimer_Couplings[M][N][Mb*spf+Nb, Mk*spf+Nk]
-				for O in range(0,M):
-					Hmat[I,J] += trimer_Couplings[O][M][N][(bra_states[O]*spf+Mb)*spf+Nb, (ket_states[O]*spf+Mk)*spf+Nk]	# Implicitly, ...
-				for O in range(M+1,N):
-					Hmat[I,J] += trimer_Couplings[M][O][N][(Mb*spf+bra_states[O])*spf+Nb, (Mk*spf+ket_states[O])*spf+Nk]	# ... we know that ...
-				for O in range(N+1,N_frag):
-					Hmat[I,J] += trimer_Couplings[M][N][O][(Mb*spf+Nb)*spf+bra_states[O], (Mk*spf+Nk)*spf+ket_states[O]]	# ... bra_states[O]=ket_states[O]
-			if len(transitions)==3:
-				(M, Mb, Mk),(N, Nb, Nk),(O, Ob, Ok) = transitions
-				Hmat[I,J] += trimer_Couplings[M][N][O][(Mb*spf+Nb)*spf+Ob, (Mk*spf+Nk)*spf+Ok]
+				#for O in range(0,M):
+				#	Hmat[I,J] += trimer_Couplings[O][M][N][(bra_states[O]*spf+Mb)*spf+Nb, (ket_states[O]*spf+Mk)*spf+Nk]	# Implicitly, ...
+				#for O in range(M+1,N):
+				#	Hmat[I,J] += trimer_Couplings[M][O][N][(Mb*spf+bra_states[O])*spf+Nb, (Mk*spf+ket_states[O])*spf+Nk]	# ... we know that ...
+				#for O in range(N+1,N_frag):
+				#	Hmat[I,J] += trimer_Couplings[M][N][O][(Mb*spf+Nb)*spf+bra_states[O], (Mk*spf+Nk)*spf+ket_states[O]]	# ... bra_states[O]=ket_states[O]
+			#if len(transitions)==3:
+			#	(M, Mb, Mk),(N, Nb, Nk),(O, Ob, Ok) = transitions
+			#	Hmat[I,J] += trimer_Couplings[M][N][O][(Mb*spf+Nb)*spf+Ob, (Mk*spf+Nk)*spf+Ok]
 			J += 1
 	else:
 		stride = states_per_frag**(N_frag-n)
