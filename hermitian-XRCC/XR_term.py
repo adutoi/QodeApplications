@@ -43,12 +43,17 @@ def _evaluate_block(result, op_blocks, frag_order, active_diagrams, subsys_indic
         nonlocal result
         if ascending(frags):    # only loop over unique groups of size frag_order
             other_charges_match = True
+            frags_chgs_i, frags_chgs_j = 0, 0
             for x,(chg_i,chg_j) in enumerate(subsys_charges):
-                if x not in frags and chg_i!=chg_j:
-                    other_charges_match = False
-            if other_charges_match:
+                if x not in frags:
+                    if chg_i!=chg_j:  other_charges_match = False
+                else:
+                    frags_chgs_i += chg_i
+                    frags_chgs_j += chg_j
+            if other_charges_match and frags_chgs_i==frags_chgs_j:
                 block = None
                 for diagram in active_diagrams:
+                    print(subsys_charges, diagram)
                     diagram_block = op_blocks[tuple(m[x] for x in frags)][tuple(subsys_charges[x] for x in frags)][diagram]
                     if diagram_block is not None:
                         if block is None:
