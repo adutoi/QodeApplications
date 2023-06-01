@@ -57,7 +57,9 @@ def numpy_storage_to_lists(nparray_1d, n_bra, n_ket, n_spin_orbs, n_ops):
 
 def build_density_tensors(z_lists, n_orbs, n_core, n_threads=1):
 	# Target
-	densities = { 'n_elec':{}, 'n_states':{}, 'aa':{}, 'caaa':{}, 'a':{}, 'caa':{}, 'ccaaa':{}, 'ca':{}, 'ccaa':{}, 'c':{}, 'cca':{}, 'cccaa':{}, 'cc':{}, 'ccca':{} }
+	densities = { 'n_elec':{}, 'n_states':{}, 'aa':{}, 'caaa':{}, 'a':{}, 'caa':{}, 'ccaaa':{}, 'ca':{}, 'ccaa':{}, 'c':{}, 'cca':{}, 'cccaa':{}, 'cc':{}, 'ccca':{},
+        'PDTccaa':{}
+        }
 
 	# Admin
 	n_chg_states = len(z_lists)
@@ -140,6 +142,26 @@ def build_density_tensors(z_lists, n_orbs, n_core, n_threads=1):
 				build.ca_tensor(result, idx[bra_chg], idx[ket_chg], n_elec, n_states, z_coeffs, n_configs, z_configs, n_orbs, n_core, combo_mat_list, n_threads)
 				densities['ca'][bra_chg,ket_chg] = numpy_storage_to_lists(result, n_bra_states, n_ket_states, n_spin_orbs, n_ops)
 				total_size += allocation
+				# PDTccaa
+				ca = densities['ca'][bra_chg,ket_chg]
+				PDTccaa = []
+				for X in range(n_bra_states):
+					row = []
+					for O in range(n_ket_states):
+						result = numpy.zeros([n_spin_orbs]*4, dtype=Double.numpy)
+						for p in range(n_spin_orbs):
+							for q in range(n_spin_orbs):
+								for r in range(n_spin_orbs):
+									for s in range(n_spin_orbs):
+										drs = 1 if (r==s) else 0
+										#result[p,q,r,s] = (1 - drs*ca[O][O][s,s]) * (ca[X][O][p,s]*ca[O][O][q,r] - ca[X][O][p,r]*ca[O][O][q,s] - ca[X][O][q,s]*ca[O][O][p,r] + ca[X][O][q,r]*ca[O][O][p,s])
+										result[p,q,r,s] = ca[X][O][p,s]*ca[0][0][q,r] - ca[X][O][p,r]*ca[0][0][q,s] - ca[X][O][q,s]*ca[0][0][p,r] + ca[X][O][q,r]*ca[0][0][p,s]
+										if X==O:  result[p,q,r,s] *= 1/2.
+										result[p,q,r,s] += ca[X][0][p,s]*ca[0][O][q,r] - ca[X][0][p,r]*ca[0][O][q,s] - ca[X][0][q,s]*ca[0][O][p,r] + ca[X][0][q,r]*ca[0][O][p,s]
+						row += [tensorly.tensor(result, dtype=tensorly.float64)]
+					PDTccaa += [row]
+				densities['PDTccaa'][bra_chg,ket_chg] = PDTccaa
+				total_size += allocation**2 // n_tensors
 				# ccaa
 				n_ops = 4
 				allocation = n_tensors*(n_spin_orbs**n_ops)
