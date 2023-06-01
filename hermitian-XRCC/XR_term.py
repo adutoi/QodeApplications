@@ -53,7 +53,7 @@ def _evaluate_block(result, op_blocks, frag_order, active_diagrams, subsys_indic
             if other_charges_match and frags_chgs_i==frags_chgs_j:
                 block = None
                 for diagram in active_diagrams:
-                    print(subsys_charges, diagram)
+                    #print(subsys_charges, diagram)
                     diagram_block = op_blocks[tuple(m[x] for x in frags)][tuple(subsys_charges[x] for x in frags)][diagram]
                     if diagram_block is not None:
                         if block is None:
