@@ -22,16 +22,13 @@ import torch
 import tensorly
 import qode.util
 import qode.math
-from   qode.atoms.integrals.fragments import AO_integrals, semiMO_integrals, spin_orb_integrals, Nuc_repulsion
+from   qode.atoms.integrals.fragments import AO_integrals, fragMO_integrals, spin_orb_integrals, Nuc_repulsion
 import diagrammatic_expansion   # defines information structure for housing results of diagram evaluations
 import XR_term                  # knows how to use ^this information to pack a matrix for use in XR model
 import S_diagrams               # contains definitions of actual diagrams needed for S operator in BO rep
 import SH_diagrams              # contains definitions of actual diagrams needed for SH operator in BO rep
 from   Be631g import monomer_data as Be
 import excitonic
-
-# Basically just a dictionary
-class _empty(object):  pass
 
 # Helper function passed to integrals engine to get them back as tensorly tensors
 def tensorly_wrapper(rule):
@@ -58,7 +55,7 @@ for m,frag in enumerate(BeN):  frag.load_states(states, n_states)      # load th
 BeN_rho = [frag.rho for frag in BeN]                                   # deprecate this:  diagrammatic_expansion.blocks should take BeN directly? (n_states and n_elec one level higher)
 
 # Get the fragment-partitioned integrals
-fragMO_ints = semiMO_integrals(AO_integrals(BeN), [frag.basis.MOcoeffs for frag in BeN], cache=True)    # get AO integrals and transform to frag MO basis
+fragMO_ints = fragMO_integrals(AO_integrals(BeN), [frag.basis.MOcoeffs for frag in BeN], cache=True)    # get AO integrals and transform to frag MO basis
 integrals = spin_orb_integrals(fragMO_ints, rule_wrappers=[tensorly_wrapper], cache=True)               # promote to spin-orbital rep (spin blocked)
 integrals.N = Nuc_repulsion(BeN).matrix                                                                 # Add nuclear repulsion matrix to the integrals
 
