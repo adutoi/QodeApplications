@@ -26,7 +26,10 @@ from   qode.atoms.integrals.fragments import AO_integrals, fragMO_integrals, spi
 import diagrammatic_expansion   # defines information structure for housing results of diagram evaluations
 import XR_term                  # knows how to use ^this information to pack a matrix for use in XR model
 import S_diagrams               # contains definitions of actual diagrams needed for S operator in BO rep
-import SH_diagrams              # contains definitions of actual diagrams needed for SH operator in BO rep
+import Sn_diagrams              # contains definitions of actual diagrams needed for SH operator in BO rep
+import St_diagrams              # contains definitions of actual diagrams needed for SH operator in BO rep
+import Su_diagrams              # contains definitions of actual diagrams needed for SH operator in BO rep
+import Sv_diagrams              # contains definitions of actual diagrams needed for SH operator in BO rep
 from   Be631g import monomer_data as Be
 import excitonic
 
@@ -80,8 +83,11 @@ two_p_mean_field = {(0, 0): 2 * (  numpy.einsum("sr,prqs->pq", D0, integrals.V[0
 integrals.f = {key: integrals.h[key] + two_p_mean_field[key] for key in integrals.h}
 
 # The engines that build the terms
-S_blocks  = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=integrals.S, diagrams=S_diagrams)
-SH_blocks = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=integrals,   diagrams=SH_diagrams)
+S_blocks  = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=integrals.S,                  diagrams=S_diagrams)
+Sn_blocks = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=(integrals.S, integrals.N),   diagrams=Sn_diagrams)
+St_blocks = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=(integrals.S, integrals.T),   diagrams=St_diagrams)
+Su_blocks = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=(integrals.S, integrals.U),   diagrams=Su_diagrams)
+Sv_blocks = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=(integrals.S, integrals.V),   diagrams=Sv_diagrams)
 
 # for comparison
 body1_ref = numpy.load("reference/test-data-4.5/H1_0.npy")    # from old XR code (same as next line, but unaffected by hack)
@@ -118,17 +124,25 @@ if True:
 # H1
 if True:
 
-    active_H1_diagrams = {1: ["n00", "t00", "u000", "v0000"]}
-    H1_0 = XR_term.monomer_matrix(SH_blocks, active_H1_diagrams, 0, [0,+1,-1])
-    H1_1 = XR_term.monomer_matrix(SH_blocks, active_H1_diagrams, 1, [0,+1,-1])
+    #active_H1_diagrams = {1: ["n00", "t00", "u000", "v0000"]}
+    H1_0  = XR_term.monomer_matrix(Sn_blocks, {1: ["n00"]},   0, [0,+1,-1])
+    H1_0 += XR_term.monomer_matrix(St_blocks, {1: ["t00"]},   0, [0,+1,-1])
+    H1_0 += XR_term.monomer_matrix(Su_blocks, {1: ["u000"]},  0, [0,+1,-1])
+    H1_0 += XR_term.monomer_matrix(Sv_blocks, {1: ["v0000"]}, 0, [0,+1,-1])
+    H1_1  = XR_term.monomer_matrix(Sn_blocks, {1: ["n00"]},   1, [0,+1,-1])
+    H1_1 += XR_term.monomer_matrix(St_blocks, {1: ["t00"]},   1, [0,+1,-1])
+    H1_1 += XR_term.monomer_matrix(Su_blocks, {1: ["u000"]},  1, [0,+1,-1])
+    H1_1 += XR_term.monomer_matrix(Sv_blocks, {1: ["v0000"]}, 1, [0,+1,-1])
 
     print("1-body error 0:", numpy.linalg.norm(H1_0 - body1_ref))
     print("1-body error 1:", numpy.linalg.norm(H1_1 - body1_ref))
     vals, vecs = qode.util.sort_eigen(numpy.linalg.eig(H1_0))
     print("1-body ground-state energy:", vals[0])
 
-    active_H2_diagrams = {2: ["n01", "t01", "u001", "u101", "u100", "v0101", "v0011", "v0010", "v0100"]}
-    H2blocked = XR_term.dimer_matrix(SH_blocks, active_H2_diagrams, (0,1), [(0,0),(0,+1),(0,-1),(+1,0),(+1,+1),(+1,-1),(-1,0),(-1,+1),(-1,-1)])
+    H2blocked  = XR_term.dimer_matrix(Sn_blocks, {2: ["n01"]},                              (0,1), [(0,0),(0,+1),(0,-1),(+1,0),(+1,+1),(+1,-1),(-1,0),(-1,+1),(-1,-1)])
+    H2blocked += XR_term.dimer_matrix(St_blocks, {2: ["t01"]},                              (0,1), [(0,0),(0,+1),(0,-1),(+1,0),(+1,+1),(+1,-1),(-1,0),(-1,+1),(-1,-1)])
+    H2blocked += XR_term.dimer_matrix(Su_blocks, {2: ["u001", "u101", "u100"]},             (0,1), [(0,0),(0,+1),(0,-1),(+1,0),(+1,+1),(+1,-1),(-1,0),(-1,+1),(-1,-1)])
+    H2blocked += XR_term.dimer_matrix(Sv_blocks, {2: ["v0101", "v0011", "v0010", "v0100"]}, (0,1), [(0,0),(0,+1),(0,-1),(+1,0),(+1,+1),(+1,-1),(-1,0),(-1,+1),(-1,-1)])
 
     # well, this sucks.  reorder the states
     dims0 = [BeN[0].rho['n_states'][chg] for chg in [0,+1,-1]]
@@ -213,13 +227,21 @@ if True:
            ]
     }
     SH = {}
-    SH[6]  = XR_term.dimer_matrix(SH_blocks, active_SH_diagrams, (0,1), [(+1,+1)])
-    SH[7]  = XR_term.dimer_matrix(SH_blocks, active_SH_diagrams, (0,1), [(0,+1),(+1,0)])
-    SH[8]  = XR_term.dimer_matrix(SH_blocks, active_SH_diagrams, (0,1), [(0,0),(+1,-1),(-1,+1)])
-    SH[9]  = XR_term.dimer_matrix(SH_blocks, active_SH_diagrams, (0,1), [(0,-1),(-1,0)])
-    SH[10] = XR_term.dimer_matrix(SH_blocks, active_SH_diagrams, (0,1), [(-1,-1)])
-
-    #active_S1H1_diagrams = {2: ["s10t01", "s10u001", "s10u101", "s01t00", "s01u000", "s01u100", "s10t00", "s10u000", "s10u100", "s01t01", "s01u001", "s01u101"]}
+    SH[6]   = XR_term.dimer_matrix(St_blocks, {1:["t00"],   2:["t01", "s01t00", "s10t00", "s10t01", "s01t01"]},                                                                (0,1), [(+1,+1)])
+    SH[6]  += XR_term.dimer_matrix(Su_blocks, {1:["u000"],  2:["u100", "u001", "u101", "s10u000", "s01u000", "s01u100", "s10u100", "s10u001", "s10u101"]},                     (0,1), [(+1,+1)])
+    SH[6]  += XR_term.dimer_matrix(Sv_blocks, {1:["v0000"], 2:["v0101", "v0011", "v0010", "v0100", "s01v0000", "s10v0000", "s10v0011", "s01v0101", "s01v0100", "s10v0010"]},   (0,1), [(+1,+1)])
+    SH[7]   = XR_term.dimer_matrix(St_blocks, {1:["t00"],   2:["t01", "s01t00", "s10t00", "s10t01", "s01t01"]},                                                                (0,1), [(0,+1),(+1,0)])
+    SH[7]  += XR_term.dimer_matrix(Su_blocks, {1:["u000"],  2:["u100", "u001", "u101", "s10u000", "s01u000", "s01u100", "s10u100", "s10u001", "s10u101"]},                     (0,1), [(0,+1),(+1,0)])
+    SH[7]  += XR_term.dimer_matrix(Sv_blocks, {1:["v0000"], 2:["v0101", "v0011", "v0010", "v0100", "s01v0000", "s10v0000", "s10v0011", "s01v0101", "s01v0100", "s10v0010"]},   (0,1), [(0,+1),(+1,0)])
+    SH[8]   = XR_term.dimer_matrix(St_blocks, {1:["t00"],   2:["t01", "s01t00", "s10t00", "s10t01", "s01t01"]},                                                                (0,1), [(0,0),(+1,-1),(-1,+1)])
+    SH[8]  += XR_term.dimer_matrix(Su_blocks, {1:["u000"],  2:["u100", "u001", "u101", "s10u000", "s01u000", "s01u100", "s10u100", "s10u001", "s10u101"]},                     (0,1), [(0,0),(+1,-1),(-1,+1)])
+    SH[8]  += XR_term.dimer_matrix(Sv_blocks, {1:["v0000"], 2:["v0101", "v0011", "v0010", "v0100", "s01v0000", "s10v0000", "s10v0011", "s01v0101", "s01v0100", "s10v0010"]},   (0,1), [(0,0),(+1,-1),(-1,+1)])
+    SH[9]   = XR_term.dimer_matrix(St_blocks, {1:["t00"],   2:["t01", "s01t00", "s10t00", "s10t01", "s01t01"]},                                                                (0,1), [(0,-1),(-1,0)])
+    SH[9]  += XR_term.dimer_matrix(Su_blocks, {1:["u000"],  2:["u100", "u001", "u101", "s10u000", "s01u000", "s01u100", "s10u100", "s10u001", "s10u101"]},                     (0,1), [(0,-1),(-1,0)])
+    SH[9]  += XR_term.dimer_matrix(Sv_blocks, {1:["v0000"], 2:["v0101", "v0011", "v0010", "v0100", "s01v0000", "s10v0000", "s10v0011", "s01v0101", "s01v0100", "s10v0010"]},   (0,1), [(0,-1),(-1,0)])
+    SH[10]  = XR_term.dimer_matrix(St_blocks, {1:["t00"],   2:["t01", "s01t00", "s10t00", "s10t01", "s01t01"]},                                                                (0,1), [(-1,-1)])
+    SH[10] += XR_term.dimer_matrix(Su_blocks, {1:["u000"],  2:["u100", "u001", "u101", "s10u000", "s01u000", "s01u100", "s10u100", "s10u001", "s10u101"]},                     (0,1), [(-1,-1)])
+    SH[10] += XR_term.dimer_matrix(Sv_blocks, {1:["v0000"], 2:["v0101", "v0011", "v0010", "v0100", "s01v0000", "s10v0000", "s10v0011", "s01v0101", "s01v0100", "s10v0010"]},   (0,1), [(-1,-1)])
 
     for n_elec in [6,7,8,9,10]:
         H = qode.math.precise_numpy_inverse(Sref[n_elec]) @ SH[n_elec]
@@ -229,6 +251,3 @@ if True:
         print("   2-body ground-state electronic energy (ref):    ", vals[0])
         vals, vecs = qode.util.sort_eigen(numpy.linalg.eig(H))
         print("   2-body ground-state electronic energy (test):   ", vals[0])
-        #S1H1_contracted = numpy.tensordot(S1[n_elec], H1[n_elec], axes=([1], [0]))
-        #diff = S1H1_contracted - S1H1[n_elec]
-        #print("norms of S1H1_contracted, S1H1, and diff", numpy.linalg.norm(S1H1_contracted), numpy.linalg.norm(S1H1[n_elec]), numpy.linalg.norm(diff))

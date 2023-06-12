@@ -60,145 +60,133 @@ def _parameters(densities, overlaps, subsystem, charges, permutation=(0,)):
 # Don't forget to update the "catalog" dictionary at the end.
 ##########
 
-class body_0(object):
+# 0-mer diagram
 
-    @staticmethod
-    def identity(densities, integrals, subsystem, charges):
-        # Identity
-        def diagram():
-            return 1
-        return [(diagram, [])]
-
+def identity(densities, integrals, subsystem, charges):
+    # Identity
+    def diagram():
+        return 1
+    return [(diagram, [])]
 
 
-class body_2(object):
 
-    @staticmethod
-    def s01(densities, integrals, subsystem, charges):
-        result01 = body_2._s01(densities, integrals, subsystem, charges, permutation=(0,1))
-        result10 = body_2._s01(densities, integrals, subsystem, charges, permutation=(1,0))
-        return [result01, result10]
-    @staticmethod
-    def _s01(densities, integrals, subsystem, charges, permutation):
-        # 1 * 1 * (0)<-(1)
-        X = _parameters(densities, integrals, subsystem, charges, permutation)
-        if X.Dchg_0==-1 and X.Dchg_1==+1:
-            prefactor = (-1)**(X.n_i1 + X.P)
-            def diagram(i0,i1,j0,j1):
-                #return prefactor * np.einsum("pq,p,q->", sig12, c1[i1][j1], a2[i2][j2])
-                partial =          tendot(X.c_0[i0][j0], X.S_01,        axes=([0],[0]))
-                return prefactor * tendot(partial,       X.a_1[i1][j1], axes=([0],[0]))
-            return diagram, permutation
-        else:
-            return None, None
+# dimer diagrams
 
-    @staticmethod
-    def s01s10(densities, integrals, subsystem, charges):
-        # 1/2! * 1 * (0)<-->(1)
-        X = _parameters(densities, integrals, subsystem, charges, permutation=(0,1))
-        if X.Dchg_0==0 and X.Dchg_1==0:
-            prefactor = -1
-            def diagram(i0,i1,j0,j1):
-                #return prefactor * np.einsum("qs,sq->", np.einsum("pq,ps->qs", sig12, ca1[i1][j1]), np.einsum("rs,rq->sq", sig21, ca2[i2][j2]))
-                partial =          tendot(X.ca_0[i0][j0], X.S_01,         axes=([0],[0]))
-                partial =          tendot(partial,        X.S_10,         axes=([0],[1]))
-                return prefactor * tendot(partial,        X.ca_1[i1][j1], axes=([0,1],[1,0]))
-            return [(diagram, (0,1))]
-        else:
-            return [(None, None)]
+def s01(densities, integrals, subsystem, charges):
+    result01 = _s01(densities, integrals, subsystem, charges, permutation=(0,1))
+    result10 = _s01(densities, integrals, subsystem, charges, permutation=(1,0))
+    return [result01, result10]
+def _s01(densities, integrals, subsystem, charges, permutation):
+    # 1 * 1 * (0)<-(1)
+    X = _parameters(densities, integrals, subsystem, charges, permutation)
+    if X.Dchg_0==-1 and X.Dchg_1==+1:
+        prefactor = (-1)**(X.n_i1 + X.P)
+        def diagram(i0,i1,j0,j1):
+            #return prefactor * np.einsum("pq,p,q->", sig12, c1[i1][j1], a2[i2][j2])
+            partial =          tendot(X.c_0[i0][j0], X.S_01,        axes=([0],[0]))
+            return prefactor * tendot(partial,       X.a_1[i1][j1], axes=([0],[0]))
+        return diagram, permutation
+    else:
+        return None, None
 
-    @staticmethod
-    def s01s01(densities, integrals, subsystem, charges):
-        result01 = body_2._s01s01(densities, integrals, subsystem, charges, permutation=(0,1))
-        result10 = body_2._s01s01(densities, integrals, subsystem, charges, permutation=(1,0))
-        return [result01, result10]
-    @staticmethod
-    def _s01s01(densities, integrals, subsystem, charges, permutation):
-        # 1/2! * 1 * (0)<-<-(1)
-        X = _parameters(densities, integrals, subsystem, charges, permutation)
-        if X.Dchg_0==-2 and X.Dchg_1==+2:
-            prefactor = 1/2.
-            def diagram(i0,i1,j0,j1):
-                #return prefactor * np.einsum("qr,rq->", np.einsum("pq,pr->qr", sig12, cc1[i1][j1]), np.einsum("rs,sq->rq", sig12, aa2[i2][j2]))
-                partial =          tendot(X.cc_0[i0][j0], X.S_01,         axes=([0],[0]))
-                partial =          tendot(partial,        X.S_01,         axes=([0],[0]))
-                return prefactor * tendot(partial,        X.aa_1[i1][j1], axes=([0,1],[1,0]))
-            return diagram, permutation
-        else:
-            return None, None
+def s01s10(densities, integrals, subsystem, charges):
+    # 1/2! * 1 * (0)<-->(1)
+    X = _parameters(densities, integrals, subsystem, charges, permutation=(0,1))
+    if X.Dchg_0==0 and X.Dchg_1==0:
+        prefactor = -1
+        def diagram(i0,i1,j0,j1):
+            #return prefactor * np.einsum("qs,sq->", np.einsum("pq,ps->qs", sig12, ca1[i1][j1]), np.einsum("rs,rq->sq", sig21, ca2[i2][j2]))
+            partial =          tendot(X.ca_0[i0][j0], X.S_01,         axes=([0],[0]))
+            partial =          tendot(partial,        X.S_10,         axes=([0],[1]))
+            return prefactor * tendot(partial,        X.ca_1[i1][j1], axes=([0,1],[1,0]))
+        return [(diagram, (0,1))]
+    else:
+        return [(None, None)]
 
-    @staticmethod
-    def s01s01s10(densities, integrals, subsystem, charges):
-        result01 = body_2._s01s01s10(densities, integrals, subsystem, charges, permutation=(0,1))
-        result10 = body_2._s01s01s10(densities, integrals, subsystem, charges, permutation=(1,0))
-        return [result01, result10]
-    @staticmethod
-    def _s01s01s10(densities, integrals, subsystem, charges, permutation):
-        # 1/3! * 3 * (0)<-<-->(1)
-        X = _parameters(densities, integrals, subsystem, charges, permutation)
-        if X.Dchg_0==-1 and X.Dchg_1==+1:
-            prefactor = (-1)**(X.n_i1 + X.P + 1) / 2.
-            def diagram(i0,i1,j0,j1):
-                partial =          tendot(X.cca_0[i0][j0], X.S_01,          axes=([0],[0]))
-                partial =          tendot(partial,         X.S_01,          axes=([0],[0]))
-                partial =          tendot(partial,         X.S_10,          axes=([0],[1]))
-                return prefactor * tendot(partial,         X.caa_1[i1][j1], axes=([0,1,2],[2,1,0]))
-            return diagram, permutation
-        else:
-            return None, None
+def s01s01(densities, integrals, subsystem, charges):
+    result01 = _s01s01(densities, integrals, subsystem, charges, permutation=(0,1))
+    result10 = _s01s01(densities, integrals, subsystem, charges, permutation=(1,0))
+    return [result01, result10]
+def _s01s01(densities, integrals, subsystem, charges, permutation):
+    # 1/2! * 1 * (0)<-<-(1)
+    X = _parameters(densities, integrals, subsystem, charges, permutation)
+    if X.Dchg_0==-2 and X.Dchg_1==+2:
+        prefactor = 1/2.
+        def diagram(i0,i1,j0,j1):
+            #return prefactor * np.einsum("qr,rq->", np.einsum("pq,pr->qr", sig12, cc1[i1][j1]), np.einsum("rs,sq->rq", sig12, aa2[i2][j2]))
+            partial =          tendot(X.cc_0[i0][j0], X.S_01,         axes=([0],[0]))
+            partial =          tendot(partial,        X.S_01,         axes=([0],[0]))
+            return prefactor * tendot(partial,        X.aa_1[i1][j1], axes=([0,1],[1,0]))
+        return diagram, permutation
+    else:
+        return None, None
 
-    @staticmethod
-    def s01s01s10s10(densities, integrals, subsystem, charges):
-        # (1/4!) * 3 * (0)<-<-->->(1)
-        X = _parameters(densities, integrals, subsystem, charges, permutation=(0,1))
-        if X.Dchg_0==0 and X.Dchg_1==0:
-            prefactor = 1/4.
-            def diagram(i0,i1,j0,j1):
-                partial =          tendot(X.ccaa_0[i0][j0], X.S_01,           axes=([0],[0]))
-                partial =          tendot(partial,          X.S_01,           axes=([0],[0]))
-                partial =          tendot(partial,          X.S_10,           axes=([0],[1]))
-                partial =          tendot(partial,          X.S_10,           axes=([0],[1]))
-                return prefactor * tendot(partial,          X.ccaa_1[i1][j1], axes=([0,1,2,3],[3,2,1,0]))
-            return [(diagram, (0,1))]
-        else:
-            return [(None, None)]
+def s01s01s10(densities, integrals, subsystem, charges):
+    result01 = _s01s01s10(densities, integrals, subsystem, charges, permutation=(0,1))
+    result10 = _s01s01s10(densities, integrals, subsystem, charges, permutation=(1,0))
+    return [result01, result10]
+def _s01s01s10(densities, integrals, subsystem, charges, permutation):
+    # 1/3! * 3 * (0)<-<-->(1)
+    X = _parameters(densities, integrals, subsystem, charges, permutation)
+    if X.Dchg_0==-1 and X.Dchg_1==+1:
+        prefactor = (-1)**(X.n_i1 + X.P + 1) / 2.
+        def diagram(i0,i1,j0,j1):
+            partial =          tendot(X.cca_0[i0][j0], X.S_01,          axes=([0],[0]))
+            partial =          tendot(partial,         X.S_01,          axes=([0],[0]))
+            partial =          tendot(partial,         X.S_10,          axes=([0],[1]))
+            return prefactor * tendot(partial,         X.caa_1[i1][j1], axes=([0,1,2],[2,1,0]))
+        return diagram, permutation
+    else:
+        return None, None
 
-    @staticmethod
-    def PDTs01s01s10s10(densities, integrals, subsystem, charges):
-        # (1/4!) * 3 * (0)<-<-->->(1)
-        X = _parameters(densities, integrals, subsystem, charges, permutation=(0,1))
-        if X.Dchg_0==0 and X.Dchg_1==0:
-            prefactor = 1/4.
-            def diagram(i0,i1,j0,j1):
-                partial =          tendot(X.PDTccaa_0[i0][j0], X.S_01,           axes=([0],[0]))
-                partial =          tendot(partial,          X.S_01,           axes=([0],[0]))
-                partial =          tendot(partial,          X.S_10,           axes=([0],[1]))
-                partial =          tendot(partial,          X.S_10,           axes=([0],[1]))
-                return prefactor * tendot(partial,          X.PDTccaa_1[i1][j1], axes=([0,1,2,3],[3,2,1,0]))
-            return [(diagram, (0,1))]
-        else:
-            return [(None, None)]
+def s01s01s10s10(densities, integrals, subsystem, charges):
+    # (1/4!) * 3 * (0)<-<-->->(1)
+    X = _parameters(densities, integrals, subsystem, charges, permutation=(0,1))
+    if X.Dchg_0==0 and X.Dchg_1==0:
+        prefactor = 1/4.
+        def diagram(i0,i1,j0,j1):
+            partial =          tendot(X.ccaa_0[i0][j0], X.S_01,           axes=([0],[0]))
+            partial =          tendot(partial,          X.S_01,           axes=([0],[0]))
+            partial =          tendot(partial,          X.S_10,           axes=([0],[1]))
+            partial =          tendot(partial,          X.S_10,           axes=([0],[1]))
+            return prefactor * tendot(partial,          X.ccaa_1[i1][j1], axes=([0,1,2,3],[3,2,1,0]))
+        return [(diagram, (0,1))]
+    else:
+        return [(None, None)]
 
-    @staticmethod
-    def s01s01s01s10(densities, integrals, subsystem, charges):
-        result01 = body_2._s01s01s01s10(densities, integrals, subsystem, charges, permutation=(0,1))
-        result10 = body_2._s01s01s01s10(densities, integrals, subsystem, charges, permutation=(1,0))
-        return [result01, result10]
-    @staticmethod
-    def _s01s01s01s10(densities, integrals, subsystem, charges, permutation):
-        # 1/4! * 4 * (0)<-<-<-->(1)
-        X = _parameters(densities, integrals, subsystem, charges, permutation)
-        if X.Dchg_0==-2 and X.Dchg_1==+2:
-            prefactor = -1 / 6.
-            def diagram(i0,i1,j0,j1):
-                partial =          tendot(X.ccca_0[i0][j0], X.S_01,           axes=([0],[0]))
-                partial =          tendot(partial,          X.S_01,           axes=([0],[0]))
-                partial =          tendot(partial,          X.S_01,           axes=([0],[0]))
-                partial =          tendot(partial,          X.S_10,           axes=([0],[1]))
-                return prefactor * tendot(partial,          X.caaa_1[i1][j1], axes=([0,1,2,3],[3,2,1,0]))
-            return diagram, permutation
-        else:
-            return None, None
+def PDTs01s01s10s10(densities, integrals, subsystem, charges):
+    # (1/4!) * 3 * (0)<-<-->->(1)
+    X = _parameters(densities, integrals, subsystem, charges, permutation=(0,1))
+    if X.Dchg_0==0 and X.Dchg_1==0:
+        prefactor = 1/4.
+        def diagram(i0,i1,j0,j1):
+            partial =          tendot(X.PDTccaa_0[i0][j0], X.S_01,           axes=([0],[0]))
+            partial =          tendot(partial,          X.S_01,           axes=([0],[0]))
+            partial =          tendot(partial,          X.S_10,           axes=([0],[1]))
+            partial =          tendot(partial,          X.S_10,           axes=([0],[1]))
+            return prefactor * tendot(partial,          X.PDTccaa_1[i1][j1], axes=([0,1,2,3],[3,2,1,0]))
+        return [(diagram, (0,1))]
+    else:
+        return [(None, None)]
+
+def s01s01s01s10(densities, integrals, subsystem, charges):
+    result01 = _s01s01s01s10(densities, integrals, subsystem, charges, permutation=(0,1))
+    result10 = _s01s01s01s10(densities, integrals, subsystem, charges, permutation=(1,0))
+    return [result01, result10]
+def _s01s01s01s10(densities, integrals, subsystem, charges, permutation):
+    # 1/4! * 4 * (0)<-<-<-->(1)
+    X = _parameters(densities, integrals, subsystem, charges, permutation)
+    if X.Dchg_0==-2 and X.Dchg_1==+2:
+        prefactor = -1 / 6.
+        def diagram(i0,i1,j0,j1):
+            partial =          tendot(X.ccca_0[i0][j0], X.S_01,           axes=([0],[0]))
+            partial =          tendot(partial,          X.S_01,           axes=([0],[0]))
+            partial =          tendot(partial,          X.S_01,           axes=([0],[0]))
+            partial =          tendot(partial,          X.S_10,           axes=([0],[1]))
+            return prefactor * tendot(partial,          X.caaa_1[i1][j1], axes=([0,1,2,3],[3,2,1,0]))
+        return diagram, permutation
+    else:
+        return None, None
 
 
 
@@ -214,15 +202,15 @@ class body_2(object):
 catalog = {}
 
 catalog[0] = {
-    "identity": body_0.identity
+    "identity": identity
 }
 
 catalog[2] = {
-    "s01":          body_2.s01,
-    "s01s10":       body_2.s01s10,
-    "s01s01":       body_2.s01s01,
-    "s01s01s10":    body_2.s01s01s10,
-    "s01s01s10s10": body_2.s01s01s10s10,
-    "s01s01s01s10": body_2.s01s01s01s10,
-    "PDTs01s01s10s10": body_2.PDTs01s01s10s10
+    "s01":          s01,
+    "s01s10":       s01s10,
+    "s01s01":       s01s01,
+    "s01s01s10":    s01s01s10,
+    "s01s01s10s10": s01s01s10s10,
+    "s01s01s01s10": s01s01s01s10,
+    "PDTs01s01s10s10": PDTs01s01s10s10
 }
