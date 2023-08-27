@@ -16,6 +16,10 @@
 #    along with QodeApplications.  If not, see <http://www.gnu.org/licenses/>.
 #
 
+# Usage:
+#     python [-u] <this-file.py> <displacement> <states>
+# where <states> can be the name of any one of directories in atomic_states/states/16-115-550
+
 import sys
 import numpy
 #import torch
@@ -43,7 +47,7 @@ from   Be631g   import monomer_data as Be
 # Information about the Be2 supersystem
 n_frag       = 2
 displacement = sys.argv[1]
-states       = "load=states:16-115-550:thresh=1e-6:4.5:u.pickle/4.5"
+states       = "{}/4.5".format(sys.argv[2])
 n_states     = ("all","all","all","all","all")
 
 # "Assemble" the supersystem from the displaced fragments
