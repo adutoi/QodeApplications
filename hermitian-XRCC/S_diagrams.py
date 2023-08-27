@@ -29,7 +29,6 @@ def _parameters(densities, overlaps, subsystem, charges, permutation=(0,)):
     data = _empty()
     data.P = 0 if permutation==(0,1) else 1    # This line of code is specific to two fragments (needs to be generalized for >=3).
     #
-    #Dchg_rhos = {+2:["aa", "caaa"], +1:["a","caa"], 0:["ca","ccaa","PDTccaa"], -1:["c","cca"], -2:["cc", "ccca"]}
     Dchg_rhos = {+2:["aa", "caaa"], +1:["a","caa"], 0:["ca","ccaa"], -1:["c","cca"], -2:["cc", "ccca"]}
     n_i = 0
     n_i_label = ""
@@ -150,21 +149,6 @@ def s01s01s10s10(densities, integrals, subsystem, charges):
             partial =          tendot(partial,          X.S_10,           axes=([0],[1]))
             partial =          tendot(partial,          X.S_10,           axes=([0],[1]))
             return prefactor * tendot(partial,          X.ccaa_1[i1][j1], axes=([0,1,2,3],[3,2,1,0]))
-        return [(diagram, (0,1))]
-    else:
-        return [(None, None)]
-
-def PDTs01s01s10s10(densities, integrals, subsystem, charges):
-    # (1/4!) * 3 * (0)<-<-->->(1)
-    X = _parameters(densities, integrals, subsystem, charges, permutation=(0,1))
-    if X.Dchg_0==0 and X.Dchg_1==0:
-        prefactor = 1/4.
-        def diagram(i0,i1,j0,j1):
-            partial =          tendot(X.PDTccaa_0[i0][j0], X.S_01,           axes=([0],[0]))
-            partial =          tendot(partial,          X.S_01,           axes=([0],[0]))
-            partial =          tendot(partial,          X.S_10,           axes=([0],[1]))
-            partial =          tendot(partial,          X.S_10,           axes=([0],[1]))
-            return prefactor * tendot(partial,          X.PDTccaa_1[i1][j1], axes=([0,1,2,3],[3,2,1,0]))
         return [(diagram, (0,1))]
     else:
         return [(None, None)]

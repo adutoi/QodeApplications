@@ -18,7 +18,7 @@
 
 import sys
 import numpy
-import torch
+#import torch
 import tensorly
 import qode.util
 import qode.math
@@ -80,116 +80,96 @@ all_dimer_charges = [(0,0), (0,+1), (0,-1), (+1,0), (+1,+1), (+1,-1), (-1,0), (-
 # Build and test
 #########
 
-n_elec = 8
+H1 = []
+for m in [0,1]:
+    H1_m  = XR_term.monomer_matrix(Sn_blocks, {
+                          1: [
+                              "n00"
+                             ]
+                         }, m, monomer_charges)
+
+    H1_m += XR_term.monomer_matrix(St_blocks_bior, {
+                          1: [
+                              "t00"
+                             ]
+                         }, m, monomer_charges)
+    H1_m += XR_term.monomer_matrix(Su_blocks_bior, {
+                          1: [
+                              "u000"
+                             ]
+                         }, m, monomer_charges)
+
+    H1_m += XR_term.monomer_matrix(Sv_blocks_bior, {
+                          1: [
+                              "v0000"
+                             ]
+                         }, m, monomer_charges)
+    H1 += [H1_m]
 
 
 
-S    = XR_term.dimer_matrix(S_blocks, {
-                      0: [
-                          "identity"
-                         ],
-                      2: [
-                          "s01"
-                          #"s01s10", "s01s01",
-                          #"s01s01s10",
-                          #"s01s01s10s10", "s01s01s01s10"
-                         ]
-                     },  (0,1), dimer_charges[n_elec])
+S2     = XR_term.dimer_matrix(S_blocks, {
+                        0: [
+                            "identity"
+                           ]
+                       },  (0,1), all_dimer_charges)
 
-Sinv = qode.math.precise_numpy_inverse(S)
+S2inv = qode.math.precise_numpy_inverse(S2)
 
 
 
-SH   = XR_term.dimer_matrix(Sn_blocks, {
-                      1: [
-                          "n00"
-                         ],
-                      2: [
-                          "n01",
-                          "s01n00", "s01n11", "s01n01"
-                         ]
-                     }, (0,1), dimer_charges[n_elec])
+S2H2   = XR_term.dimer_matrix(Sn_blocks, {
+                        2: [
+                            "n01"
+                           ]
+                       }, (0,1), all_dimer_charges)
 
-SH  += XR_term.dimer_matrix(St_blocks_symm, {
-                      1: [
-                          "t00"
-                         ],
-                      2: [
-                          "t01",
-                          #"s01t00", "s10t00",
-                          #"s10t01", "s01t01"
-                         ]
-                     }, (0,1), dimer_charges[n_elec])
-SH  += XR_term.dimer_matrix(Su_blocks_symm, {
-                      1: [
-                          "u000"
-                         ],
-                      2: [
-                          "u100",
-                          "u001", "u101",
-                          #"s01u000", "s10u000",
-                          #"s01u100", "s10u100",
-                          #"s10u001", "s10u101", "s01u001", "s01u101"
-                         ]
-                     }, (0,1), dimer_charges[n_elec])
+S2H2  += XR_term.dimer_matrix(St_blocks_bior, {
+                        2: [
+                            "t01"
+                           ]
+                       }, (0,1), all_dimer_charges)
+S2H2  += XR_term.dimer_matrix(Su_blocks_bior, {
+                        2: [
+                            "u100",
+                            "u001", "u101"
+                           ]
+                       }, (0,1), all_dimer_charges)
 
-SH  += XR_term.dimer_matrix(St_blocks_bior, {
-                      1: [
-                          #"t00"
-                         ],
-                      2: [
-                          #"t01",
-                          "s01t00", "s10t00",
-                          "s10t01", "s01t01"
-                         ]
-                     }, (0,1), dimer_charges[n_elec])
-SH  += XR_term.dimer_matrix(Su_blocks_bior, {
-                      1: [
-                          #"u000"
-                         ],
-                      2: [
-                          #"u100",
-                          #"u001", "u101",
-                          "s01u000", "s10u000",
-                          "s01u100", "s10u100",
-                          "s10u001", "s10u101", "s01u001", "s01u101"
-                         ]
-                     }, (0,1), dimer_charges[n_elec])
-
-SH  -= XR_term.dimer_matrix(Sv_blocks_bior, {
-                      1: [
-                          "v0000"
-                         ],
-                      2: [
-                          "v0101", "v0010", "v0100", "v0011",
-                          #"s01v0000", "s10v0000",
-                          #"s01v0101", "s10v0010", "s01v0100", "s10v0011", "s01v0010", "s10v0100"#, "s01v0011"
-                         ]
-                     }, (0,1), dimer_charges[n_elec])
-
-SH  += XR_term.dimer_matrix(Sv_blocks_half, {
-                      1: [
-                          "v0000"
-                         ],
-                      2: [
-                          "v0101", "v0010", "v0100", "v0011",
-                          #"s01v0000", "s10v0000",
-                          #"s01v0101", "s10v0010", "s01v0100", "s10v0011", "s01v0010", "s10v0100"#, "s01v0011"
-                         ]
-                     }, (0,1), dimer_charges[n_elec])
-
-SH  += XR_term.dimer_matrix(Sv_blocks_bior, {
-                      1: [
-                          #"v0000"
-                         ],
-                      2: [
-                          #"v0101", "v0010", "v0100", "v0011",
-                          "s01v0000", "s10v0000",
-                          "s01v0101", "s10v0010", "s01v0100", "s10v0011", "s01v0010", "s10v0100"#, "s01v0011"
-                         ]
-                     }, (0,1), dimer_charges[n_elec])
+S2H2  += XR_term.dimer_matrix(Sv_blocks_bior, {
+                        2: [
+                            "v0101", "v0010", "v0100", "v0011"
+                           ]
+                       }, (0,1), all_dimer_charges)
 
 
 
-vals, vecs = qode.util.sort_eigen(numpy.linalg.eig(Sinv @ SH))
-print("2-body ground-state energy:", vals[0])
+H2blocked = S2inv @ S2H2
+
+# well, this sucks.  reorder the states
+dims0 = [BeN[0].rho['n_states'][chg] for chg in [0,+1,-1]]
+dims1 = [BeN[1].rho['n_states'][chg] for chg in [0,+1,-1]]
+mapping2 = [[None]*sum(dims0) for _ in range(sum(dims1))]
+idx = 0
+beg0 = 0
+for dim0 in dims0:
+    beg1 = 0
+    for dim1 in dims1:
+        for m in range(dim0):
+            for n in range(dim1):
+                mapping2[beg0+m][beg1+n] = idx
+                idx += 1
+        beg1 += dim1
+    beg0 += dim0
+mapping = []
+for m in range(sum(dims0)):
+    for n in range(sum(dims1)):
+        mapping += [mapping2[m][n]]
+H2 = numpy.zeros(H2blocked.shape)
+for i,i_ in enumerate(mapping):
+    for j,j_ in enumerate(mapping):
+        H2[i,j] = H2blocked[i_,j_]
+
+out, resources = qode.util.output(log=qode.util.textlog(echo=True)), qode.util.parallel.resources(1)
+E, T = excitonic.ccsd((H1,[[None,H2],[None,None]]), out, resources)
+out.log("\nTotal Excitonic CCSD Energy (test) = ", E)

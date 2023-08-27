@@ -57,9 +57,7 @@ def numpy_storage_to_lists(nparray_1d, n_bra, n_ket, n_spin_orbs, n_ops):
 
 def build_density_tensors(z_lists, n_orbs, n_core, n_threads=1):
 	# Target
-	densities = { 'n_elec':{}, 'n_states':{}, 'aa':{}, 'caaa':{}, 'a':{}, 'caa':{}, 'ccaaa':{}, 'ca':{}, 'ccaa':{}, 'c':{}, 'cca':{}, 'cccaa':{}, 'cc':{}, 'ccca':{},
-        'PDTccaa':{}
-        }
+	densities = { 'n_elec':{}, 'n_states':{}, 'aa':{}, 'caaa':{}, 'a':{}, 'caa':{}, 'ccaaa':{}, 'ca':{}, 'ccaa':{}, 'c':{}, 'cca':{}, 'cccaa':{}, 'cc':{}, 'ccca':{} }
 
 	# Admin
 	n_chg_states = len(z_lists)
@@ -142,25 +140,6 @@ def build_density_tensors(z_lists, n_orbs, n_core, n_threads=1):
 				build.ca_tensor(result, idx[bra_chg], idx[ket_chg], n_elec, n_states, z_coeffs, n_configs, z_configs, n_orbs, n_core, combo_mat_list, n_threads)
 				densities['ca'][bra_chg,ket_chg] = numpy_storage_to_lists(result, n_bra_states, n_ket_states, n_spin_orbs, n_ops)
 				total_size += allocation
-				# PDTccaa
-				"""
-				ca = densities['ca'][bra_chg,ket_chg]
-				PDTccaa = []
-				n_braket_states = n_bra_states    # == n_ket_states
-				for X in range(n_braket_states):
-					row = []
-					for Y in range(n_braket_states):
-						result = numpy.zeros([n_spin_orbs]*4, dtype=Double.numpy)
-						for p in range(n_spin_orbs):
-							for q in range(n_spin_orbs):
-								for r in range(n_spin_orbs):
-									for s in range(n_spin_orbs):
-										result = #
-						row += [tensorly.tensor(result, dtype=tensorly.float64)]
-					PDTccaa += [row]
-				densities['PDTccaa'][bra_chg,ket_chg] = PDTccaa
-				total_size += allocation**2 // n_tensors
-				"""
 				# ccaa
 				n_ops = 4
 				allocation = n_tensors*(n_spin_orbs**n_ops)
