@@ -17,7 +17,7 @@
 #
 
 from tendot import tendot
-from qode.math.tensornet import tl_tensor, scalar_value
+from qode.math.tensornet import scalar_value
 
 p, q, r, s, t, u, v, w = "pqrstuvw"
 
@@ -87,9 +87,9 @@ def _s01(densities, integrals, subsystem, charges, permutation):
     if X.Dchg_0==-1 and X.Dchg_1==+1:
         prefactor = (-1)**(X.n_i1 + X.P)
         def diagram(i0,i1,j0,j1):
-            S_01 = tl_tensor(X.S_01)
-            c_0  = tl_tensor(X.c_0[i0][j0])
-            a_1  = tl_tensor(X.a_1[i1][j1])
+            S_01 = X.S_01
+            c_0  = X.c_0[i0][j0]
+            a_1  = X.a_1[i1][j1]
             return scalar_value( prefactor * c_0(p) @ S_01(p,q) @ a_1(q) )
         return diagram, permutation
     else:
@@ -101,10 +101,10 @@ def s01s10(densities, integrals, subsystem, charges):
     if X.Dchg_0==0 and X.Dchg_1==0:
         prefactor = -1
         def diagram(i0,i1,j0,j1):
-            S_01 = tl_tensor(X.S_01)
-            S_10 = tl_tensor(X.S_10)
-            ca_0 = tl_tensor(X.ca_0[i0][j0])
-            ca_1 = tl_tensor(X.ca_1[i1][j1])
+            S_01 = X.S_01
+            S_10 = X.S_10
+            ca_0 = X.ca_0[i0][j0]
+            ca_1 = X.ca_1[i1][j1]
             return scalar_value( prefactor * ca_0(p,q) @ S_01(p,r) @ S_10(s,q) @ ca_1(s,r) )
             #partial =          tendot(X.ca_0[i0][j0], X.S_01,         axes=([0],[0]))
             #partial =          tendot(partial,        X.S_10,         axes=([0],[1]))
@@ -123,9 +123,9 @@ def _s01s01(densities, integrals, subsystem, charges, permutation):
     if X.Dchg_0==-2 and X.Dchg_1==+2:
         prefactor = 1/2.
         def diagram(i0,i1,j0,j1):
-            S_01 = tl_tensor(X.S_01)
-            cc_0 = tl_tensor(X.cc_0[i0][j0])
-            aa_1 = tl_tensor(X.aa_1[i1][j1])
+            S_01 = X.S_01
+            cc_0 = X.cc_0[i0][j0]
+            aa_1 = X.aa_1[i1][j1]
             return scalar_value( prefactor *  cc_0(p,q) @ S_01(p,r) @ S_01(q,s) @ aa_1(s,r) )
             #partial =          tendot(X.cc_0[i0][j0], X.S_01,         axes=([0],[0]))
             #partial =          tendot(partial,        X.S_01,         axes=([0],[0]))
@@ -144,10 +144,10 @@ def _s01s01s10(densities, integrals, subsystem, charges, permutation):
     if X.Dchg_0==-1 and X.Dchg_1==+1:
         prefactor = (-1)**(X.n_i1 + X.P + 1) / 2.
         def diagram(i0,i1,j0,j1):
-            S_01  = tl_tensor(X.S_01)
-            S_10  = tl_tensor(X.S_10)
-            cca_0 = tl_tensor(X.cca_0[i0][j0])
-            caa_1 = tl_tensor(X.caa_1[i1][j1])
+            S_01  = X.S_01
+            S_10  = X.S_10
+            cca_0 = X.cca_0[i0][j0]
+            caa_1 = X.caa_1[i1][j1]
             return scalar_value( prefactor *  cca_0(p,q,r) @ S_01(p,s) @ S_01(q,t) @ S_10(u,r) @ caa_1(u,t,s) )
             #partial =          tendot(X.cca_0[i0][j0], X.S_01,          axes=([0],[0]))
             #partial =          tendot(partial,         X.S_01,          axes=([0],[0]))
@@ -163,10 +163,10 @@ def s01s01s10s10(densities, integrals, subsystem, charges):
     if X.Dchg_0==0 and X.Dchg_1==0:
         prefactor = 1/4.
         def diagram(i0,i1,j0,j1):
-            S_01   = tl_tensor(X.S_01)
-            S_10   = tl_tensor(X.S_10)
-            ccaa_0 = tl_tensor(X.ccaa_0[i0][j0])
-            ccaa_1 = tl_tensor(X.ccaa_1[i1][j1])
+            S_01   = X.S_01
+            S_10   = X.S_10
+            ccaa_0 = X.ccaa_0[i0][j0]
+            ccaa_1 = X.ccaa_1[i1][j1]
             return scalar_value( prefactor * ccaa_0(p,q,r,s) @ S_01(p,t) @ S_01(q,u) @ S_10(v,r) @ S_10(w,s) @ ccaa_1(w,v,u,t) )
             #partial =          tendot(X.ccaa_0[i0][j0], X.S_01,           axes=([0],[0]))
             #partial =          tendot(partial,          X.S_01,           axes=([0],[0]))
@@ -187,10 +187,10 @@ def _s01s01s01s10(densities, integrals, subsystem, charges, permutation):
     if X.Dchg_0==-2 and X.Dchg_1==+2:
         prefactor = -1 / 6.
         def diagram(i0,i1,j0,j1):
-            S_01   = tl_tensor(X.S_01)
-            S_10   = tl_tensor(X.S_10)
-            ccca_0 = tl_tensor(X.ccca_0[i0][j0])
-            caaa_1 = tl_tensor(X.caaa_1[i1][j1])
+            S_01   = X.S_01
+            S_10   = X.S_10
+            ccca_0 = X.ccca_0[i0][j0]
+            caaa_1 = X.caaa_1[i1][j1]
             return scalar_value( prefactor * ccca_0(p,q,r,s) @ S_01(p,t) @ S_01(q,u) @ S_01(r,v) @ S_10(w,s) @ caaa_1(w,v,u,t) )
             #partial =          tendot(X.ccca_0[i0][j0], X.S_01,           axes=([0],[0]))
             #partial =          tendot(partial,          X.S_01,           axes=([0],[0]))

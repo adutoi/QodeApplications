@@ -3,11 +3,11 @@
 mkdir -p ../deprecated
 
 ### This inserts the drop-in replacements for the diagrams using tensornet
-mv ../S*_diagrams.py ../deprecated
-cp  ./alt-diagrams/* ..
+mv ../S*_diagrams.py ../get_ints.py ../build_density_tensors.py ../deprecated
+cp  ./alt-diagrams/*  ./get_ints.py  ./build_density_tensors.py ..
 
 ### This changes the workflow so that density tensors are precomputed on disk
-mv ../Be631g.py      ../deprecated
+mv ../Be631g.py                ../deprecated
+cp  ./Be631g.py                ../atomic_states
 mv ../density_tensors.c        ../atomic_states
 mv ../build_density_tensors.py ../atomic_states
-cp  ./Be631g.py                ../atomic_states

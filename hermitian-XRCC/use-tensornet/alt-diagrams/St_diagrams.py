@@ -74,8 +74,8 @@ def t00(densities, integrals, subsystem, charges):
     if X.Dchg_0==0:
         prefactor = 1
         def diagram(i0,j0):
-            T_00 = tl_tensor(X.T_00)
-            ca_0 = tl_tensor(X.ca_0[i0][j0])
+            T_00 = X.T_00
+            ca_0 = X.ca_0[i0][j0]
             return scalar_value( prefactor * T_00(p,q) @ ca_0(p,q) )
         return [(diagram, (0,))]
     else:
@@ -95,9 +95,9 @@ def _t01(densities, integrals, subsystem, charges, permutation):
     if X.Dchg_0==-1 and X.Dchg_1==+1:
         prefactor = (-1)**(X.n_i1 + X.P)
         def diagram(i0,i1,j0,j1):
-            T_01 = tl_tensor(X.T_01)
-            c_0  = tl_tensor(X.c_0[i0][j0])
-            a_1  = tl_tensor(X.a_1[i1][j1])
+            T_01 = X.T_01
+            c_0  = X.c_0[i0][j0]
+            a_1  = X.a_1[i1][j1]
             return scalar_value( prefactor * T_01(p,q) @ c_0(p) @ a_1(q) )
         return diagram, permutation
     else:
@@ -113,10 +113,10 @@ def _s10t01(densities, integrals, subsystem, charges, permutation):
     if X.Dchg_0==0 and X.Dchg_1==0:
         prefactor = -1
         def diagram(i0,i1,j0,j1):
-            S_10  = tl_tensor(X.S_10)
-            T_01  = tl_tensor(X.T_01)
-            ca_0  = tl_tensor(X.ca_0[i0][j0])
-            ca_1  = tl_tensor(X.ca_1[i1][j1])
+            S_10  = X.S_10
+            T_01  = X.T_01
+            ca_0  = X.ca_0[i0][j0]
+            ca_1  = X.ca_1[i1][j1]
             return scalar_value( prefactor * S_10(p,q) @ ca_0(r,q) @ T_01(r,s) @ ca_1(p,s) )
         return diagram, permutation
     else:
@@ -132,10 +132,10 @@ def _s01t00(densities, integrals, subsystem, charges, permutation):
     if X.Dchg_0==-1 and X.Dchg_1==+1:
         prefactor = (-1)**(X.n_i1 + X.P)
         def diagram(i0,i1,j0,j1):
-            S_01  = tl_tensor(X.S_01)
-            T_00  = tl_tensor(X.T_00)
-            cca_0 = tl_tensor(X.cca_0[i0][j0])
-            a_1   = tl_tensor(X.a_1[i1][j1])
+            S_01  = X.S_01
+            T_00  = X.T_00
+            cca_0 = X.cca_0[i0][j0]
+            a_1   = X.a_1[i1][j1]
             return scalar_value( prefactor * S_01(r,s) @ T_00(p,q) @ cca_0(r,p,q) @ a_1(s) )
         return diagram, permutation
     else:
@@ -151,10 +151,10 @@ def _s10t00(densities, integrals, subsystem, charges, permutation):
     if X.Dchg_0==+1 and X.Dchg_1==-1:
         prefactor = (-1)**(X.n_i1 + X.P)
         def diagram(i0,i1,j0,j1):
-            S_10  = tl_tensor(X.S_10)
-            T_00  = tl_tensor(X.T_00)
-            caa_0 = tl_tensor(X.caa_0[i0][j0])
-            c_1   = tl_tensor(X.c_1[i1][j1])
+            S_10  = X.S_10
+            T_00  = X.T_00
+            caa_0 = X.caa_0[i0][j0]
+            c_1   = X.c_1[i1][j1]
             return scalar_value( prefactor * S_10(s,r) @ T_00(p,q) @ caa_0(p,r,q) @ c_1(s) )
         return diagram, permutation
     else:
@@ -170,10 +170,10 @@ def _s01t01(densities, integrals, subsystem, charges, permutation):
     if X.Dchg_0==-2 and X.Dchg_1==+2:
         prefactor = 1
         def diagram(i0,i1,j0,j1):
-            S_01 = tl_tensor(X.S_01)
-            T_01 = tl_tensor(X.T_01)
-            cc_0 = tl_tensor(X.cc_0[i0][j0])
-            aa_1 = tl_tensor(X.aa_1[i1][j1])
+            S_01 = X.S_01
+            T_01 = X.T_01
+            cc_0 = X.cc_0[i0][j0]
+            aa_1 = X.aa_1[i1][j1]
             return scalar_value( prefactor * S_01(p,q) @ cc_0(r,p) @ T_01(r,s) @ aa_1(q,s) )
         return diagram, permutation
     else:
