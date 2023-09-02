@@ -17,8 +17,8 @@
 #
 
 # Usage:
-#     python [-u] <this-file.py> <displacement> <states>
-# where <states> can be the name of any one of directories in atomic_states/states/16-115-550
+#     python [-u] <this-file.py> <displacement> <rhos>
+# where <rhos> can be the filestem of any one of the .pkl files in atomic_states/ prepared by Be631g.py.
 
 import sys
 import pickle

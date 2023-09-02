@@ -16,6 +16,10 @@
 #    along with QodeApplications.  If not, see <http://www.gnu.org/licenses/>.
 #
 
+# Usage:
+#     python Be631g.py <states>
+# where <states> can be the name of any one of directories in states/16-115-550/.
+
 import sys
 import pickle
 import numpy

@@ -76,9 +76,7 @@ def u000(densities, integrals, subsystem, charges):
     if X.Dchg_0==0:
         prefactor = 1
         def diagram(i0,j0):
-            U_0_00 = X.U_0_00
-            ca_0   = X.ca_0[i0][j0]
-            return scalar_value( prefactor * U_0_00(p,q) @ ca_0(p,q) )
+            return scalar_value( prefactor * X.U_0_00(p,q) @ X.ca_0[i0][j0](p,q) )
         return [(diagram, (0,))]
     else:
         return [(None, None)]
@@ -97,9 +95,7 @@ def _u100(densities, integrals, subsystem, charges, permutation):
     if X.Dchg_0==0 and X.Dchg_1==0:
         prefactor = 1
         def diagram(i0,i1,j0,j1):
-            U_1_00 = X.U_1_00
-            ca_0   = X.ca_0[i0][j0]
-            if i1==j1:  return scalar_value( prefactor * U_1_00(p,q) @ ca_0(p,q) )
+            if i1==j1:  return scalar_value( prefactor * X.U_1_00(p,q) @ X.ca_0[i0][j0](p,q) )
             else:       return 0
         return diagram, permutation
     else:
@@ -115,10 +111,7 @@ def _u001(densities, integrals, subsystem, charges, permutation):
     if X.Dchg_0==-1 and X.Dchg_1==+1:
         prefactor = (-1)**(X.n_i1 + X.P)
         def diagram(i0,i1,j0,j1):
-            U_0_01 = X.U_0_01
-            c_0    = X.c_0[i0][j0]
-            a_1    = X.a_1[i1][j1]
-            return scalar_value( prefactor * U_0_01(p,q) @ c_0(p) @ a_1(q) )
+            return scalar_value( prefactor * X.U_0_01(p,q) @ X.c_0[i0][j0](p) @ X.a_1[i1][j1](q) )
         return diagram, permutation
     else:
         return None, None
@@ -133,10 +126,7 @@ def _u101(densities, integrals, subsystem, charges, permutation):
     if X.Dchg_0==-1 and X.Dchg_1==+1:
         prefactor = (-1)**(X.n_i1 + X.P)
         def diagram(i0,i1,j0,j1):
-            U_1_01 = X.U_1_01
-            c_0    = X.c_0[i0][j0]
-            a_1    = X.a_1[i1][j1]
-            return scalar_value( prefactor * U_1_01(p,q) @ c_0(p) @ a_1(q) )
+            return scalar_value( prefactor * X.U_1_01(p,q) @ X.c_0[i0][j0](p) @ X.a_1[i1][j1](q) )
         return diagram, permutation
     else:
         return None, None
@@ -151,11 +141,7 @@ def _s01u000(densities, integrals, subsystem, charges, permutation):
     if X.Dchg_0==-1 and X.Dchg_1==+1:
         prefactor = (-1)**(X.n_i1 + X.P)
         def diagram(i0,i1,j0,j1):
-            S_01   = X.S_01
-            U_0_00 = X.U_0_00
-            cca_0  = X.cca_0[i0][j0]
-            a_1    = X.a_1[i1][j1]
-            return scalar_value( prefactor * S_01(r,s) @ U_0_00(p,q) @ cca_0(r,p,q) @ a_1(s) )
+            return scalar_value( prefactor * X.S_01(r,s) @ X.U_0_00(p,q) @ X.cca_0[i0][j0](r,p,q) @ X.a_1[i1][j1](s) )
         return diagram, permutation
     else:
         return None, None
@@ -170,11 +156,7 @@ def _s01u100(densities, integrals, subsystem, charges, permutation):
     if X.Dchg_0==-1 and X.Dchg_1==+1:
         prefactor = (-1)**(X.n_i1 + X.P)
         def diagram(i0,i1,j0,j1):
-            S_01   = X.S_01
-            U_1_00 = X.U_1_00
-            cca_0  = X.cca_0[i0][j0]
-            a_1    = X.a_1[i1][j1]
-            return scalar_value( prefactor * S_01(r,s) @ U_1_00(p,q) @ cca_0(r,p,q) @ a_1(s) )
+            return scalar_value( prefactor * X.S_01(r,s) @ X.U_1_00(p,q) @ X.cca_0[i0][j0](r,p,q) @ X.a_1[i1][j1](s) )
         return diagram, permutation
     else:
         return None, None
@@ -189,11 +171,7 @@ def _s10u000(densities, integrals, subsystem, charges, permutation):
     if X.Dchg_0==+1 and X.Dchg_1==-1:
         prefactor = (-1)**(X.n_i1 + X.P)
         def diagram(i0,i1,j0,j1):
-            S_10   = X.S_10
-            U_0_00 = X.U_0_00
-            caa_0  = X.caa_0[i0][j0]
-            c_1    = X.c_1[i1][j1]
-            return scalar_value( prefactor * S_10(s,r) @ U_0_00(p,q) @ caa_0(p,r,q) @ c_1(s) )
+            return scalar_value( prefactor * X.S_10(s,r) @ X.U_0_00(p,q) @ X.caa_0[i0][j0](p,r,q) @ X.c_1[i1][j1](s) )
         return diagram, permutation
     else:
         return None, None
@@ -208,11 +186,7 @@ def _s10u100(densities, integrals, subsystem, charges, permutation):
     if X.Dchg_0==+1 and X.Dchg_1==-1:
         prefactor = (-1)**(X.n_i1 + X.P)
         def diagram(i0,i1,j0,j1):
-            S_10   = X.S_10
-            U_1_00 = X.U_1_00
-            caa_0  = X.caa_0[i0][j0]
-            c_1    = X.c_1[i1][j1]
-            return scalar_value( prefactor * S_10(s,r) @ U_1_00(p,q) @ caa_0(p,r,q) @ c_1(s) )
+            return scalar_value( prefactor * X.S_10(s,r) @ X.U_1_00(p,q) @ X.caa_0[i0][j0](p,r,q) @ X.c_1[i1][j1](s) )
         return diagram, permutation
     else:
         return None, None
@@ -227,11 +201,7 @@ def _s01u001(densities, integrals, subsystem, charges, permutation):
     if X.Dchg_0==-2 and X.Dchg_1==+2:
         prefactor = 1
         def diagram(i0,i1,j0,j1):
-            S_01   = X.S_01
-            U_0_01 = X.U_0_01
-            cc_0   = X.cc_0[i0][j0]
-            aa_1   = X.aa_1[i1][j1]
-            return scalar_value( prefactor * S_01(p,q) @ cc_0(r,p) @ U_0_01(r,s) @ aa_1(q,s) )
+            return scalar_value( prefactor * X.S_01(p,q) @ X.cc_0[i0][j0](r,p) @ X.U_0_01(r,s) @ X.aa_1[i1][j1](q,s) )
         return diagram, permutation
     else:
         return None, None
@@ -246,11 +216,7 @@ def _s01u101(densities, integrals, subsystem, charges, permutation):
     if X.Dchg_0==-2 and X.Dchg_1==+2:
         prefactor = 1
         def diagram(i0,i1,j0,j1):
-            S_01   = X.S_01
-            U_1_01 = X.U_1_01
-            cc_0   = X.cc_0[i0][j0]
-            aa_1   = X.aa_1[i1][j1]
-            return scalar_value( prefactor * S_01(p,q) @ cc_0(r,p) @ U_1_01(r,s) @ aa_1(q,s) )
+            return scalar_value( prefactor * X.S_01(p,q) @ X.cc_0[i0][j0](r,p) @ X.U_1_01(r,s) @ X.aa_1[i1][j1](q,s) )
         return diagram, permutation
     else:
         return None, None
@@ -265,14 +231,7 @@ def _s10u001(densities, integrals, subsystem, charges, permutation):
     if X.Dchg_0==0 and X.Dchg_1==0:
         prefactor = -1
         def diagram(i0,i1,j0,j1):
-            S_10   = X.S_10
-            U_0_01 = X.U_0_01
-            ca_0   = X.ca_0[i0][j0]
-            ca_1   = X.ca_1[i1][j1]
-            return scalar_value( prefactor * S_10(p,q) @ ca_0(r,q) @ U_0_01(r,s) @ ca_1(p,s) )
-            partial  =         tendot(X.S_10,   X.ca_0[i0][j0], axes=([1], [1]))
-            partial2 =         tendot(X.U_0_01, X.ca_1[i1][j1], axes=([1], [1]))
-            return prefactor * tendot(partial,  partial2,       axes=([0, 1], [1, 0]))
+            return scalar_value( prefactor * X.S_10(p,q) @ X.ca_0[i0][j0](r,q) @ X.U_0_01(r,s) @ X.ca_1[i1][j1](p,s) )
         return diagram, permutation
     else:
         return None, None
@@ -287,11 +246,7 @@ def _s10u101(densities, integrals, subsystem, charges, permutation):
     if X.Dchg_0==0 and X.Dchg_1==0:
         prefactor = -1
         def diagram(i0,i1,j0,j1):
-            S_10   = X.S_10
-            U_1_01 = X.U_1_01
-            ca_0   = X.ca_0[i0][j0]
-            ca_1   = X.ca_1[i1][j1]
-            return scalar_value( prefactor * S_10(p,q) @ ca_0(r,q) @ U_1_01(r,s) @ ca_1(p,s) )
+            return scalar_value( prefactor * X.S_10(p,q) @ X.ca_0[i0][j0](r,q) @ X.U_1_01(r,s) @ X.ca_1[i1][j1](p,s) )
         return diagram, permutation
     else:
         return None, None
