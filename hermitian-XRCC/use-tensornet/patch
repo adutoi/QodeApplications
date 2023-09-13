@@ -14,3 +14,7 @@ mv ../Be631g.py                ../deprecated
 cp  ./Be631g.py                ../atomic_states
 mv ../density_tensors.c        ../atomic_states
 mv ../build_density_tensors.py ../atomic_states
+
+### implement compressions
+mv ./compress_tensors.py ..
+cd ../atomic_states; ln -s ../compress_tensors.py

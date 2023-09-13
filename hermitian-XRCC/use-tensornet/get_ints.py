@@ -20,13 +20,26 @@ import tensorly
 from qode.math import precise_numpy_inverse, linear_inner_product_space, iterative_biorthog, biorthog_iteration
 from qode.math.tensornet import tl_tensor
 from qode.util.PyC import Double
-from qode.atoms.integrals.fragments import AO_integrals, fragMO_integrals, bra_transformed, ket_transformed, spin_orb_integrals, Nuc_repulsion, as_raw_mat, as_frag_blocked_mat, zeros2, Id, mat_as_rows, mat_as_columns, space_traits, add, subtract, mat_mul, cached
+from qode.util.dynamic_array import wrap, cached
+from qode.atoms.integrals.fragments import AO_integrals, fragMO_integrals, bra_transformed, ket_transformed, spin_orb_integrals, Nuc_repulsion, as_raw_mat, as_frag_blocked_mat, zeros2, Id, mat_as_rows, mat_as_columns, space_traits, add, subtract, mat_mul
+from compress_tensors import compress
 
 
 
 def tensorly_wrapper(rule):
     def wrap_it(*indices):
-        return tl_tensor(tensorly.tensor(rule(*indices), dtype=tensorly.float64))
+        return compress(rule(*indices), free_indices=None, compression="none")
+    return wrap_it
+def tensorly_wrapper2(rule):
+    def wrap_it(*indices):
+        print(indices)
+        free_indices = [[],[]]
+        for i,m in enumerate(indices):
+            free_indices[m] += [i]
+        if False and len(free_indices[0])>0 and len(free_indices[1])>0:
+            return compress(rule(*indices), free_indices, compression="SVD")
+        else:
+            return compress(rule(*indices), free_indices=None, compression="none")
     return wrap_it
 
 def iterative_Sinv(fragments, S):
@@ -161,6 +174,8 @@ def iterative_CoreSinv(fragments, S):
     return Left, Right
 
 
+class _empty(object):  pass
+
 def get_ints(fragments):
     # More needs to be done regarding the basis to prevent mismatches with the fragment states
     AO_ints     = AO_integrals(fragments)
@@ -175,7 +190,20 @@ def get_ints(fragments):
     Sinv = direct_Sinv(fragments, FragMO_ints.S)
     BiFragMO_ints = bra_transformed(Sinv, FragMO_ints)    # no need to cache because each block only called once
 
-    FragMO_spin_ints   = spin_orb_integrals(  FragMO_ints, rule_wrappers=[tensorly_wrapper], cache=True)     # no need to cache? because each block only called once by contraction code
-    BiFragMO_spin_ints = spin_orb_integrals(BiFragMO_ints, rule_wrappers=[tensorly_wrapper], cache=True)     # no need to cache? because each block only called once by contraction code
+    #-#-# FragMO_spin_ints   = spin_orb_integrals(  FragMO_ints, rule_wrappers=[tensorly_wrapper], cache=True)     # no need to cache? because each block only called once by contraction code
+    #-#-# BiFragMO_spin_ints = spin_orb_integrals(BiFragMO_ints, rule_wrappers=[tensorly_wrapper], cache=True)     # no need to cache? because each block only called once by contraction code
+    FragMO_spin_ints_raw   = spin_orb_integrals(  FragMO_ints)     # no need to cache? because each block only called once by contraction code
+    BiFragMO_spin_ints_raw = spin_orb_integrals(BiFragMO_ints)     # no need to cache? because each block only called once by contraction code
+    FragMO_spin_ints   = _empty()
+    BiFragMO_spin_ints = _empty()
+    FragMO_spin_ints.S   = wrap(FragMO_spin_ints_raw.S,   [cached, tensorly_wrapper])
+    FragMO_spin_ints.T   = wrap(FragMO_spin_ints_raw.T,   [cached, tensorly_wrapper])
+    FragMO_spin_ints.U   = wrap(FragMO_spin_ints_raw.U,   [cached, tensorly_wrapper])
+    FragMO_spin_ints.V   = wrap(FragMO_spin_ints_raw.V,   [cached, tensorly_wrapper2])
+    BiFragMO_spin_ints.S = wrap(BiFragMO_spin_ints_raw.S, [cached, tensorly_wrapper])
+    BiFragMO_spin_ints.T = wrap(BiFragMO_spin_ints_raw.T, [cached, tensorly_wrapper])
+    BiFragMO_spin_ints.U = wrap(BiFragMO_spin_ints_raw.U, [cached, tensorly_wrapper])
+    BiFragMO_spin_ints.V = wrap(BiFragMO_spin_ints_raw.V, [cached, tensorly_wrapper2])
+    BiFragMO_spin_ints.V_half = wrap(BiFragMO_spin_ints_raw.V_half, [cached, tensorly_wrapper2])
 
     return FragMO_spin_ints, BiFragMO_spin_ints, Nuc_repulsion(fragments).matrix
