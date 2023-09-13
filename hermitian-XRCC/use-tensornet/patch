@@ -3,18 +3,15 @@
 mkdir -p ../deprecated
 
 ### This inserts the drop-in replacements for using tensornet in the diagrams.
+### It also nominally links in the tensor compression module, but in "off" mode.
 ### They should be used with the old main scripts.
-#
 mv ../S*_diagrams.py ../get_ints.py ../build_density_tensors.py ../deprecated
-cp  ./alt-diagrams/*  ./get_ints.py  ./build_density_tensors.py ..
+cp  ./alt-diagrams/*  ./get_ints.py  ./build_density_tensors.py ./compress_tensors.py ..
 
 ### This changes the workflow so that density tensors are precomputed on disk.
 ### First run Be631g.py as main inside atomic_states/.  Then use the new main scripts here.
-mv ../Be631g.py                ../deprecated
-cp  ./Be631g.py                ../atomic_states
-mv ../density_tensors.c        ../atomic_states
-mv ../build_density_tensors.py ../atomic_states
-
-### implement compressions
-mv ./compress_tensors.py ..
-cd ../atomic_states; ln -s ../compress_tensors.py
+mv    ../Be631g.py                ../deprecated
+cp     ./Be631g.py                ../atomic_states
+mv    ../density_tensors.c        ../atomic_states
+mv    ../build_density_tensors.py ../atomic_states
+ln -s ../compress_tensors.py      ../atomic_states

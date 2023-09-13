@@ -50,7 +50,7 @@ def numpy_storage_to_lists(nparray_1d, n_bra, n_ket, n_spin_orbs, free_indices):
 	for i in range(n_bra):
 		for j in range(n_ket):
 			print(i,j)
-			result[i][j] = compress(nparray_1d[idx: idx+tensor_size].reshape(tensor_shape), free_indices, compression="SVD")
+			result[i][j] = compress(nparray_1d[idx: idx+tensor_size].reshape(tensor_shape), free_indices, compression="none")
 			idx += tensor_size
 	del nparray_1d
 	return result
