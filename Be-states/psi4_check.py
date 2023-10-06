@@ -18,9 +18,10 @@
 
 import psi4
 
-# Psi4 HF energy of dimer for reference
-def print_dimer_E(molecule, basis_string):
+def print_HF_energy(geometry, basis_string):
+    molecule = psi4.geometry(geometry)
+    molecule.update_geometry()
     psi4.set_output_file("output.dat")
     psi4.set_options({"scf_type":"pk", "PRINT_MOS":"True"})
-    print("Psi4 dimer HF energy = ", psi4.energy("SCF/{}".format(basis_string), molecule=molecule))
+    print("Psi4 HF energy       = ", psi4.energy("SCF/{}".format(basis_string), molecule=molecule))
 

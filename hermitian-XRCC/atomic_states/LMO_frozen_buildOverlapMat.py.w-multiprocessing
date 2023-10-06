@@ -76,11 +76,10 @@ def compute_transform_matrix(C_Be_long,
 
 	# raise RuntimeError
 	# print("Computing Conversion Matrix...")
-	#from multiprocessing import Pool
-	#myPool  = Pool(25)
-	#results = myPool.map(compute_column, [[ i, num_valence_elec_atom, Be_n_state, Be_fci_states, Be2_fci_states, S_Atomic_overlap ] for i in range(Be2_n_state)], )
-	#myPool.terminate()
-	results = [compute_column([i, num_valence_elec_atom, Be_n_state, Be_fci_states, Be2_fci_states, S_Atomic_overlap]) for i in range(Be2_n_state)]
+	from multiprocessing import Pool
+	myPool  = Pool(25)
+	results = myPool.map(compute_column, [[ i, num_valence_elec_atom, Be_n_state, Be_fci_states, Be2_fci_states, S_Atomic_overlap ] for i in range(Be2_n_state)], )
+	myPool.terminate()
 	
 	# print("Computation Done. Filling In Numbers...")
 	for i in range(Be2_n_state):
