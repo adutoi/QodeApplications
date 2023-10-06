@@ -32,7 +32,7 @@ import qode.atoms.integrals.external_engines.psi4_ints as integrals
 from   qode.many_body.self_consistent_field.fermionic import RHF_RoothanHall_Nonorthogonal
 
 from fci_index import fci_index
-import LMO_frozen_special_fci    # compute atom FCI states
+#import LMO_frozen_special_fci    # compute atom FCI states
 import LMO_frozen_Hamiltonian_wrapper
 from fci_space import fci_space_traits
 import excitonic
@@ -47,9 +47,7 @@ def MO_transform(H, V, C):
 
 basis_string = "6-31G"
 
-
-
-dist, state_string = sys.argv[1:]
+dist = sys.argv[1]
 
 
 
@@ -80,52 +78,51 @@ H_2_MO, V_2_MO = MO_transform(H_2, V_2, C_2)
 
 psi4_check.print_HF_energy(Be_2, basis_string)
 
-
 # Put everything in terms of spin orbitals
-C_1    = spatial_to_spin.one_electron_blocked(C_1)
 H_1_MO = spatial_to_spin.one_electron_blocked(H_1_MO)
 V_1_MO = spatial_to_spin.two_electron_blocked(V_1_MO)
-#S_2    = spatial_to_spin.one_electron_blocked(S_2)
-#H_2    = spatial_to_spin.one_electron_blocked(H_2)
-#V_2    = spatial_to_spin.two_electron_blocked(V_2)
-#C_2    = spatial_to_spin.one_electron_blocked(C_2)
 H_2_MO = spatial_to_spin.one_electron_blocked(H_2_MO)
 V_2_MO = spatial_to_spin.two_electron_blocked(V_2_MO)
 
-
-
-
-
-
-
-
-n_1e_states, n_2e_states, n_3e_states = state_string.split("-")
-n_states = { 2:int(n_2e_states),  1:int(n_1e_states),  3:int(n_3e_states) }	# keys reference number of valence electrons explicitly (this is a frozen-core Be2 code!)
-
-print("Loading data ...", end="", flush=True)
-h_mat       = H_1_MO
-V_mat       = V_1_MO
-C_scf_atom  = C_1
-print("Done.")
-
-frag_dim  = n_states[1] + n_states[2] + n_states[3]
-frag_idx = { 2: (0, n_states[2]),  1: (n_states[2], n_states[2]+n_states[1]),  3: (n_states[2]+n_states[1], frag_dim) }
-super_dim = frag_dim**2
 # Given that dict keys are hard-coded, some of these could be hard coded too, but this makes it easier to read.
 num_elec_atom         = 4	# For neutral (deviations handled explicitly, locally)
 num_core_elec_atom    = 2
 num_valence_elec_atom = num_elec_atom - num_core_elec_atom
-num_spin_orbs_atom    = h_mat.shape[0]
+num_spin_orbs_atom    = H_1_MO.shape[0]
 num_spat_orbs_atom    = num_spin_orbs_atom // 2
 
-# Compute atomic states
-print("Building atomic eigenstates ...", flush=True)
-U_1e, U_2e, U_3e, nrg = LMO_frozen_special_fci.compute_fci_vecs(num_spin_orbs_atom, num_core_elec_atom, h_mat, V_mat, n_states[1], n_states[2], n_states[3])	# Atomic FCI calcs
-U_1e = U_1e[:,:n_states[1]].copy()	# Slice out the requisite number of 1e- eigenstates (in the basis of atomic orbitals)
-U_2e = U_2e[:,:n_states[2]].copy()	# Slice out the requisite number of 2e- eigenstates (in the basis of atomic orbitals)
-U_3e = U_3e[:,:n_states[3]].copy()	# Slice out the requisite number of 3e- eigenstates (in the basis of atomic orbitals)
+num_valence_orbs_atom = num_spin_orbs_atom - num_core_elec_atom
 
-print("monomer FCI done", nrg)
+num_configs_atom = ( math.factorial(num_valence_orbs_atom) // math.factorial(num_valence_orbs_atom - num_valence_elec_atom) ) // math.factorial(num_valence_elec_atom)
+
+block_dims = (num_configs_atom,1)
+
+nominal_block = numpy.zeros(block_dims, dtype=Double.numpy)
+
+idx = fci_index(num_valence_elec_atom, num_spin_orbs_atom-num_core_elec_atom)
+i = idx([0,8])
+print("i=", i)
+nominal_block[i,0] = 1
+
+guess = num_elec_atom, nominal_block, 0, block_dims
+
+
+# Set up Hamiltonian and promote it and tensor product basis to living in that space
+H = LMO_frozen_Hamiltonian_wrapper.Hamiltonian(H_1_MO, V_1_MO, num_core_elec_atom, num_elec=[3,4,5])
+fci_space = qode.math.linear_inner_product_space(fci_space_traits)
+H = fci_space.lin_op(H)
+print("Done.")
+
+# Find the dimer ground state (orthonormalize the basis because Lanczos only for Hermitian case, then back to non-ON basis)
+print("Ground-state calculation ... ", flush=True)
+guess = fci_space.member(guess)
+print((guess|H|guess))
+
+(Eval,Evec), = qode.math.lanczos.lowest_eigen(H, [guess], thresh=1e-8)
+print("... Done.  \n\nE_gs = {}\n".format(Eval))
+
+
+
 
 
 
@@ -158,9 +155,7 @@ guess = num_elec_dimer, nominal_block, 0, block_dims
 
 # Set up Hamiltonian and promote it and tensor product basis to living in that space
 print("Setting up Hamiltonian ... ", end="", flush=True)
-h_mat = H_2_MO
-V_mat = V_2_MO
-H = LMO_frozen_Hamiltonian_wrapper.Hamiltonian(h_mat, V_mat, 2*num_core_elec_atom, num_elec=[6,7,8,9,10])
+H = LMO_frozen_Hamiltonian_wrapper.Hamiltonian(H_2_MO, V_2_MO, num_core_elec_dimer, num_elec=[6,7,8,9,10])
 fci_space = qode.math.linear_inner_product_space(fci_space_traits)
 H = fci_space.lin_op(H)
 print("Done.")
