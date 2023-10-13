@@ -31,9 +31,7 @@ import qode.atoms.integrals.spatial_to_spin as spatial_to_spin
 import qode.atoms.integrals.external_engines.psi4_ints as integrals
 from   qode.many_body.self_consistent_field.fermionic import RHF_RoothanHall_Nonorthogonal
 
-from fci_index import fci_index
-#import LMO_frozen_special_fci    # compute atom FCI states
-import LMO_frozen_Hamiltonian_wrapper
+import field_op_ham
 from fci_space import fci_space_traits
 import excitonic
 import psi4_check
@@ -74,6 +72,7 @@ Enuc_2 = X_2.mol.nuclear_repulsion_energy()
 # Normal AO SCF Be dimer
 energy_2, _, C_2 = RHF_RoothanHall_Nonorthogonal(n_elec_2, (S_2,H_2,V_2), thresh=1e-12)
 print("As computed here     = ", energy_2 + Enuc_2)
+print("As computed here     = ", energy_2)
 H_2_MO, V_2_MO = MO_transform(H_2, V_2, C_2)
 
 psi4_check.print_HF_energy(Be_2, basis_string)
@@ -84,86 +83,68 @@ V_1_MO = spatial_to_spin.two_electron_blocked(V_1_MO)
 H_2_MO = spatial_to_spin.one_electron_blocked(H_2_MO)
 V_2_MO = spatial_to_spin.two_electron_blocked(V_2_MO)
 
+
+
+
+
+
 # Given that dict keys are hard-coded, some of these could be hard coded too, but this makes it easier to read.
 num_elec_atom         = 4	# For neutral (deviations handled explicitly, locally)
 num_core_elec_atom    = 2
-num_valence_elec_atom = num_elec_atom - num_core_elec_atom
-num_spin_orbs_atom    = H_1_MO.shape[0]
-num_spat_orbs_atom    = num_spin_orbs_atom // 2
+num_spat_orb_atom     = 9
 
-num_valence_orbs_atom = num_spin_orbs_atom - num_core_elec_atom
+num_elec_atom_dn = num_elec_atom//2
+num_elec_atom_up = num_elec_atom - num_elec_atom_dn
+configs = field_op_ham.fci_configs(num_spat_orb_atom, num_elec_atom_dn, num_elec_atom_up, num_core_elec_atom//2)
 
-num_configs_atom = ( math.factorial(num_valence_orbs_atom) // math.factorial(num_valence_orbs_atom - num_valence_elec_atom) ) // math.factorial(num_valence_elec_atom)
-
-block_dims = (num_configs_atom,1)
-
+block_dims = (1,len(configs))
 nominal_block = numpy.zeros(block_dims, dtype=Double.numpy)
-
-idx = fci_index(num_valence_elec_atom, num_spin_orbs_atom-num_core_elec_atom)
-i = idx([0,8])
-print("i=", i)
-nominal_block[i,0] = 1
-
+idx = field_op_ham.find_index(0b000000011000000011, configs)
+nominal_block[0,idx] = 1
 guess = num_elec_atom, nominal_block, 0, block_dims
 
 
 # Set up Hamiltonian and promote it and tensor product basis to living in that space
-H = LMO_frozen_Hamiltonian_wrapper.Hamiltonian(H_1_MO, V_1_MO, num_core_elec_atom, num_elec=[3,4,5])
+H = field_op_ham.Hamiltonian(H_1_MO, V_1_MO, configs)
 fci_space = qode.math.linear_inner_product_space(fci_space_traits)
 H = fci_space.lin_op(H)
-print("Done.")
 
 # Find the dimer ground state (orthonormalize the basis because Lanczos only for Hermitian case, then back to non-ON basis)
 print("Ground-state calculation ... ", flush=True)
 guess = fci_space.member(guess)
 print((guess|H|guess))
 
-(Eval,Evec), = qode.math.lanczos.lowest_eigen(H, [guess], thresh=1e-8)
-print("... Done.  \n\nE_gs = {}\n".format(Eval))
+#(Eval,Evec), = qode.math.lanczos.lowest_eigen(H, [guess], thresh=1e-8)
+#print("... Done.  \n\nE_gs = {}\n".format(Eval))
 
 
 
 
+num_elec_dimer      = 2 * num_elec_atom
+num_core_elec_dimer = 2 * num_core_elec_atom
+num_spat_orb_dimer  = 2 * num_spat_orb_atom
 
+num_elec_dimer_dn = num_elec_dimer//2
+num_elec_dimer_up = num_elec_dimer - num_elec_dimer_dn
+configs = field_op_ham.fci_configs(num_spat_orb_dimer, num_elec_dimer_dn, num_elec_dimer_up, num_core_elec_dimer//2)
 
-
-
-
-
-num_elec_dimer         = 2 * num_elec_atom
-num_core_elec_dimer    = 2 * num_core_elec_atom
-num_spat_orbs_dimer    = 2 * num_spat_orbs_atom
-
-num_spin_orbs_dimer    = 2 * num_spat_orbs_dimer
-
-num_valence_elec_dimer = num_elec_dimer      - num_core_elec_dimer
-num_valence_orbs_dimer = num_spin_orbs_dimer - num_core_elec_dimer
-
-num_configs_dimer = ( math.factorial(num_valence_orbs_dimer) // math.factorial(num_valence_orbs_dimer - num_valence_elec_dimer) ) // math.factorial(num_valence_elec_dimer)
-
-block_dims = (num_configs_dimer,1)
-
+block_dims = (1,len(configs))
 nominal_block = numpy.zeros(block_dims, dtype=Double.numpy)
-
-idx = fci_index(num_valence_elec_dimer, num_spin_orbs_dimer-num_core_elec_dimer)
-i = idx([0,1,16,17])
-print("i=", i)
-nominal_block[i,0] = 1
-
+idx = field_op_ham.find_index(0b000000000000001111000000000000001111, configs)
+nominal_block[0,idx] = 1
 guess = num_elec_dimer, nominal_block, 0, block_dims
 
 
 # Set up Hamiltonian and promote it and tensor product basis to living in that space
-print("Setting up Hamiltonian ... ", end="", flush=True)
-H = LMO_frozen_Hamiltonian_wrapper.Hamiltonian(H_2_MO, V_2_MO, num_core_elec_dimer, num_elec=[6,7,8,9,10])
+H = field_op_ham.Hamiltonian(H_2_MO, V_2_MO, configs)
 fci_space = qode.math.linear_inner_product_space(fci_space_traits)
 H = fci_space.lin_op(H)
-print("Done.")
 
 # Find the dimer ground state (orthonormalize the basis because Lanczos only for Hermitian case, then back to non-ON basis)
 print("Ground-state calculation ... ", flush=True)
 guess = fci_space.member(guess)
 print((guess|H|guess)+ Enuc_2)
+print((guess|H|guess))
 
-(Eval,Evec), = qode.math.lanczos.lowest_eigen(H, [guess], thresh=1e-8)
-print("... Done.  \n\nE_gs = {}\n".format(Eval+Enuc_2))
+#(Eval,Evec), = qode.math.lanczos.lowest_eigen(H, [guess], thresh=1e-8)
+#print("... Done.  \n\nE_gs = {}\n".format(Eval+Enuc_2))
