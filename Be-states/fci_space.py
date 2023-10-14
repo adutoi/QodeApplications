@@ -26,28 +26,28 @@ class fci_space_traits_class(object):
 		return False
 	@staticmethod
 	def copy(v):
-		n, block, i, (dim,I) = v
-		new = numpy.zeros((dim,1))
-		new[:,0] = block[:,i]
-		return (n, new, 0, (dim,1))
+		n, block, i, (I,dim) = v
+		new = numpy.zeros((1,dim))
+		new[0,:] = block[i,:]
+		return (n, new, 0, (1,dim))
 	@staticmethod
 	def scale(c,v):
-		n, block, i, (dim,I) = v
-		block[:,i] *= c
+		n, block, i, (I,dim) = v
+		block[i,:] *= c
 	@staticmethod
 	def add_to(v,w,c=1):
-		nv, blockv, iv, (dimv,Iv) = v
-		nw, blockw, iw, (dimw,Iw) = w
+		nv, blockv, iv, (Iv,dimv) = v
+		nw, blockw, iw, (Iw,dimw) = w
 		if   nv!=nw:    raise Exception("this should not happen here ... true Fock-space vecs not allowed")
 		if dimv!=dimw:  raise Exception("this should not happen here ... true Fock-space vecs not allowed")
-		if c==1:  blockv[:,iv] +=   blockw[:,iw]
-		else:     blockv[:,iv] += c*blockw[:,iw]
+		if c==1:  blockv[iv,:] +=   blockw[iw,:]
+		else:     blockv[iv,:] += c*blockw[iw,:]
 	@staticmethod
 	def dot(v,w):
-		nv, blockv, iv, (dimv,Iv) = v
-		nw, blockw, iw, (dimw,Iw) = w
+		nv, blockv, iv, (Iv,dimv) = v
+		nw, blockw, iw, (Iw,dimw) = w
 		if nv!=nw:  return 0.
-		else:       return blockv[:,iv].dot(blockw[:,iw])
+		else:       return blockv[iv,:].dot(blockw[iw,:])
 	@staticmethod
 	def act_on_vec(op,v):
 		return op(v)
@@ -64,41 +64,41 @@ class fci_space_traits_class(object):
 		#
 		# unpack the blocks
 		nn, bblock, ii, dims = zip(*v_block)
-		ddim, II = zip(*dims)
+		II, ddim = zip(*dims)
 		# check that they are homogeneous
-		n, block, dim, Io = nn[0], bblock[0], ddim[0], II[0]
-		for n,b,d,I in zip(nn,bblock,ddim,II):
-			if (n,b,d,I)!=(n,block,dim,Io):  raise Exception() 
+		n, block, Io, dim = nn[0], bblock[0], II[0], ddim[0]
+		for n,b,I,d in zip(nn,bblock,II,ddim):
+			if (n,b,I,d)!=(n,block,Io,dim):  raise Exception() 
 		# check that the vectors are all adjacent
 		iA,iZ = ii[0], ii[-1]+1
 		if list(ii)!=list(range(iA,iZ)):  raise Exception()
 		num = len(ii)
 		# ok then, do it!
-		v_block = n, block, (iA,num), (dim,Io)
+		v_block = n, block, (iA,num), (Io,dim)
 		u_block = op(v_block)
-		n, block, (iA,num), (dim,Io) = u_block		# FYI, iA will be 0, and num will be the same as Io
+		n, block, (iA,num), (Io,dim) = u_block		# FYI, iA will be 0, and num will be the same as Io
 		# repackage results
-		return [ (n, block, iA+j, (dim,num)) for j in range(num) ]
+		return [ (n, block, iA+j, (num,dim)) for j in range(num) ]
 	@staticmethod
 	def dot_vec_blocks(v_block,w_block):
 		# unpack the blocks
 		nnv, bblockv, iiv, dimsv = zip(*v_block)
 		nnw, bblockw, iiw, dimsw = zip(*w_block)
-		ddimv, IIv = zip(*dimsv)
-		ddimw, IIw = zip(*dimsw)
+		IIv, ddimv = zip(*dimsv)
+		IIw, ddimw = zip(*dimsw)
 		# check that they are homogeneous
-		nv, blockv, dimv, Iv = nnv[0], bblockv[0], ddimv[0], IIv[0]
-		nw, blockw, dimw, Iw = nnw[0], bblockw[0], ddimw[0], IIw[0]
-		for n,b,d,I in zip(nnv,bblockv,ddimv,IIv):
-			if (n,b,d,I)!=(nv,blockv,dimv,Iv):  raise Exception() 
-		for n,b,d,I in zip(nnw,bblockw,ddimw,IIw):
-			if (n,b,d,I)!=(nw,blockw,dimw,Iw):  raise Exception() 
+		nv, blockv, Iv, dimv = nnv[0], bblockv[0], IIv[0], ddimv[0]
+		nw, blockw, Iw, dimw = nnw[0], bblockw[0], IIw[0], ddimw[0]
+		for n,b,I,d in zip(nnv,bblockv,IIv,ddimv):
+			if (n,b,I,d)!=(nv,blockv,Iv,dimv):  raise Exception() 
+		for n,b,I,d in zip(nnw,bblockw,IIw,ddimw):
+			if (n,b,I,d)!=(nw,blockw,Iw,dimw):  raise Exception() 
 		# check that the vectors are all adjacent
 		ivA,ivZ = iiv[0], iiv[-1]+1
 		iwA,iwZ = iiw[0], iiw[-1]+1
 		if list(iiv)!=list(range(ivA,ivZ)):  raise Exception()
 		if list(iiw)!=list(range(iwA,iwZ)):  raise Exception()
 		# ok then, do it!
-		return blockv[:,ivA:ivZ].T.dot(blockw[:,iwA:iwZ]).tolist()
+		return blockv[ivA:ivZ,:].T.dot(blockw[iwA:iwZ,:]).tolist()
 
 fci_space_traits = fci_space_traits_class()

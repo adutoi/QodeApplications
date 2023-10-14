@@ -21,6 +21,15 @@
 #include <math.h>         // fabs()
 #include "PyC_types.h"
 
+/*
+ * Ideas for making this even better:
+ * - faster "find" function
+ * - allow input about what ranges of creation/annihilation have nonzero elements
+ * - insist integrals are antisymmetrized
+ * - feed in integrals that account for frozen core and only use active configs
+ * - spin symmetry
+ */
+
 
 
 PyInt bisect_search(BigInt config, BigInt* configs, PyInt lower, PyInt upper)
@@ -84,7 +93,6 @@ void opPsi_1e(Double* op,            // tensor of matrix elements (integrals)
         if (any_significant)
             {
             BigInt config = configs[n];
-            printf("config %d\n", config);
 
             int n_occ = 0;
             int n_emt = 0;
@@ -108,8 +116,7 @@ void opPsi_1e(Double* op,            // tensor of matrix elements (integrals)
                     // This therefore loops over all q and p that lead to a nonzero
                     // action on config.
                     Double op_pq = op[p*n_orbs + q];
-                    //if (fabs(op_pq) > thresh)
-                    if (1)
+                    if (fabs(op_pq) > thresh)
                         {
                         BigInt pq_config = q_config ^ ((BigInt)1<<p);
                         PyInt m = bisect_search(pq_config, configs, 0, n_configs-1);
@@ -118,7 +125,6 @@ void opPsi_1e(Double* op,            // tensor of matrix elements (integrals)
                             int permute = cumulative_occ[q] - cumulative_occ[p];
                             if (p>q)  {permute += 1;}    // correct for asymmetry in counting occs betweeen p and q
                             int phase = (permute%2) ? -1 : 1;
-                            printf("%d %d (%d * %f)\n", p, q, phase, op_pq);
                             for (v=vec_0; v<vec_0+n_vecs; v++)  {opPsi[v*n_configs+m] += phase * op_pq * Psi[v*n_configs+n];}
                             }
                         }

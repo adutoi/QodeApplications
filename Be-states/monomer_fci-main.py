@@ -72,7 +72,6 @@ Enuc_2 = X_2.mol.nuclear_repulsion_energy()
 # Normal AO SCF Be dimer
 energy_2, _, C_2 = RHF_RoothanHall_Nonorthogonal(n_elec_2, (S_2,H_2,V_2), thresh=1e-12)
 print("As computed here     = ", energy_2 + Enuc_2)
-print("As computed here     = ", energy_2)
 H_2_MO, V_2_MO = MO_transform(H_2, V_2, C_2)
 
 psi4_check.print_HF_energy(Be_2, basis_string)
@@ -114,8 +113,8 @@ print("Ground-state calculation ... ", flush=True)
 guess = fci_space.member(guess)
 print((guess|H|guess))
 
-#(Eval,Evec), = qode.math.lanczos.lowest_eigen(H, [guess], thresh=1e-8)
-#print("... Done.  \n\nE_gs = {}\n".format(Eval))
+(Eval,Evec), = qode.math.lanczos.lowest_eigen(H, [guess], thresh=1e-8)
+print("... Done.  \n\nE_gs = {}\n".format(Eval))
 
 
 
@@ -144,7 +143,12 @@ H = fci_space.lin_op(H)
 print("Ground-state calculation ... ", flush=True)
 guess = fci_space.member(guess)
 print((guess|H|guess)+ Enuc_2)
-print((guess|H|guess))
 
-#(Eval,Evec), = qode.math.lanczos.lowest_eigen(H, [guess], thresh=1e-8)
-#print("... Done.  \n\nE_gs = {}\n".format(Eval+Enuc_2))
+(Eval,Evec), = qode.math.lanczos.lowest_eigen(H, [guess], thresh=1e-8)
+print("... Done.  \n\nE_gs = {}\n".format(Eval+Enuc_2))
+
+print(Evec|Evec)
+zeroVec = (H|Evec) - Eval*Evec
+print(zeroVec|zeroVec)
+
+print((Evec|H|Evec) + Enuc_2)
