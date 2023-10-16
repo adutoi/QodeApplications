@@ -16,11 +16,8 @@
 #    along with QodeApplications.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-import math
 import numpy
-from multiprocessing import cpu_count
 from qode.util.PyC import import_C, BigInt, Double
-
 field_op = import_C("field_op", flags="-O2 -lm")
 field_op.find_index.return_type(int)
 
@@ -63,50 +60,33 @@ def fci_configs(num_spat_orb, num_elec_dn, num_elec_up, num_core_orb):
 
 
 
-class _action(object):
-	def __init__(self, H, configs):
-		self.H = H
-		self.configs = configs
-		self.thresh = 1e-10
-	def __call__(self, Psi, vec_0, num_vecs):
-		HPsi = numpy.zeros((num_vecs,len(self.configs)), dtype=Double.numpy)
-		field_op.opPsi_1e(self.H.h,                # tensor of matrix elements (integrals)
-		                  Psi,                     # block of row vectors: input vectors to act on
-		                  HPsi,                    # block of row vectors: incremented by output
-		                  self.configs,            # bitwise occupation strings stored as integers ... so, max 64 orbs for FCI ;-) [no checking here!]
-		                  self.H.num_spin_orbs,    # edge dimension of the integrals tensor.  cannot be bigger than the number of bits in a BigInt (64)
-		                  vec_0,                   # index of first vector in block to act upon
-		                  num_vecs,                # how many vectors we are acting on simultaneously
-		                  len(self.configs),       # how many configurations are there (call signature is ok as long as PyInt not longer than BigInt)
-		                  self.thresh,             # threshold for ignoring integrals and coefficients (avoiding expensive index search)
-		                  cpu_count())             # number of OMP threads to spread the work over
-		field_op.opPsi_2e(self.H.V,                # tensor of matrix elements (integrals)
-		                  Psi,                     # block of row vectors: input vectors to act on
-		                  HPsi,                    # block of row vectors: incremented by output
-		                  self.configs,            # bitwise occupation strings stored as integers ... so, max 64 orbs for FCI ;-) [no checking here!]
-		                  self.H.num_spin_orbs,    # edge dimension of the integrals tensor.  cannot be bigger than the number of bits in a BigInt (64)
-		                  vec_0,                   # index of first vector in block to act upon
-		                  num_vecs,                # how many vectors we are acting on simultaneously
-		                  len(self.configs),       # how many configurations are there (call signature is ok as long as PyInt not longer than BigInt)
-		                  self.thresh,             # threshold for ignoring integrals and coefficients (avoiding expensive index search)
-		                  cpu_count())             # number of OMP threads to spread the work over
-		return HPsi
-
-
-
 class Hamiltonian(object):
-	def __init__(self, h, V, configs):
+	def __init__(self, h, V, thresh=1e-10):
 		self.h = h
 		self.V = V
-		self.num_spin_orbs = h.shape[0]
-		self.H_action = _action(H=self, configs=configs)
-	def __call__(self, Psi):
-		n_unused, block, ii, block_dims_unused = Psi
-		try:
-			i, num = ii
-			jj = 0, num
-		except:
-			i, num = ii, 1
-			jj = 0
-		Hblock = self.H_action(block, i, num)
-		return (n_unused, Hblock, jj, block_dims_unused)
+		self.thresh = thresh
+	def __call__(self, Psi, vec_0=0, num_vecs=1):    # The ability to act on blocks of consecutively stored vectors is not currently used (but it has been tested)
+		configs, vec = Psi
+		num_spin_orbs = self.h.shape[0]
+		Hvec = numpy.zeros((num_vecs,len(configs)), dtype=Double.numpy)
+		field_op.opPsi_1e(self.h,           # tensor of matrix elements (integrals)
+		                  vec,              # block of row vectors: input vectors to act on
+		                  Hvec,             # block of row vectors: incremented by output
+		                  configs,          # bitwise occupation strings stored as integers ... so, max 64 orbs for FCI ;-) [no checking here!]
+		                  num_spin_orbs,    # edge dimension of the integrals tensor.  cannot be bigger than the number of bits in a BigInt (64)
+		                  vec_0,            # index of first vector in block to act upon
+		                  num_vecs,         # how many vectors we are acting on simultaneously
+		                  len(configs),     # how many configurations are there (call signature is ok as long as PyInt not longer than BigInt)
+		                  self.thresh,      # threshold for ignoring integrals and coefficients (avoiding expensive index search)
+		                  0)                # number of OMP threads to spread the work over (not currently used)
+		field_op.opPsi_2e(self.V,           # tensor of matrix elements (integrals)
+		                  vec,              # block of row vectors: input vectors to act on
+		                  Hvec,             # block of row vectors: incremented by output
+		                  configs,          # bitwise occupation strings stored as integers ... so, max 64 orbs for FCI ;-) [no checking here!]
+		                  num_spin_orbs,    # edge dimension of the integrals tensor.  cannot be bigger than the number of bits in a BigInt (64)
+		                  vec_0,            # index of first vector in block to act upon
+		                  num_vecs,         # how many vectors we are acting on simultaneously
+		                  len(configs),     # how many configurations are there (call signature is ok as long as PyInt not longer than BigInt)
+		                  self.thresh,      # threshold for ignoring integrals and coefficients (avoiding expensive index search)
+		                  0)                # number of OMP threads to spread the work over (not currently used)
+		return configs, Hvec

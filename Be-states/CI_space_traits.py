@@ -17,7 +17,7 @@
 #
 import numpy
 
-class fci_space_traits_class(object):
+class CI_space_traits_class(object):
 	def __init__(self):
 		self.field = numpy.float64
 	def check_member(self,v):
@@ -26,28 +26,25 @@ class fci_space_traits_class(object):
 		return False
 	@staticmethod
 	def copy(v):
-		n, block, i, (I,dim) = v
-		new = numpy.zeros((1,dim))
-		new[0,:] = block[i,:]
-		return (n, new, 0, (1,dim))
+		configs, vec = v
+		return configs, vec.copy()
 	@staticmethod
 	def scale(c,v):
-		n, block, i, (I,dim) = v
-		block[i,:] *= c
+		configs, vec = v
+		vec *= c
 	@staticmethod
 	def add_to(v,w,c=1):
-		nv, blockv, iv, (Iv,dimv) = v
-		nw, blockw, iw, (Iw,dimw) = w
-		if   nv!=nw:    raise Exception("this should not happen here ... true Fock-space vecs not allowed")
-		if dimv!=dimw:  raise Exception("this should not happen here ... true Fock-space vecs not allowed")
-		if c==1:  blockv[iv,:] +=   blockw[iw,:]
-		else:     blockv[iv,:] += c*blockw[iw,:]
+		configsv, vecv = v
+		configsw, vecw = w
+		if configsv is not configsw:  raise RuntimeError("attempting to add CI vecs from different configuration spaces")
+		if c==1:  vecv += vecw
+		else:     vecv += c*vecw
 	@staticmethod
 	def dot(v,w):
-		nv, blockv, iv, (Iv,dimv) = v
-		nw, blockw, iw, (Iw,dimw) = w
-		if nv!=nw:  return 0.
-		else:       return blockv[iv,:].dot(blockw[iw,:])
+		configsv, vecv = v
+		configsw, vecw = w
+		if configsv is not configsw:  raise RuntimeError("attempting to add CI vecs from different configuration spaces")
+		return (vecv.dot(vecw.T)).item()    # Here we have to remember that vecs are actually 1xlen(configs) 2-tensors
 	@staticmethod
 	def act_on_vec(op,v):
 		return op(v)
@@ -62,6 +59,6 @@ class fci_space_traits_class(object):
 		return [ op(v) for v in v_block ]
 	@staticmethod
 	def dot_vec_blocks(v_block,w_block):
-		return numpy.array([[fci_space_traits_class.dot(v,w) for v in v_block] for w in w_block])
+		return numpy.array([[CI_space_traits_class.dot(v,w) for v in v_block] for w in w_block])
 
-fci_space_traits = fci_space_traits_class()
+CI_space_traits = CI_space_traits_class()
