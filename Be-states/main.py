@@ -16,36 +16,128 @@
 #    along with QodeApplications.  If not, see <http://www.gnu.org/licenses/>.
 #
 
+import sys
 import numpy
-from qode.many_body.self_consistent_field.fermionic import RHF_RoothanHall_Nonorthogonal
+import qode
+from qode.many_body.self_consistent_field.fermionic import RHF_RoothanHall_Nonorthogonal, RHF_RoothanHall_Orthonormal
 from get_ints import get_ints
+from CI_space_traits import CI_space_traits
+import field_op_ham
 import psi4_check
+from qode.util.PyC import Double
 
 class _empty(object):  pass
 
-frag = _empty()
-frag.atoms = [("Be",[0,0,0])]
-frag.n_elec_ref = 4	# The number of electrons in the reference state of the monomer ("cation (+1)" and "anion (-1)" and technically interpreted relative to the reference, not zero, as would be the chemical definition)
-frag.basis = _empty()
-frag.basis.AOcode = "6-31G"
-frag.basis.n_spatial_orb = 9
-frag.basis.MOcoeffs = numpy.identity(frag.basis.n_spatial_orb)    # rest of code assumes spin-restriced orbitals
-frag.basis.core = [0]	# indices of spatial MOs to freeze in CI portions
+dist = float(sys.argv[1])
 
 
 
-symm_ints, bior_ints, nuc_rep = get_ints([frag], spin_ints=False)
+frag0 = _empty()
+frag0.atoms = [("Be",[0,0,0])]
+frag0.n_elec_ref = 4	# The number of electrons in the reference state of the monomer ("cation (+1)" and "anion (-1)" and technically interpreted relative to the reference, not zero, as would be the chemical definition)
+frag0.basis = _empty()
+frag0.basis.AOcode = "6-31G"
+frag0.basis.n_spatial_orb = 9
+frag0.basis.MOcoeffs = numpy.identity(frag0.basis.n_spatial_orb)    # rest of code assumes spin-restricted orbitals
+frag0.basis.core = [0]	# indices of spatial MOs to freeze in CI portions
 
 
 
-N, S, T, U, V = nuc_rep[0,0], symm_ints.S[0,0], symm_ints.T[0,0], symm_ints.U[0,0,0], symm_ints.V[0,0,0,0]
-E, e, frag.basis.MOcoeffs = RHF_RoothanHall_Nonorthogonal(frag.n_elec_ref, (S, T+U, V), thresh=1e-12)
-
-print(E)
 psi4_check.print_HF_energy(
-    "".join("{} {} {} {}\n".format(A,x,y,z) for A,(x,y,z) in frag.atoms),
-    frag.basis.AOcode
+    "".join("{} {} {} {}\n".format(A,x,y,z) for A,(x,y,z) in frag0.atoms),
+    frag0.basis.AOcode
     )
+
+symm_ints, bior_ints, nuc_rep = get_ints([frag0], spin_ints=False)
+N, S, T, U, V = nuc_rep[0,0], symm_ints.S[0,0], symm_ints.T[0,0], symm_ints.U[0,0,0], symm_ints.V[0,0,0,0]
+E, e, frag0.basis.MOcoeffs = RHF_RoothanHall_Nonorthogonal(frag0.n_elec_ref, (S, T+U, V), thresh=1e-12)
+print(E)
+
+symm_ints, bior_ints, nuc_rep = get_ints([frag0], spin_ints=False)
+N, S, T, U, V = nuc_rep[0,0], symm_ints.S[0,0], symm_ints.T[0,0], symm_ints.U[0,0,0], symm_ints.V[0,0,0,0]
+E, e, _ = RHF_RoothanHall_Orthonormal(frag0.n_elec_ref, (T+U, V), thresh=1e-12)
+print(E)
+
+
+
+symm_ints, bior_ints, nuc_rep = get_ints([frag0])
+N, S, T, U, V = nuc_rep[0,0], symm_ints.S[0,0], symm_ints.T[0,0], symm_ints.U[0,0,0], symm_ints.V[0,0,0,0]
+
+CI_space = qode.math.linear_inner_product_space(CI_space_traits)
+
+
+
+
+num_elec_atom_dn = frag0.n_elec_ref // 2
+num_elec_atom_up = frag0.n_elec_ref - num_elec_atom_dn
+configs = field_op_ham.fci_configs(frag0.basis.n_spatial_orb, num_elec_atom_dn, num_elec_atom_up, len(frag0.basis.core))
+
+H = field_op_ham.Hamiltonian(T+U, V)
+guess = numpy.zeros((1,len(configs)), dtype=Double.numpy)
+idx = field_op_ham.find_index(0b000000011000000011, configs)
+guess[0,idx] = 1
+
+H = CI_space.lin_op(H)
+guess = CI_space.member((configs,guess))
+print((guess|H|guess))
+
+
+# Find the dimer ground state (orthonormalize the basis because Lanczos only for Hermitian case, then back to non-ON basis)
+print("Ground-state calculation ... ", flush=True)
+(Eval,Evec), = qode.math.lanczos.lowest_eigen(H, [guess], thresh=1e-8)
+print("... Done.  \n\nE_gs = {}\n".format(Eval))
+
+exit()
+
+
+
+
+
+
+
+
+
+
+
+
+
+exit()
+
+frag1 = _empty()
+frag1.atoms = [("Be",[0,0,dist])]
+frag1.n_elec_ref = 4	# The number of electrons in the reference state of the monomer ("cation (+1)" and "anion (-1)" and technically interpreted relative to the reference, not zero, as would be the chemical definition)
+frag1.basis = _empty()
+frag1.basis.AOcode = "6-31G"
+frag1.basis.n_spatial_orb = 9
+frag1.basis.MOcoeffs = frag0.basis.MOcoeffs
+frag1.basis.core = [0]	# indices of spatial MOs to freeze in CI portions
+
+
+
+symm_ints, bior_ints, nuc_rep = get_ints([frag0, frag1])
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 print("DONE!!!")
 exit()

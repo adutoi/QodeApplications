@@ -217,7 +217,6 @@ void opPsi_2e(Double* op,            // tensor of matrix elements (integrals)
                             op_pqrs -= op[((p*n_orbs + q)*n_orbs + s)*n_orbs + r];
                             op_pqrs -= op[((q*n_orbs + p)*n_orbs + r)*n_orbs + s];
                             op_pqrs += op[((q*n_orbs + p)*n_orbs + s)*n_orbs + r];
-                            op_pqrs /= 2;
                             if (fabs(op_pqrs) > thresh)
                                 {
                                 BigInt pqsr_config = psr_config ^ ((BigInt)1<<qq);

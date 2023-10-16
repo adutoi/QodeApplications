@@ -78,9 +78,9 @@ psi4_check.print_HF_energy(Be_2, basis_string)
 
 # Put everything in terms of spin orbitals
 H_1_MO = spatial_to_spin.one_electron_blocked(H_1_MO)
-V_1_MO = spatial_to_spin.two_electron_blocked(V_1_MO)
+V_1_MO = spatial_to_spin.two_electron_blocked(V_1_MO) / 2
 H_2_MO = spatial_to_spin.one_electron_blocked(H_2_MO)
-V_2_MO = spatial_to_spin.two_electron_blocked(V_2_MO)
+V_2_MO = spatial_to_spin.two_electron_blocked(V_2_MO) / 2
 
 
 
