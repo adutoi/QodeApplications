@@ -86,6 +86,9 @@ V_2_MO = spatial_to_spin.two_electron_blocked(V_2_MO)
 
 
 
+CI_space = qode.math.linear_inner_product_space(CI_space_traits)
+
+
 
 # Given that dict keys are hard-coded, some of these could be hard coded too, but this makes it easier to read.
 num_elec_atom         = 4	# For neutral (deviations handled explicitly, locally)
@@ -96,28 +99,24 @@ num_elec_atom_dn = num_elec_atom//2
 num_elec_atom_up = num_elec_atom - num_elec_atom_dn
 configs = field_op_ham.fci_configs(num_spat_orb_atom, num_elec_atom_dn, num_elec_atom_up, num_core_elec_atom//2)
 
-raw_vec = numpy.zeros((1,len(configs)), dtype=Double.numpy)
-idx = field_op_ham.find_index(0b000000011000000011, configs)
-raw_vec[0,idx] = 1
-guess = configs, raw_vec
-
-
 # Set up Hamiltonian and promote it and tensor product basis to living in that space
 H = field_op_ham.Hamiltonian(H_1_MO, V_1_MO)
-CI_space = qode.math.linear_inner_product_space(CI_space_traits)
+guess = numpy.zeros((1,len(configs)), dtype=Double.numpy)
+idx = field_op_ham.find_index(0b000000011000000011, configs)
+guess[0,idx] = 1
+
 H = CI_space.lin_op(H)
+guess = CI_space.member((configs,guess))
+print((guess|H|guess))
 
 # Find the dimer ground state (orthonormalize the basis because Lanczos only for Hermitian case, then back to non-ON basis)
 print("Ground-state calculation ... ", flush=True)
-guess = CI_space.member(guess)
-print((guess|H|guess))
-
 (Eval,Evec), = qode.math.lanczos.lowest_eigen(H, [guess], thresh=1e-8)
 print("... Done.  \n\nE_gs = {}\n".format(Eval))
 
 
 
-
+# Given that dict keys are hard-coded, some of these could be hard coded too, but this makes it easier to read.
 num_elec_dimer      = 2 * num_elec_atom
 num_core_elec_dimer = 2 * num_core_elec_atom
 num_spat_orb_dimer  = 2 * num_spat_orb_atom
@@ -126,21 +125,17 @@ num_elec_dimer_dn = num_elec_dimer//2
 num_elec_dimer_up = num_elec_dimer - num_elec_dimer_dn
 configs = field_op_ham.fci_configs(num_spat_orb_dimer, num_elec_dimer_dn, num_elec_dimer_up, num_core_elec_dimer//2)
 
-raw_vec = numpy.zeros((1,len(configs)), dtype=Double.numpy)
-idx = field_op_ham.find_index(0b000000000000001111000000000000001111, configs)
-raw_vec[0,idx] = 1
-guess = configs, raw_vec
-
-
 # Set up Hamiltonian and promote it and tensor product basis to living in that space
 H = field_op_ham.Hamiltonian(H_2_MO, V_2_MO)
-CI_space = qode.math.linear_inner_product_space(CI_space_traits)
+guess = numpy.zeros((1,len(configs)), dtype=Double.numpy)
+idx = field_op_ham.find_index(0b000000000000001111000000000000001111, configs)
+guess[0,idx] = 1
+
 H = CI_space.lin_op(H)
+guess = CI_space.member((configs,guess))
+print((guess|H|guess)+ Enuc_2)
 
 # Find the dimer ground state (orthonormalize the basis because Lanczos only for Hermitian case, then back to non-ON basis)
 print("Ground-state calculation ... ", flush=True)
-guess = CI_space.member(guess)
-print((guess|H|guess)+ Enuc_2)
-
 (Eval,Evec), = qode.math.lanczos.lowest_eigen(H, [guess], thresh=1e-8)
 print("... Done.  \n\nE_gs = {}\n".format(Eval+Enuc_2))
