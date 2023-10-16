@@ -34,20 +34,17 @@
 
 PyInt bisect_search(BigInt config, BigInt* configs, PyInt lower, PyInt upper)
     {
-    if (upper-lower <= 1)
-        {
-        if      (config == configs[lower])  {return lower;}
-        else if (config == configs[upper])  {return upper;}
-        else                                {return    -1;}
-        }
-    else
+    while (upper-lower > 1)
         {
         PyInt half = (lower + upper) / 2;
         BigInt deviation = config - configs[half];
-        if      (deviation == 0)  {return half;}    // this could frequently save a whole function call right at the end
-        else if (deviation  > 0)  {return bisect_search(config, configs, half+1, upper);}
-        else                      {return bisect_search(config, configs, lower, half-1);}
+        if      (deviation == 0)  {return half;}
+        else if (deviation  > 0)  {lower = half+1;}
+        else                      {upper = half-1;}
         }
+    if      (config == configs[lower])  {return lower;}
+    else if (config == configs[upper])  {return upper;}
+    else                                {return    -1;}
     }
 
 PyInt find_index(PyInt config, BigInt* configs, PyInt upper)  {return bisect_search((BigInt)config, configs, 0, upper);}
@@ -182,7 +179,7 @@ void opPsi_2e(Double* op,            // tensor of matrix elements (integrals)
                 {
                 cumulative_occ[i] = n_occ;    // before incrementing (so "not counting this orb")
                 if (((BigInt)1<<i) & config)  {occupied[n_occ++] = i;}
-                else                  {   empty[n_emt++] = i;}
+                else                          {   empty[n_emt++] = i;}
                 }
 
             for (int r_=0; r_<n_occ; r_++)
@@ -228,10 +225,11 @@ void opPsi_2e(Double* op,            // tensor of matrix elements (integrals)
                                 if (m != -1)
                                     {
                                     int permute = (cumulative_occ[r] - cumulative_occ[p]) + (cumulative_occ[s] - cumulative_occ[q]);
-                                    if (p>r)  {permute += 1;}    // correct for asymmetry in counting occs betweeen p and r
-                                    if (q>s)  {permute += 1;}    // correct for asymmetry in counting occs betweeen q and s
-                                    if (p>s)  {permute += 1;}    // one way that excitations can "cross"
-                                    if (q<r)  {permute += 1;}    // another way they can "cross"
+                                    if (p>r)   {permute += 1;}    // correct for asymmetry in counting occs betweeen p and r
+                                    if (q>s)   {permute += 1;}    // correct for asymmetry in counting occs betweeen q and s
+                                    if (q==r)  {permute += 1;}    // corner case where refilled occ gets counted
+                                    if (p>s)   {permute += 1;}    // one way that excitations can "cross"
+                                    if (q<r)   {permute += 1;}    // another way they can "cross"
                                     int phase = (permute%2) ? -1 : 1;
                                     for (v=vec_0; v<vec_0+n_vecs; v++)  {opPsi[v*n_configs+m] += phase * op_pqrs * Psi[v*n_configs+n];}
                                     }

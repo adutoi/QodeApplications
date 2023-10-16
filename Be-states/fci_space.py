@@ -1,4 +1,4 @@
-#    (C) Copyright 2018 Anthony D. Dutoi and Yuhong Liu
+#    (C) Copyright 2018, 2023 Anthony D. Dutoi and Yuhong Liu
 # 
 #    This file is part of QodeApplications.
 # 
@@ -59,46 +59,9 @@ class fci_space_traits_class(object):
 		return [ op(v) for v in v_block ]
 	@staticmethod
 	def back_act_on_vec_block(v_block,op):
-		#
-		# return [ op(v) for v in v_block ]
-		#
-		# unpack the blocks
-		nn, bblock, ii, dims = zip(*v_block)
-		II, ddim = zip(*dims)
-		# check that they are homogeneous
-		n, block, Io, dim = nn[0], bblock[0], II[0], ddim[0]
-		for n,b,I,d in zip(nn,bblock,II,ddim):
-			if (n,b,I,d)!=(n,block,Io,dim):  raise Exception() 
-		# check that the vectors are all adjacent
-		iA,iZ = ii[0], ii[-1]+1
-		if list(ii)!=list(range(iA,iZ)):  raise Exception()
-		num = len(ii)
-		# ok then, do it!
-		v_block = n, block, (iA,num), (Io,dim)
-		u_block = op(v_block)
-		n, block, (iA,num), (Io,dim) = u_block		# FYI, iA will be 0, and num will be the same as Io
-		# repackage results
-		return [ (n, block, iA+j, (num,dim)) for j in range(num) ]
+		return [ op(v) for v in v_block ]
 	@staticmethod
 	def dot_vec_blocks(v_block,w_block):
-		# unpack the blocks
-		nnv, bblockv, iiv, dimsv = zip(*v_block)
-		nnw, bblockw, iiw, dimsw = zip(*w_block)
-		IIv, ddimv = zip(*dimsv)
-		IIw, ddimw = zip(*dimsw)
-		# check that they are homogeneous
-		nv, blockv, Iv, dimv = nnv[0], bblockv[0], IIv[0], ddimv[0]
-		nw, blockw, Iw, dimw = nnw[0], bblockw[0], IIw[0], ddimw[0]
-		for n,b,I,d in zip(nnv,bblockv,IIv,ddimv):
-			if (n,b,I,d)!=(nv,blockv,Iv,dimv):  raise Exception() 
-		for n,b,I,d in zip(nnw,bblockw,IIw,ddimw):
-			if (n,b,I,d)!=(nw,blockw,Iw,dimw):  raise Exception() 
-		# check that the vectors are all adjacent
-		ivA,ivZ = iiv[0], iiv[-1]+1
-		iwA,iwZ = iiw[0], iiw[-1]+1
-		if list(iiv)!=list(range(ivA,ivZ)):  raise Exception()
-		if list(iiw)!=list(range(iwA,iwZ)):  raise Exception()
-		# ok then, do it!
-		return blockv[ivA:ivZ,:].T.dot(blockw[iwA:iwZ,:]).tolist()
+		return numpy.array([[fci_space_traits_class.dot(v,w) for v in v_block] for w in w_block])
 
 fci_space_traits = fci_space_traits_class()
