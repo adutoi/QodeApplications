@@ -17,46 +17,8 @@
 #
 
 import numpy
-from qode.util.PyC import import_C, BigInt, Double
+from qode.util.PyC import import_C, Double
 field_op = import_C("field_op", flags="-O2 -lm")
-field_op.find_index.return_type(int)
-
-
-
-def find_index(config, configs):
-	return field_op.find_index(config, configs, len(configs))
-
-def _all_nelec_configs(num_orb, num_elec, _outer_config=0):
-	configs = []
-	for p in range(num_elec-1, num_orb):
-		config = _outer_config + 2**p
-		if num_elec==1:
-			configs += [config]
-		else:
-			configs += _all_nelec_configs(p, num_elec-1, _outer_config=config)
-	return configs    # not suitable for end users because not a numpy BigInt array (needed for recursive use)
-
-def fci_configs(num_spat_orb, num_elec_dn, num_elec_up, num_core_orb):
-	active_orb  = num_spat_orb - num_core_orb
-	active_dn   = num_elec_dn  - num_core_orb
-	active_up   = num_elec_up  - num_core_orb
-	configs_dn  = _all_nelec_configs(active_orb, active_dn)
-	configs_up  = _all_nelec_configs(active_orb, active_up)
-	core_shift  = 2**num_core_orb
-	core_config = core_shift - 1
-	spin_shift  = 2**num_spat_orb
-	for i in range(len(configs_dn)):
-		configs_dn[i] *= core_shift
-		configs_dn[i] += core_config
-		configs_dn[i] *= spin_shift
-	for i in range(len(configs_up)):
-		configs_up[i] *= core_shift
-		configs_up[i] += core_config
-	configs = []
-	for config_dn in configs_dn:
-		for config_up in configs_up:
-			configs += [config_dn + config_up]
-	return numpy.array(configs, dtype=BigInt.numpy)
 
 
 

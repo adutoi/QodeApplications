@@ -23,6 +23,7 @@ from qode.many_body.self_consistent_field.fermionic import RHF_RoothanHall_Nonor
 from get_ints import get_ints
 from CI_space_traits import CI_space_traits
 import field_op_ham
+import configurations
 import psi4_check
 from qode.util.PyC import Double
 
@@ -60,90 +61,55 @@ print(E)
 
 
 
-symm_ints, bior_ints, nuc_rep = get_ints([frag0])
-N, S, T, U, V = nuc_rep[0,0], symm_ints.S[0,0], symm_ints.T[0,0], symm_ints.U[0,0,0], symm_ints.V[0,0,0,0]
+frag1 = _empty()
+frag1.atoms = [("Be",[0,0,dist])]
+frag1.n_elec_ref = 4
+frag1.basis = _empty()
+frag1.basis.AOcode = "6-31G"
+frag1.basis.n_spatial_orb = 9
+frag1.basis.MOcoeffs = frag0.basis.MOcoeffs
+frag1.basis.core = [0]
 
 CI_space = qode.math.linear_inner_product_space(CI_space_traits)
-
+symm_ints, bior_ints, nuc_rep = get_ints([frag0,frag1])
 
 
 
 num_elec_atom_dn = frag0.n_elec_ref // 2
 num_elec_atom_up = frag0.n_elec_ref - num_elec_atom_dn
-configs = field_op_ham.fci_configs(frag0.basis.n_spatial_orb, num_elec_atom_dn, num_elec_atom_up, len(frag0.basis.core))
-
-H = field_op_ham.Hamiltonian(T+U, V)
+configs = configurations.C_configs(configurations.fci_configs(frag0.basis.n_spatial_orb, num_elec_atom_dn, num_elec_atom_up, len(frag0.basis.core)))
 guess = numpy.zeros((1,len(configs)), dtype=Double.numpy)
-idx = field_op_ham.find_index(0b000000011000000011, configs)
+idx = configurations.find_index(0b000000011000000011, configs)
 guess[0,idx] = 1
+
+N, S, T, U, V = nuc_rep[0,0], symm_ints.S[0,0], symm_ints.T[0,0], symm_ints.U[0,0,0], symm_ints.V[0,0,0,0]
+H = field_op_ham.Hamiltonian(T+U, V)
 
 H = CI_space.lin_op(H)
 guess = CI_space.member((configs,guess))
-print((guess|H|guess))
-
-
-# Find the dimer ground state (orthonormalize the basis because Lanczos only for Hermitian case, then back to non-ON basis)
-print("Ground-state calculation ... ", flush=True)
+print(guess|H|guess)
 (Eval,Evec), = qode.math.lanczos.lowest_eigen(H, [guess], thresh=1e-8)
-print("... Done.  \n\nE_gs = {}\n".format(Eval))
+print("\nE_gs = {}\n".format(Eval))
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 exit()
-
-
-
-
-
-
-
-
-
-
-
-
-
-exit()
-
-frag1 = _empty()
-frag1.atoms = [("Be",[0,0,dist])]
-frag1.n_elec_ref = 4	# The number of electrons in the reference state of the monomer ("cation (+1)" and "anion (-1)" and technically interpreted relative to the reference, not zero, as would be the chemical definition)
-frag1.basis = _empty()
-frag1.basis.AOcode = "6-31G"
-frag1.basis.n_spatial_orb = 9
-frag1.basis.MOcoeffs = frag0.basis.MOcoeffs
-frag1.basis.core = [0]	# indices of spatial MOs to freeze in CI portions
-
-
-
-symm_ints, bior_ints, nuc_rep = get_ints([frag0, frag1])
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-print("DONE!!!")
-exit()
-
-
-
 
 # The engines that build the terms
 BeN_rho = [frag.rho for frag in BeN]   # diagrammatic_expansion.blocks should take BeN directly? (n_states and n_elec one level higher)
