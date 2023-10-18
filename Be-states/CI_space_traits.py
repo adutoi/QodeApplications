@@ -20,44 +20,47 @@ from qode.util.PyC import import_C, Double, BigInt
 field_op = import_C("field_op", flags="-O2 -lm")
 field_op.find_index.return_type(int)
 
-
+class _auxilliary(object):
+    def __init__(self, parent):
+        self.parent = parent
+    def basis_vec(self, config):
+        configs = self.parent.configs    # access at call time because parent not completely set up at init time (could be here, but advertising a general pattern)
+        v = numpy.zeros((1,len(configs)), dtype=Double.numpy)    # nominally a matrix bc Hamiltonian supports block action
+        config = int(config, 2)    # config comes in as a string literal of 0 and 1 characters
+        index  = field_op.find_index(config, configs, len(configs))
+        v[0,index] = 1
+        return v
 
 class CI_space_traits(object):
-	def __init__(self, configs):
-		self.field = numpy.float64
-		self.configs = numpy.array(configs, dtype=BigInt.numpy)
-	def new_vec(self, config=None):
-		v = numpy.zeros((1,len(self.configs)), dtype=Double.numpy)    # nominally a matrix bc Hamiltonian supports block action
-		if config is not None:
-			config = int(config, 2)    # config comes in as a string literal of 0 and 1 characters
-			index  = field_op.find_index(config, self.configs, len(self.configs))
-			v[0,index] = 1
-		return v
-	def check_member(self,v):
-		pass
-	def check_lin_op(self,op):
-		return False
-	@staticmethod
-	def copy(v):
-		return v.copy()
-	@staticmethod
-	def scale(c,v):
-		v *= c
-	@staticmethod
-	def add_to(v,w,c=1):
-		if c==1:  v += w
-		else:     v += c*w
-	@staticmethod
-	def dot(v,w):
-		return (v.dot(w.T)).item()    # Here we have to remember that vecs are actually 1xlen(configs) 2-tensors
-	def act_on_vec(self, op, v):
-		return op(v, self.configs)
-	def back_act_on_vec(self, v, op):
-		return op(v, self.configs)
-	def act_on_vec_block(self, op, v_block):
-		return [ op(v, self.configs) for v in v_block ]
-	def back_act_on_vec_block(self, v_block, op):
-		return [ op(v, self.configs) for v in v_block ]
-	@staticmethod
-	def dot_vec_blocks(v_block,w_block):
-		return numpy.array([[CI_space_traits_class.dot(v,w) for v in v_block] for w in w_block])
+    def __init__(self, configs):
+        self.field = numpy.float64
+        self.aux = _auxilliary(self)
+        self.configs = numpy.array(configs, dtype=BigInt.numpy)
+    def check_member(self,v):
+        pass
+    def check_lin_op(self,op):
+        return False
+    @staticmethod
+    def copy(v):
+        return v.copy()
+    @staticmethod
+    def scale(c,v):
+        v *= c
+    @staticmethod
+    def add_to(v,w,c=1):
+        if c==1:  v += w
+        else:     v += c*w
+    @staticmethod
+    def dot(v,w):
+        return (v.dot(w.T)).item()    # Here we have to remember that vecs are actually 1xlen(configs) 2-tensors
+    def act_on_vec(self, op, v):
+        return op(v, self.configs)
+    def back_act_on_vec(self, v, op):
+        return op(v, self.configs)
+    def act_on_vec_block(self, op, v_block):
+        return [ op(v, self.configs) for v in v_block ]
+    def back_act_on_vec_block(self, v_block, op):
+        return [ op(v, self.configs) for v in v_block ]
+    @staticmethod
+    def dot_vec_blocks(v_block,w_block):
+        return numpy.array([[CI_space_traits_class.dot(v,w) for v in v_block] for w in w_block])
