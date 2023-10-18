@@ -17,17 +17,6 @@
 #
 
 import numpy
-from qode.util.PyC import import_C, BigInt
-field_op = import_C("field_op", flags="-O2 -lm")
-field_op.find_index.return_type(int)
-
-
-
-def find_index(config, configs):
-    return field_op.find_index(config, configs, len(configs))
-
-def C_configs(configs):
-    return numpy.array(configs, dtype=BigInt.numpy)
 
 
 
@@ -38,6 +27,8 @@ def all_nelec_configs(num_orb, num_elec, _outer_config=0):
         if num_elec==1:  configs += [config]
         else:            configs += _all_nelec_configs(p, num_elec-1, _outer_config=config)
     return configs
+
+
 
 def fci_configs(num_spat_orb, num_elec_dn, num_elec_up, num_core_orb):
     active_orb  = num_spat_orb - num_core_orb
@@ -60,6 +51,8 @@ def fci_configs(num_spat_orb, num_elec_dn, num_elec_up, num_core_orb):
         for config_up in configs_up:
             configs += [config_dn + config_up]
     return configs
+
+
 
 # The list of configs is interpreted as belonging to multiple systems, divided according to
 # sysA_low_orbs, which gives the lowest-indexed orbital of each system (except for the last

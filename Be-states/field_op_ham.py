@@ -27,13 +27,12 @@ class Hamiltonian(object):
 		self.h = h
 		self.V = V
 		self.thresh = thresh
-	def __call__(self, Psi, vec_0=0, num_vecs=1):    # The ability to act on blocks of consecutively stored vectors is not currently used (but it has been tested)
-		configs, vec = Psi
+	def __call__(self, Psi, configs, vec_0=0, num_vecs=1):    # The ability to act on blocks of consecutively stored vectors is not currently used (but it has been tested)
 		num_spin_orbs = self.h.shape[0]
-		Hvec = numpy.zeros((num_vecs,len(configs)), dtype=Double.numpy)
+		HPsi = numpy.zeros((num_vecs,len(configs)), dtype=Double.numpy)
 		field_op.opPsi_1e(self.h,           # tensor of matrix elements (integrals)
-		                  vec,              # block of row vectors: input vectors to act on
-		                  Hvec,             # block of row vectors: incremented by output
+		                  Psi,              # block of row vectors: input vectors to act on
+		                  HPsi,             # block of row vectors: incremented by output
 		                  configs,          # bitwise occupation strings stored as integers ... so, max 64 orbs for FCI ;-) [no checking here!]
 		                  num_spin_orbs,    # edge dimension of the integrals tensor.  cannot be bigger than the number of bits in a BigInt (64)
 		                  vec_0,            # index of first vector in block to act upon
@@ -42,8 +41,8 @@ class Hamiltonian(object):
 		                  self.thresh,      # threshold for ignoring integrals and coefficients (avoiding expensive index search)
 		                  0)                # number of OMP threads to spread the work over (not currently used)
 		field_op.opPsi_2e(self.V,           # tensor of matrix elements (integrals)
-		                  vec,              # block of row vectors: input vectors to act on
-		                  Hvec,             # block of row vectors: incremented by output
+		                  Psi,              # block of row vectors: input vectors to act on
+		                  HPsi,             # block of row vectors: incremented by output
 		                  configs,          # bitwise occupation strings stored as integers ... so, max 64 orbs for FCI ;-) [no checking here!]
 		                  num_spin_orbs,    # edge dimension of the integrals tensor.  cannot be bigger than the number of bits in a BigInt (64)
 		                  vec_0,            # index of first vector in block to act upon
@@ -51,4 +50,4 @@ class Hamiltonian(object):
 		                  len(configs),     # how many configurations are there (call signature is ok as long as PyInt not longer than BigInt)
 		                  self.thresh,      # threshold for ignoring integrals and coefficients (avoiding expensive index search)
 		                  0)                # number of OMP threads to spread the work over (not currently used)
-		return configs, Hvec
+		return HPsi

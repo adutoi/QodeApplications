@@ -19,13 +19,14 @@
 import sys
 import numpy
 import qode
+
 from qode.many_body.self_consistent_field.fermionic import RHF_RoothanHall_Nonorthogonal, RHF_RoothanHall_Orthonormal
 from get_ints import get_ints
+import psi4_check
+
 from CI_space_traits import CI_space_traits
 import field_op_ham
 import configurations
-import psi4_check
-from qode.util.PyC import Double
 
 class _empty(object):  pass
 
@@ -70,23 +71,20 @@ frag1.basis.n_spatial_orb = 9
 frag1.basis.MOcoeffs = frag0.basis.MOcoeffs
 frag1.basis.core = [0]
 
-CI_space = qode.math.linear_inner_product_space(CI_space_traits)
 symm_ints, bior_ints, nuc_rep = get_ints([frag0,frag1])
 
 
 
 num_elec_atom_dn = frag0.n_elec_ref // 2
 num_elec_atom_up = frag0.n_elec_ref - num_elec_atom_dn
-configs = configurations.C_configs(configurations.fci_configs(frag0.basis.n_spatial_orb, num_elec_atom_dn, num_elec_atom_up, len(frag0.basis.core)))
-guess = numpy.zeros((1,len(configs)), dtype=Double.numpy)
-idx = configurations.find_index(0b000000011000000011, configs)
-guess[0,idx] = 1
-
+configs_atom = CI_space_traits(configurations.fci_configs(frag0.basis.n_spatial_orb, num_elec_atom_dn, num_elec_atom_up, len(frag0.basis.core)))
 N, S, T, U, V = nuc_rep[0,0], symm_ints.S[0,0], symm_ints.T[0,0], symm_ints.U[0,0,0], symm_ints.V[0,0,0,0]
-H = field_op_ham.Hamiltonian(T+U, V)
 
-H = CI_space.lin_op(H)
-guess = CI_space.member((configs,guess))
+CI_space_atom = qode.math.linear_inner_product_space(configs_atom)
+
+guess = CI_space_atom.member(configs_atom.new_vec("000000011000000011"))
+H     = CI_space_atom.lin_op(field_op_ham.Hamiltonian(T+U, V))
+
 print(guess|H|guess)
 (Eval,Evec), = qode.math.lanczos.lowest_eigen(H, [guess], thresh=1e-8)
 print("\nE_gs = {}\n".format(Eval))
