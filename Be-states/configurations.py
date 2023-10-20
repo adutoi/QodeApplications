@@ -19,61 +19,114 @@
 import numpy
 
 
-
-def all_nelec_configs(num_orb, num_elec, _outer_config=0):
+def _all_configs(active_orbs, num_active_elec, static_config):
     configs = []
-    for p in range(num_elec-1, num_orb):
-        config = _outer_config + 2**p
-        if num_elec==1:  configs += [config]
-        else:            configs += all_nelec_configs(p, num_elec-1, _outer_config=config)
+    for p in range(num_active_elec-1, len(active_orbs)):
+        config = static_config + 2**active_orbs[p]
+        if num_active_elec==1:  configs += [config]
+        else:                   configs += _all_configs(active_orbs[:p], num_active_elec-1, config)
     return configs
 
-
-
-def fci_configs(num_spat_orb, num_elec_dn, num_elec_up, num_core_orb):
-    active_orb  = num_spat_orb - num_core_orb
-    active_dn   = num_elec_dn  - num_core_orb
-    active_up   = num_elec_up  - num_core_orb
-    configs_dn  = all_nelec_configs(active_orb, active_dn)
-    configs_up  = all_nelec_configs(active_orb, active_up)
-    core_shift  = 2**num_core_orb
-    core_config = core_shift - 1
-    spin_shift  = 2**num_spat_orb
-    for i in range(len(configs_dn)):
-        configs_dn[i] *= core_shift
-        configs_dn[i] += core_config
-        configs_dn[i] *= spin_shift
-    for i in range(len(configs_up)):
-        configs_up[i] *= core_shift
-        configs_up[i] += core_config
-    configs = []
-    for config_dn in configs_dn:
-        for config_up in configs_up:
-            configs += [config_dn + config_up]
-    return configs
-
-
+def all_configs(num_tot_orb, num_active_elec, frozen_occ_orbs=None, frozen_vrt_orbs=None):
+    if frozen_occ_orbs is None:  frozen_occ_orbs = []
+    if frozen_vrt_orbs is None:  frozen_vrt_orbs = []
+    frozen_occ_orbs = set(frozen_occ_orbs)
+    frozen_vrt_orbs = set(frozen_vrt_orbs)
+    static_config = 0
+    active_orbs = []
+    for p in range(num_tot_orb):
+        if p in frozen_occ_orbs:
+            static_config += 2**p
+        elif p not in frozen_vrt_orbs:
+            active_orbs += [p]
+    return _all_configs(active_orbs, num_active_elec, static_config)
 
 # The list of configs is interpreted as belonging to multiple systems, divided according to
 # sysA_low_orbs, which gives the lowest-indexed orbital of each system (except for the last
 # one which is assumed to be zero.  It then creates mutliply nested lists, where each state
 # of a former system is associated with lists of all states of the the latter ones.  This
 # should work with any number of systems, but it has only been tested for two.
-def decompose_configs(configs, sysA_low_orbs):
-    decomposed = []
-    denom = 2**sysA_low_orbs[0]
-    sysA_low_orbs = sysA_low_orbs[1:]
-    sysA_prev = None
+def decompose_configs(configs, orb_counts):
+    nested = []
+    orb_counts = orb_counts[:-1]
+    shift = 2**sum(orb_counts)
+    configA_prev = None
     for config in configs:
-        sysA = config // denom
-        low  = config %  denom
-        if sysA!=sysA_prev:
-            if sysA_prev is not None:
-                if len(sysA_low_orbs)>0:  decomposed += [(sysA_prev, decompose_configs(current_sysB, sysA_low_orbs))]
-                else:                     decomposed += [(sysA_prev, current_sysB)]
-            current_sysB = []
-            sysA_prev = sysA
-        current_sysB += [low]
-    if len(sysA_low_orbs)>0:  decomposed += [(sysA_prev, decompose_configs(current_sysB, sysA_low_orbs))]
-    else:                     decomposed += [(sysA_prev, current_sysB)]
-    return decomposed
+        configA  = config // shift
+        configBZ = config %  shift
+        if configA!=configA_prev:
+            if configA_prev is not None:
+                if len(orb_counts)>1:  nested += [(configA_prev, decompose_configs(configsBZ, orb_counts))]
+                else:                  nested += [(configA_prev, configsBZ)]
+            configsBZ = []
+            configA_prev = configA
+        configsBZ += [configBZ]
+    if len(orb_counts)>1:  nested += [(configA_prev, decompose_configs(configsBZ, orb_counts))]
+    else:                  nested += [(configA_prev, configsBZ)]
+    return nested
+
+def combine_configs(nested, orb_counts):
+    configs = []
+    orb_counts = orb_counts[:-1]
+    shift = 2**sum(orb_counts)
+    for configA,nestedBZ in nested:
+        if len(orb_counts)>1:  configsBZ = combine_configs(nestedBZ, orb_counts)
+        else:                  configsBZ = nestedBZ
+        for configBZ in configsBZ:
+            configs += [configA*shift + configBZ]
+    return configs
+
+def _tensor_pdt_nested(configsX):
+    configsA = configsX[-1]
+    configsX = configsX[:-1]
+    if len(configsX)==0:
+        nested = configsA
+    else:
+        nested = []
+        for configA in configsA:
+            nested += [(configA, _tensor_pdt_nested(configsX))]
+    return nested
+
+def tensor_product_configs(configsX, orb_counts):
+    return combine_configs(_tensor_pdt_nested(configsX), orb_counts)
+
+
+
+def print_configs(nested, orb_counts, _indent=""):
+    num_orb = orb_counts[-1]
+    orb_counts = orb_counts[:-1]
+    formatter = "{{:0{}b}}".format(num_orb)
+    if len(orb_counts)==0:
+        for config in nested:
+            print(_indent, formatter.format(config))
+    else:
+        for configA,nestedBZ in nested:
+            print(_indent, formatter.format(configA))
+            print_configs(nestedBZ, orb_counts, _indent+" "*num_orb)
+
+
+
+if __name__ == "__main__":
+    configs = _all_configs([0,2,4,6,8], 3, 0b0010101010)
+    print_configs(configs, [10])
+    print()
+    configs = all_configs(10, 4, frozen_occ_orbs=[0,5], frozen_vrt_orbs=[1,6])
+    print_configs(configs, [10])
+    print()
+    configs = all_configs(6, 3)
+    print_configs(configs, [6])
+    print()
+    nested = decompose_configs(configs, [3,3])
+    print_configs(nested, [3,3])
+    print()
+    configs = combine_configs(nested, [3,3])
+    print_configs(configs, [6])
+    print()
+    configs = all_configs(4, 2)
+    print_configs(configs, [4])
+    print()
+    nested = _tensor_pdt_nested([configs, configs])
+    print_configs(nested, [4,4])
+    print()
+    configs = tensor_product_configs([configs, configs], [4,4])
+    print_configs(configs, [8])

@@ -85,13 +85,15 @@ V_2_MO = spatial_to_spin.two_electron_blocked(V_2_MO) / 2
 
 
 
-num_elec_atom         = 4	# For neutral (deviations handled explicitly, locally)
-num_core_elec_atom    = 2
-num_spat_orb_atom     = 9
+num_elec_atom     = 4
+num_spat_orb_atom = 9
+core_orb_atom     = [0]
+num_elec_atom_dn  = num_elec_atom//2
+num_elec_atom_up  = num_elec_atom - num_elec_atom_dn
 
-num_elec_atom_dn = num_elec_atom//2
-num_elec_atom_up = num_elec_atom - num_elec_atom_dn
-configs_atom = configurations.fci_configs(num_spat_orb_atom, num_elec_atom_dn, num_elec_atom_up, num_core_elec_atom//2)
+dn_configs_atom = configurations.all_configs(num_spat_orb_atom, num_elec_atom_dn-len(core_orb_atom), frozen_occ_orbs=core_orb_atom)
+up_configs_atom = configurations.all_configs(num_spat_orb_atom, num_elec_atom_up-len(core_orb_atom), frozen_occ_orbs=core_orb_atom)
+configs_atom    = configurations.tensor_product_configs([up_configs_atom,up_configs_atom], [num_spat_orb_atom,num_spat_orb_atom])
 
 CI_space_atom = qode.math.linear_inner_product_space(CI_space_traits(configs_atom))
 H     = CI_space_atom.lin_op(field_op_ham.Hamiltonian(H_1_MO, V_1_MO))
@@ -103,17 +105,19 @@ print("\nE_gs = {}\n".format(Eval))
 
 
 
-num_elec_dimer      = 2 * num_elec_atom
-num_core_elec_dimer = 2 * num_core_elec_atom
-num_spat_orb_dimer  = 2 * num_spat_orb_atom
+num_elec_dimer     = 2 * num_elec_atom
+num_spat_orb_dimer = 2 * num_spat_orb_atom
+core_orb_dimer     = [0,1]
+num_elec_dimer_dn  = num_elec_dimer//2
+num_elec_dimer_up  = num_elec_dimer - num_elec_dimer_dn
 
-num_elec_dimer_dn = num_elec_dimer//2
-num_elec_dimer_up = num_elec_dimer - num_elec_dimer_dn
-configs_dimer = configurations.fci_configs(num_spat_orb_dimer, num_elec_dimer_dn, num_elec_dimer_up, num_core_elec_dimer//2)
+dn_configs_dimer = configurations.all_configs(num_spat_orb_dimer, num_elec_dimer_dn-len(core_orb_dimer), frozen_occ_orbs=core_orb_dimer)
+up_configs_dimer = configurations.all_configs(num_spat_orb_dimer, num_elec_dimer_up-len(core_orb_dimer), frozen_occ_orbs=core_orb_dimer)
+configs_dimer    = configurations.tensor_product_configs([up_configs_dimer,up_configs_dimer], [num_spat_orb_dimer,num_spat_orb_dimer])
 
-CI_space_atom = qode.math.linear_inner_product_space(CI_space_traits(configs_dimer))
-H     = CI_space_atom.lin_op(field_op_ham.Hamiltonian(H_2_MO, V_2_MO))
-guess = CI_space_atom.member(CI_space_atom.aux.basis_vec("000000000000001111000000000000001111"))
+CI_space_dimer = qode.math.linear_inner_product_space(CI_space_traits(configs_dimer))
+H     = CI_space_dimer.lin_op(field_op_ham.Hamiltonian(H_2_MO, V_2_MO))
+guess = CI_space_dimer.member(CI_space_dimer.aux.basis_vec("000000000000001111000000000000001111"))
 
 print((guess|H|guess) + Enuc_2)
 (Eval,Evec), = qode.math.lanczos.lowest_eigen(H, [guess], thresh=1e-8)

@@ -78,7 +78,12 @@ symm_ints, bior_ints, nuc_rep = get_ints([frag0,frag1])
 
 num_elec_atom_dn = frag0.n_elec_ref // 2
 num_elec_atom_up = frag0.n_elec_ref - num_elec_atom_dn
-configs_atom = configurations.fci_configs(frag0.basis.n_spatial_orb, num_elec_atom_dn, num_elec_atom_up, len(frag0.basis.core))
+num_spatial_atom = frag0.basis.n_spatial_orb
+
+dn_configs_atom = configurations.all_configs(num_spatial_atom, num_elec_atom_dn-len(frag0.basis.core), frozen_occ_orbs=frag0.basis.core)
+up_configs_atom = configurations.all_configs(num_spatial_atom, num_elec_atom_up-len(frag0.basis.core), frozen_occ_orbs=frag0.basis.core)
+configs_atom    = configurations.tensor_product_configs([up_configs_atom,up_configs_atom], [num_spatial_atom,num_spatial_atom])
+
 N, S, T, U, V = nuc_rep[0,0], symm_ints.S[0,0], symm_ints.T[0,0], symm_ints.U[0,0,0], symm_ints.V[0,0,0,0]
 h = T + U
 
