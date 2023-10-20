@@ -19,15 +19,15 @@
 import numpy
 
 
-def _all_configs(active_orbs, num_active_elec, static_config):
-    configs = []
-    for p in range(num_active_elec-1, len(active_orbs)):
-        config = static_config + 2**active_orbs[p]
-        if num_active_elec==1:  configs += [config]
-        else:                   configs += _all_configs(active_orbs[:p], num_active_elec-1, config)
-    return configs
 
 def all_configs(num_tot_orb, num_active_elec, frozen_occ_orbs=None, frozen_vrt_orbs=None):
+    def recur_all_configs(active_orbs, num_active_elec, static_config):
+        configs = []
+        for p in range(num_active_elec-1, len(active_orbs)):
+            config = static_config + 2**active_orbs[p]
+            if num_active_elec==1:  configs += [config]
+            else:                   configs += recur_all_configs(active_orbs[:p], num_active_elec-1, config)
+        return configs
     if frozen_occ_orbs is None:  frozen_occ_orbs = []
     if frozen_vrt_orbs is None:  frozen_vrt_orbs = []
     frozen_occ_orbs = set(frozen_occ_orbs)
@@ -39,7 +39,7 @@ def all_configs(num_tot_orb, num_active_elec, frozen_occ_orbs=None, frozen_vrt_o
             static_config += 2**p
         elif p not in frozen_vrt_orbs:
             active_orbs += [p]
-    return _all_configs(active_orbs, num_active_elec, static_config)
+    return recur_all_configs(active_orbs, num_active_elec, static_config)
 
 # The list of configs is interpreted as belonging to multiple systems, divided according to
 # sysA_low_orbs, which gives the lowest-indexed orbital of each system (except for the last
@@ -71,38 +71,37 @@ def config_combination(orb_counts):
     for orb_count in orb_counts[:-1]:
         orb_count_tot += orb_count
         shifts += [2**orb_count_tot]
-    def combine_configs(*configsX):
+    def combine_configs(configsX):
         config = 0
-        for configX,shift in zip(reversed(configsX),shifts):
+        for configX,shift in zip(configsX,shifts):
             config += configX*shift
         return config
     return combine_configs
 
-def combine_decomposed(nested, orb_counts):
+def recompose_configs(nested, orb_counts):
     orb_count  = orb_counts[-1]
     orb_counts = orb_counts[:-1]
     combine_configs = config_combination([sum(orb_counts), orb_count])
     configs = []
     for configA,nestedBZ in nested:
-        if len(orb_counts)>1:  configsBZ = combine_decomposed(nestedBZ, orb_counts)
+        if len(orb_counts)>1:  configsBZ = recompose_configs(nestedBZ, orb_counts)
         else:                  configsBZ = nestedBZ
         for configBZ in configsBZ:
-            configs += [combine_configs(configA, configBZ)]
+            configs += [combine_configs([configBZ, configA])]
     return configs
 
-def _tensor_pdt_nested(configsX):
-    configsA = configsX[-1]
-    configsX = configsX[:-1]
-    if len(configsX)==0:
-        nested = configsA
-    else:
-        nested = []
-        for configA in configsA:
-            nested += [(configA, _tensor_pdt_nested(configsX))]
-    return nested
-
 def tensor_product_configs(configsX, orb_counts):
-    return combine_decomposed(_tensor_pdt_nested(configsX), orb_counts)
+    def recur_tensor_product_configs(configsX):
+        configsA = configsX[-1]
+        configsX = configsX[:-1]
+        if len(configsX)==0:
+            nested = configsA
+        else:
+            nested = []
+            for configA in configsA:
+                nested += [(configA, recur_tensor_product_configs(configsX))]
+        return nested
+    return recompose_configs(recur_tensor_product_configs(configsX), orb_counts)
 
 
 
@@ -121,9 +120,9 @@ def print_configs(nested, orb_counts, _indent=""):
 
 
 if __name__ == "__main__":
-    configs = _all_configs([0,2,4,6,8], 3, 0b0010101010)
-    print_configs(configs, [10])
-    print()
+    #configs = _all_configs([0,2,4,6,8], 3, 0b0010101010)
+    #print_configs(configs, [10])
+    #print()
     configs = all_configs(10, 4, frozen_occ_orbs=[0,5], frozen_vrt_orbs=[1,6])
     print_configs(configs, [10])
     print()
@@ -133,14 +132,14 @@ if __name__ == "__main__":
     nested = decompose_configs(configs, [3,3])
     print_configs(nested, [3,3])
     print()
-    configs = combine_decomposed(nested, [3,3])
+    configs = recompose_configs(nested, [3,3])
     print_configs(configs, [6])
     print()
     configs = all_configs(4, 2)
     print_configs(configs, [4])
     print()
-    nested = _tensor_pdt_nested([configs, configs])
-    print_configs(nested, [4,4])
-    print()
+    #nested = _tensor_pdt_nested([configs, configs])
+    #print_configs(nested, [4,4])
+    #print()
     configs = tensor_product_configs([configs, configs], [4,4])
     print_configs(configs, [8])

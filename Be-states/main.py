@@ -74,11 +74,11 @@ frag1.basis.core = [0]
 
 symm_ints, bior_ints, nuc_rep = get_ints([frag0,frag1])
 
-
-
 num_elec_atom_dn = frag0.n_elec_ref // 2
 num_elec_atom_up = frag0.n_elec_ref - num_elec_atom_dn
 num_spatial_atom = frag0.basis.n_spatial_orb
+
+
 
 dn_configs_atom = configurations.all_configs(num_spatial_atom, num_elec_atom_dn-len(frag0.basis.core), frozen_occ_orbs=frag0.basis.core)
 up_configs_atom = configurations.all_configs(num_spatial_atom, num_elec_atom_up-len(frag0.basis.core), frozen_occ_orbs=frag0.basis.core)
@@ -97,11 +97,52 @@ print("\nE_gs = {}\n".format(Eval+N))
 
 
 
+dimer_core = frag0.basis.core + [c+frag0.basis.n_spatial_orb for c in frag1.basis.core]
+
+dn_configs_dimer = configurations.all_configs(2*num_spatial_atom, 2*num_elec_atom_dn-len(dimer_core), frozen_occ_orbs=dimer_core)
+up_configs_dimer = configurations.all_configs(2*num_spatial_atom, 2*num_elec_atom_up-len(dimer_core), frozen_occ_orbs=dimer_core)
+dn_configs_decomp = configurations.decompose_configs(dn_configs_dimer, [num_spatial_atom, num_spatial_atom])
+up_configs_decomp = configurations.decompose_configs(up_configs_dimer, [num_spatial_atom, num_spatial_atom])
+combine_configs = configurations.config_combination([num_spatial_atom, num_spatial_atom])
+nested = []
+for config_dn1,configs_dn0 in dn_configs_decomp:
+    for config_up1,configs_up0 in up_configs_decomp:
+        config_1  = combine_configs([config_up1, config_dn1])
+        configs_0 = configurations.tensor_product_configs([configs_up0, configs_dn0], [num_spatial_atom, num_spatial_atom])
+        nested += [(config_1, configs_0)]
+configs_dimer = configurations.recompose_configs(nested, [2*num_spatial_atom, 2*num_spatial_atom])
+
 N = nuc_rep[0,0] + nuc_rep[1,1] + nuc_rep[0,1]
 T = unblock_2(    bior_ints.T, [frag0,frag1], spin_orbs=True)
 U = unblock_last2(bior_ints.U, [frag0,frag1], spin_orbs=True)
 V = unblock_4(    bior_ints.V, [frag0,frag1], spin_orbs=True)
 h = T + U[0] + U[1]
+
+core = [0,9,18,27]
+orbs = list(range(4*9))
+for p in orbs:
+    for q in orbs:
+        if (q in core) and (p!=q):  h[p,q] = 0
+        if (p in core) and (p!=q):  h[p,q] = 0
+        for r in orbs:
+            for s in orbs:
+                if (r in core) and (p!=r) and (q!=r):  V[p,q,r,s] = 0
+                if (s in core) and (p!=s) and (q!=s):  V[p,q,r,s] = 0
+                if (p in core) and (p!=r) and (p!=s):  V[p,q,r,s] = 0
+                if (q in core) and (q!=r) and (q!=s):  V[p,q,r,s] = 0
+
+CI_space_dimer = qode.math.linear_inner_product_space(CI_space_traits(configs_dimer))
+H     = CI_space_dimer.lin_op(field_op_ham.Hamiltonian(h,V))
+guess = CI_space_dimer.member(CI_space_dimer.aux.basis_vec("000000011000000011000000011000000011"))
+
+print((guess|H|guess) + N)
+(Eval,Evec), = qode.math.lanczos.lowest_eigen(H, [guess], thresh=1e-8)
+print("\nE_gs = {}\n".format(Eval+N))
+
+
+
+
+
 
 
 
