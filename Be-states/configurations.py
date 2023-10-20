@@ -25,7 +25,7 @@ def all_nelec_configs(num_orb, num_elec, _outer_config=0):
     for p in range(num_elec-1, num_orb):
         config = _outer_config + 2**p
         if num_elec==1:  configs += [config]
-        else:            configs += _all_nelec_configs(p, num_elec-1, _outer_config=config)
+        else:            configs += all_nelec_configs(p, num_elec-1, _outer_config=config)
     return configs
 
 
