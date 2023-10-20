@@ -65,15 +65,29 @@ def decompose_configs(configs, orb_counts):
     else:                  nested += [(configA_prev, configsBZ)]
     return nested
 
-def combine_configs(nested, orb_counts):
-    configs = []
+def config_combination(orb_counts):
+    shifts = [1]
+    orb_count_tot = 0
+    for orb_count in orb_counts[:-1]:
+        orb_count_tot += orb_count
+        shifts += [2**orb_count_tot]
+    def combine_configs(*configsX):
+        config = 0
+        for configX,shift in zip(reversed(configsX),shifts):
+            config += configX*shift
+        return config
+    return combine_configs
+
+def combine_decomposed(nested, orb_counts):
+    orb_count  = orb_counts[-1]
     orb_counts = orb_counts[:-1]
-    shift = 2**sum(orb_counts)
+    combine_configs = config_combination([sum(orb_counts), orb_count])
+    configs = []
     for configA,nestedBZ in nested:
-        if len(orb_counts)>1:  configsBZ = combine_configs(nestedBZ, orb_counts)
+        if len(orb_counts)>1:  configsBZ = combine_decomposed(nestedBZ, orb_counts)
         else:                  configsBZ = nestedBZ
         for configBZ in configsBZ:
-            configs += [configA*shift + configBZ]
+            configs += [combine_configs(configA, configBZ)]
     return configs
 
 def _tensor_pdt_nested(configsX):
@@ -88,7 +102,7 @@ def _tensor_pdt_nested(configsX):
     return nested
 
 def tensor_product_configs(configsX, orb_counts):
-    return combine_configs(_tensor_pdt_nested(configsX), orb_counts)
+    return combine_decomposed(_tensor_pdt_nested(configsX), orb_counts)
 
 
 
@@ -119,7 +133,7 @@ if __name__ == "__main__":
     nested = decompose_configs(configs, [3,3])
     print_configs(nested, [3,3])
     print()
-    configs = combine_configs(nested, [3,3])
+    configs = combine_decomposed(nested, [3,3])
     print_configs(configs, [6])
     print()
     configs = all_configs(4, 2)
