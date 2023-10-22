@@ -21,9 +21,13 @@
 #include <math.h>         // fabs()
 #include "PyC_types.h"
 
+#ifdef _OPENMP
+#include <omp.h>
+#endif
+
 /*
  * Ideas for making this even better:
- * - faster "find" function
+ * - faster "find" function (run through Ham once to make lookup table for each element)
  * - allow input about what ranges of creation/annihilation have nonzero elements
  * - insist integrals are antisymmetrized
  * - feed in integrals that account for frozen core and only use active configs
@@ -34,6 +38,54 @@
 
 PyInt bisect_search(BigInt config, BigInt* configs, PyInt lower, PyInt upper)
     {
+    if ((config<configs[lower]) || (config>configs[upper]))  {return -1;}
+    /***********************************************************************************
+    // ********  The code appears to be just slightly faster *without* this ... but maybe context dependent?  so keep it around
+    // make a guess as to where roughly the config is in the index range
+    float  frac  = (config - configs[lower]) / (float)(configs[upper] - configs[lower]);
+    BigInt delta = (BigInt)(frac * (upper - lower));
+    BigInt guess = lower + delta;
+    if (guess < lower)  {guess = lower;}
+    if (guess > upper)  {guess = upper;}
+    // figuring that our guess was either too high or too low, try to bound it
+    if (config == configs[guess])
+        {
+        return guess;
+        }
+    else if (config < configs[guess])
+        {
+        upper = guess;
+        frac  = (configs[upper] - config) / (float)(configs[upper] - configs[lower]);
+        delta = 2 * (BigInt)(frac * (upper - lower));
+        if (delta < 2)  {delta = 2;}
+        guess = upper - delta;
+        if (guess < lower)  {guess = lower;}
+        while (config < configs[guess])
+            {
+            guess -= delta;
+            delta *= 2;
+            if (guess < lower)  {guess = lower;}
+            }
+        lower = guess;
+        }
+    else if (config > configs[guess])
+        {
+        lower = guess;
+        frac  = (config - configs[lower]) / (float)(configs[upper] - configs[lower]);
+        delta = 2 * (BigInt)(frac * (upper - lower));
+        if (delta < 2)  {delta = 2;}
+        guess = lower + delta;
+        if (guess > upper)  {guess = upper;}
+        while (config > configs[guess])
+            {
+            guess += delta;
+            delta *= 2;
+            if (guess > upper)  {guess = upper;}
+            }
+        upper = guess;
+        }
+    ***********************************************************************************/
+    // once bounded, perform the bisection search (this code works even if everything above is deleted ... including the top line, though that one makes things faster)
     while (upper-lower > 1)
         {
         PyInt half = (lower + upper) / 2;
@@ -47,7 +99,7 @@ PyInt bisect_search(BigInt config, BigInt* configs, PyInt lower, PyInt upper)
     else                                {return    -1;}
     }
 
-PyInt find_index(PyInt config, BigInt* configs, PyInt upper)  {return bisect_search((BigInt)config, configs, 0, upper);}
+PyInt find_index(PyInt config, BigInt* configs, PyInt n_configs)  {return bisect_search((BigInt)config, configs, 0, n_configs-1);}
 
 
 
@@ -62,15 +114,7 @@ void opPsi_1e(Double* op,            // tensor of matrix elements (integrals)
               PyFloat thresh,        // threshold for ignoring integrals and coefficients (avoiding expensive index search)
               PyInt   n_threads)     // number of OMP threads to spread the work over
     {
-    // omp, occ-emt ranges, factor of 4
-    //omp_set_dynamic(0);
     //omp_set_num_threads(nthd);
-    //#pragma omp parallel for
-            //#pragma omp parallel for private(sorted_state, orig1, gd1_is_core, excited1, ex1_is_core, sign, state_index, h_value)
-                        //#pragma omp atomic
-            //#pragma omp parallel for private(sorted_state, orig1, gd1_is_core, orig2, gd2_is_core, excited1, excited2, index, sign, state_index, h_value)
-                                // #pragma omp parallel for
-                                    //#pragma omp atomic
 
     // "scratch" space that needs to be maximally n_orbs long
     // It helps to imagine arrays written right-to-left (opposite the natural direction
@@ -80,6 +124,7 @@ void opPsi_1e(Double* op,            // tensor of matrix elements (integrals)
     int empty[n_orbs];
     int cumulative_occ[n_orbs];
 
+    #pragma omp parallel for private(occupied, empty, cumulative_occ) num_threads(4)
     for (PyInt n=0; n<n_configs; n++)
         {
         int any_significant = 0;
@@ -122,7 +167,12 @@ void opPsi_1e(Double* op,            // tensor of matrix elements (integrals)
                             int permute = cumulative_occ[q] - cumulative_occ[p];
                             if (p>q)  {permute += 1;}    // correct for asymmetry in counting occs betweeen p and q
                             int phase = (permute%2) ? -1 : 1;
-                            for (v=vec_0; v<vec_0+n_vecs; v++)  {opPsi[v*n_configs+m] += phase * op_pq * Psi[v*n_configs+n];}
+                            for (v=vec_0; v<vec_0+n_vecs; v++)
+                                {
+                                Double update = phase * op_pq * Psi[v*n_configs+n];
+                                #pragma omp atomic
+                                opPsi[v*n_configs+m] += update;
+                                }
                             }
                         }
                     }
@@ -144,15 +194,7 @@ void opPsi_2e(Double* op,            // tensor of matrix elements (integrals)
               PyFloat thresh,        // threshold for ignoring integrals and coefficients (avoiding expensive index search)
               PyInt   n_threads)     // number of OMP threads to spread the work over
     {
-    // omp, occ-emt ranges, factor of 4
-    //omp_set_dynamic(0);
     //omp_set_num_threads(nthd);
-    //#pragma omp parallel for
-            //#pragma omp parallel for private(sorted_state, orig1, gd1_is_core, excited1, ex1_is_core, sign, state_index, h_value)
-                        //#pragma omp atomic
-            //#pragma omp parallel for private(sorted_state, orig1, gd1_is_core, orig2, gd2_is_core, excited1, excited2, index, sign, state_index, h_value)
-                                // #pragma omp parallel for
-                                    //#pragma omp atomic
 
     // "scratch" space that needs to be maximally n_orbs long
     // It helps to imagine arrays written right-to-left (opposite the natural direction
@@ -162,6 +204,7 @@ void opPsi_2e(Double* op,            // tensor of matrix elements (integrals)
     int empty[n_orbs];
     int cumulative_occ[n_orbs];
 
+    #pragma omp parallel for private(occupied, empty, cumulative_occ) num_threads(4)
     for (PyInt n=0; n<n_configs; n++)
         {
         int any_significant = 0;
@@ -230,7 +273,12 @@ void opPsi_2e(Double* op,            // tensor of matrix elements (integrals)
                                     if (p>s)   {permute += 1;}    // one way that excitations can "cross"
                                     if (q<r)   {permute += 1;}    // another way they can "cross"
                                     int phase = (permute%2) ? -1 : 1;
-                                    for (v=vec_0; v<vec_0+n_vecs; v++)  {opPsi[v*n_configs+m] += phase * op_pqrs * Psi[v*n_configs+n];}
+                                    for (v=vec_0; v<vec_0+n_vecs; v++)
+                                        {
+                                        Double update = phase * op_pqrs * Psi[v*n_configs+n];
+                                        #pragma omp atomic
+                                        opPsi[v*n_configs+m] += update;
+                                        }
                                     }
                                 }
                             }

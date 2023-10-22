@@ -18,7 +18,7 @@
 
 import numpy
 from qode.util.PyC import import_C, Double
-field_op = import_C("field_op", flags="-O2 -lm")
+field_op = import_C("field_op", flags="-O3 -lm -fopenmp")
 
 
 
