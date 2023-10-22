@@ -27,10 +27,9 @@
 
 /*
  * Ideas for making this even better:
- * - faster "find" function (run through Ham once to make lookup table for each element)
  * - allow input about what ranges of creation/annihilation have nonzero elements
- * - insist integrals are antisymmetrized
- * - feed in integrals that account for frozen core and only use active configs
+ * - feed in integrals that account for frozen core while working only with active-space configs
+ * - faster "find" function (run through Ham once to make lookup table for each element)
  * - spin symmetry
  */
 
@@ -114,7 +113,7 @@ void opPsi_1e(Double* op,            // tensor of matrix elements (integrals)
               PyFloat thresh,        // threshold for ignoring integrals and coefficients (avoiding expensive index search)
               PyInt   n_threads)     // number of OMP threads to spread the work over
     {
-    //omp_set_num_threads(nthd);
+    omp_set_num_threads(n_threads);
 
     // "scratch" space that needs to be maximally n_orbs long
     // It helps to imagine arrays written right-to-left (opposite the natural direction
@@ -124,7 +123,7 @@ void opPsi_1e(Double* op,            // tensor of matrix elements (integrals)
     int empty[n_orbs];
     int cumulative_occ[n_orbs];
 
-    #pragma omp parallel for private(occupied, empty, cumulative_occ) num_threads(4)
+    #pragma omp parallel for private(occupied, empty, cumulative_occ)
     for (PyInt n=0; n<n_configs; n++)
         {
         int any_significant = 0;
@@ -167,9 +166,10 @@ void opPsi_1e(Double* op,            // tensor of matrix elements (integrals)
                             int permute = cumulative_occ[q] - cumulative_occ[p];
                             if (p>q)  {permute += 1;}    // correct for asymmetry in counting occs betweeen p and q
                             int phase = (permute%2) ? -1 : 1;
+                            op_pq *= phase;
                             for (v=vec_0; v<vec_0+n_vecs; v++)
                                 {
-                                Double update = phase * op_pq * Psi[v*n_configs+n];
+                                Double update = op_pq * Psi[v*n_configs+n];
                                 #pragma omp atomic
                                 opPsi[v*n_configs+m] += update;
                                 }
@@ -183,7 +183,7 @@ void opPsi_1e(Double* op,            // tensor of matrix elements (integrals)
 
 
 
-void opPsi_2e(Double* op,            // tensor of matrix elements (integrals)
+void opPsi_2e(Double* op,            // tensor of matrix elements (integrals), assumed antisymmetrized
               Double* Psi,           // block of row vectors: input vectors to act on
               Double* opPsi,         // block of row vectors: incremented by output
               BigInt* configs,       // bitwise occupation strings stored as integers ... so, max 64 orbs for FCI ;-) [no checking here!]
@@ -194,7 +194,7 @@ void opPsi_2e(Double* op,            // tensor of matrix elements (integrals)
               PyFloat thresh,        // threshold for ignoring integrals and coefficients (avoiding expensive index search)
               PyInt   n_threads)     // number of OMP threads to spread the work over
     {
-    //omp_set_num_threads(nthd);
+    omp_set_num_threads(n_threads);
 
     // "scratch" space that needs to be maximally n_orbs long
     // It helps to imagine arrays written right-to-left (opposite the natural direction
@@ -204,7 +204,7 @@ void opPsi_2e(Double* op,            // tensor of matrix elements (integrals)
     int empty[n_orbs];
     int cumulative_occ[n_orbs];
 
-    #pragma omp parallel for private(occupied, empty, cumulative_occ) num_threads(4)
+    #pragma omp parallel for private(occupied, empty, cumulative_occ)
     for (PyInt n=0; n<n_configs; n++)
         {
         int any_significant = 0;
@@ -255,11 +255,7 @@ void opPsi_2e(Double* op,            // tensor of matrix elements (integrals)
                             // config.  We keep track of pp and qq separately to avoid
                             // confusing the inner loops, especially the bitwise
                             // configuration-changing mechanism.
-                            Double op_pqrs;
-                            op_pqrs  = op[((p*n_orbs + q)*n_orbs + r)*n_orbs + s];
-                            op_pqrs -= op[((p*n_orbs + q)*n_orbs + s)*n_orbs + r];
-                            op_pqrs -= op[((q*n_orbs + p)*n_orbs + r)*n_orbs + s];
-                            op_pqrs += op[((q*n_orbs + p)*n_orbs + s)*n_orbs + r];
+                            Double op_pqrs = 4 * op[((p*n_orbs + q)*n_orbs + r)*n_orbs + s];
                             if (fabs(op_pqrs) > thresh)
                                 {
                                 BigInt pqsr_config = psr_config ^ ((BigInt)1<<qq);
@@ -273,9 +269,10 @@ void opPsi_2e(Double* op,            // tensor of matrix elements (integrals)
                                     if (p>s)   {permute += 1;}    // one way that excitations can "cross"
                                     if (q<r)   {permute += 1;}    // another way they can "cross"
                                     int phase = (permute%2) ? -1 : 1;
+                                    op_pqrs *= phase;
                                     for (v=vec_0; v<vec_0+n_vecs; v++)
                                         {
-                                        Double update = phase * op_pqrs * Psi[v*n_configs+n];
+                                        Double update = op_pqrs * Psi[v*n_configs+n];
                                         #pragma omp atomic
                                         opPsi[v*n_configs+m] += update;
                                         }

@@ -39,8 +39,8 @@ class Hamiltonian(object):
                           num_vecs,         # how many vectors we are acting on simultaneously
                           len(configs),     # how many configurations are there (call signature is ok as long as PyInt not longer than BigInt)
                           self.thresh,      # threshold for ignoring integrals and coefficients (avoiding expensive index search)
-                          0)                # number of OMP threads to spread the work over (not currently used)
-        field_op.opPsi_2e(self.V,           # tensor of matrix elements (integrals)
+                          8)                # number of OMP threads to spread the work over (not currently used)
+        field_op.opPsi_2e(self.V,           # tensor of matrix elements (integrals), assumed antisymmetrized
                           Psi,              # block of row vectors: input vectors to act on
                           HPsi,             # block of row vectors: incremented by output
                           configs,          # bitwise occupation strings stored as integers ... so, max 64 orbs for FCI ;-) [no checking here!]
@@ -49,5 +49,5 @@ class Hamiltonian(object):
                           num_vecs,         # how many vectors we are acting on simultaneously
                           len(configs),     # how many configurations are there (call signature is ok as long as PyInt not longer than BigInt)
                           self.thresh,      # threshold for ignoring integrals and coefficients (avoiding expensive index search)
-                          0)                # number of OMP threads to spread the work over (not currently used)
+                          8)                # number of OMP threads to spread the work over (not currently used)
         return HPsi

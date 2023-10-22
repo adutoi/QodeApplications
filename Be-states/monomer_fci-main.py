@@ -82,6 +82,12 @@ H_1_MO = spatial_to_spin.one_electron_blocked(H_1_MO)
 V_1_MO = spatial_to_spin.two_electron_blocked(V_1_MO) / 2
 H_2_MO = spatial_to_spin.one_electron_blocked(H_2_MO)
 V_2_MO = spatial_to_spin.two_electron_blocked(V_2_MO) / 2
+V_1_MO -= V_1_MO.transpose(1,0,2,3)
+V_1_MO -= V_1_MO.transpose(0,1,3,2)
+V_1_MO /= 4
+V_2_MO -= V_2_MO.transpose(1,0,2,3)
+V_2_MO -= V_2_MO.transpose(0,1,3,2)
+V_2_MO /= 4
 
 
 
