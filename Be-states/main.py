@@ -31,8 +31,9 @@ import configurations
 
 class _empty(object):  pass
 
+n_threads = 1
 dist = float(sys.argv[1])
-
+if len(sys.argv)==3:  n_threads = int(sys.argv[2])
 
 
 frag0 = _empty()
@@ -88,7 +89,7 @@ N, S, T, U, V = nuc_rep[0,0], symm_ints.S[0,0], symm_ints.T[0,0], symm_ints.U[0,
 h = T + U
 
 CI_space_atom = qode.math.linear_inner_product_space(CI_space_traits(configs_atom))
-H     = CI_space_atom.lin_op(field_op_ham.Hamiltonian(h,V))
+H     = CI_space_atom.lin_op(field_op_ham.Hamiltonian(h,V, n_threads=n_threads))
 guess = CI_space_atom.member(CI_space_atom.aux.basis_vec("000000011000000011"))
 
 print((guess|H|guess) + N)
@@ -132,7 +133,7 @@ for p in orbs:
                 if (q in core) and (q!=r) and (q!=s):  V[p,q,r,s] = 0
 
 CI_space_dimer = qode.math.linear_inner_product_space(CI_space_traits(configs_dimer))
-H     = CI_space_dimer.lin_op(field_op_ham.Hamiltonian(h,V))
+H     = CI_space_dimer.lin_op(field_op_ham.Hamiltonian(h,V, n_threads=n_threads))
 guess = CI_space_dimer.member(CI_space_dimer.aux.basis_vec("000000011000000011000000011000000011"))
 
 print((guess|H|guess) + N)

@@ -46,7 +46,9 @@ def MO_transform(H, V, C):
 
 basis_string = "6-31G"
 
-dist = sys.argv[1]
+n_threads = 1
+dist = float(sys.argv[1])
+if len(sys.argv)==3:  n_threads = int(sys.argv[2])
 
 
 
@@ -65,7 +67,7 @@ n_elec_2 = 8
 Be_2 = """\
 Be
 Be  1  {distance:f}
-""".format(distance=float(dist))
+""".format(distance=dist)
 S_2, T_2, U_2, V_2, X_2 = integrals.AO_ints(Be_2, basis_string)
 H_2 = T_2 + U_2
 Enuc_2 = X_2.mol.nuclear_repulsion_energy()
@@ -102,7 +104,7 @@ up_configs_atom = configurations.all_configs(num_spat_orb_atom, num_elec_atom_up
 configs_atom    = configurations.tensor_product_configs([up_configs_atom,up_configs_atom], [num_spat_orb_atom,num_spat_orb_atom])
 
 CI_space_atom = qode.math.linear_inner_product_space(CI_space_traits(configs_atom))
-H     = CI_space_atom.lin_op(field_op_ham.Hamiltonian(H_1_MO, V_1_MO))
+H     = CI_space_atom.lin_op(field_op_ham.Hamiltonian(H_1_MO, V_1_MO, n_threads=n_threads))
 guess = CI_space_atom.member(CI_space_atom.aux.basis_vec("000000011000000011"))
 
 print((guess|H|guess))
@@ -122,7 +124,7 @@ up_configs_dimer = configurations.all_configs(num_spat_orb_dimer, num_elec_dimer
 configs_dimer    = configurations.tensor_product_configs([up_configs_dimer,up_configs_dimer], [num_spat_orb_dimer,num_spat_orb_dimer])
 
 CI_space_dimer = qode.math.linear_inner_product_space(CI_space_traits(configs_dimer))
-H     = CI_space_dimer.lin_op(field_op_ham.Hamiltonian(H_2_MO, V_2_MO))
+H     = CI_space_dimer.lin_op(field_op_ham.Hamiltonian(H_2_MO, V_2_MO, n_threads=n_threads))
 guess = CI_space_dimer.member(CI_space_dimer.aux.basis_vec("000000000000001111000000000000001111"))
 
 print((guess|H|guess) + Enuc_2)
