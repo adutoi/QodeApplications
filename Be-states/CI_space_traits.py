@@ -17,8 +17,9 @@
 #
 import numpy
 from qode.util.PyC import import_C, Double, BigInt
-field_op = import_C("field_op", flags="-O3 -lm -fopenmp")
-field_op.find_index.return_type(int)
+import field_op
+
+
 
 class _auxilliary(object):
     def __init__(self, parent):

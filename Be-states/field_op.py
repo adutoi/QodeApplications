@@ -18,6 +18,11 @@
 import numpy
 from qode.util.PyC import import_C, Double, BigInt
 
+# Import the C module in a python wrapper for external aesthetics and to avoid having compile
+# flags in multiple places (which points to a weakness in PyC that changing these does not
+# force a recompile and defining them inconsistently will silently just use the first one
+# imported.
+
 field_op = import_C("field_op", flags="-O3 -lm -fopenmp")
 field_op.find_index.return_type(int)
 
