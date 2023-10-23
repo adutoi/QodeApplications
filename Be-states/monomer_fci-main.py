@@ -121,7 +121,7 @@ num_elec_dimer_up  = num_elec_dimer - num_elec_dimer_dn
 
 dn_configs_dimer = configurations.all_configs(num_spat_orb_dimer, num_elec_dimer_dn-len(core_orb_dimer), frozen_occ_orbs=core_orb_dimer)
 up_configs_dimer = configurations.all_configs(num_spat_orb_dimer, num_elec_dimer_up-len(core_orb_dimer), frozen_occ_orbs=core_orb_dimer)
-configs_dimer    = configurations.tensor_product_configs([up_configs_dimer,up_configs_dimer], [num_spat_orb_dimer,num_spat_orb_dimer])
+configs_dimer    = configurations.tensor_product_configs([dn_configs_dimer,up_configs_dimer], [num_spat_orb_dimer,num_spat_orb_dimer])
 
 CI_space_dimer = qode.math.linear_inner_product_space(CI_space_traits(configs_dimer))
 H     = CI_space_dimer.lin_op(field_op_ham.Hamiltonian(H_2_MO, V_2_MO, n_threads=n_threads))
