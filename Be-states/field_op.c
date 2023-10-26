@@ -16,97 +16,133 @@
  *   along with QodeApplications.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <stdlib.h>       // exit()
-#include <stdio.h>        // fprintf(stderr, "...")
-#include <math.h>         // fabs()
-#include "PyC_types.h"
-
-#ifdef _OPENMP
-#include <omp.h>
-#endif
-
 /*
- * Ideas for making this even better:
+ * The basic operational principle is that an array of configurations is passed
+ * along with the state vectors (having the same length).  These configurations
+ * are bit strings, where each bit represents the occupation of an orbital.  The
+ * action of an operator is implemented by bit-fiddling copies of the configuration
+ * string to correspond to annihilation and creation operators, and then looking
+ * up where the (rephased) generated configuration falls in the output vector.
+ * This relies on the fact that the configuration strings are store in ascending
+ * order if their bit-sequences are interpreted as binary integers.
+ *
+ * On the inside of this code (which differs from the convention on the outside)
+ * we imagine the binary integers used to represent the configurations written
+ * in the usual way, with the low bit to the right.  Therefore, to make things
+ * conceptually consistent, it helps to imagine arrays written right-to-left
+ * (opposite the natural direction for a left-to-right reader), so that the axes
+ * of the integrals tensors associated with the same orbital sets as the bit
+ * strings run in the same direction.  This is particularly convenient for the
+ * *arrays* of configuration integers that need to be used to allow for systems
+ * with more orbitals than can fit in a single BigInt; the lowest-order bits (that
+ * is, the lowest-index orbitals) are represented in the 0-th element of such
+ * an array, and so on, so it helps to think of the 1-st element as being to the
+ * left of the 0-th, etc.  These configuration integers come in as one big block
+ * (to ensure they are contiguous for efficiency) and get chopped up as they are
+ * used.
+ *
+ * Ideas for making this better:
  * - allow input about what ranges of creation/annihilation have nonzero elements
  * - feed in integrals that account for frozen core while working only with active-space configs
  * - faster "find" function (run through Ham once to make lookup table for each element)
  * - spin symmetry
  */
 
+            // The configs array is packed such that components of each config are contiguous, with
+            // each of those then stored together consecutively and contiguously under one pointer.
+            // Internally, the high-order components of each config follow the low-order components
+            // (ie, the 1-st follows the 0-th in storage, as usual), despite what is said above about
+            // conceptualizing the arrays as written backwards.  We needed to choose between this
+            // small inconistency, or one where we interpret the << operator as a *rightward* bitshift
+            // or interpreting low-index components of a config array as high-order bits, and this seemed
+            // like the least of evils.  The inconsistency is not removable . . . yes it is, if all the storage is "backwards"
 
 
-PyInt bisect_search(BigInt config, BigInt* configs, PyInt lower, PyInt upper)
+#include <string.h>       // memcpy()
+#include <math.h>         // fabs()
+#include "PyC_types.h"    // PyInt, BigInt
+#ifdef _OPENMP
+#include <omp.h>
+#endif
+
+#include <stdio.h>        // fprintf(stderr, "...")  Can be eliminated when debugged
+
+
+
+// The number of orbitals represented by a single BigInt.
+// Self-standing function because needs to be accessible to python too for packing the configs arrays.
+PyInt orbs_per_configint()
     {
-    if ((config<configs[lower]) || (config>configs[upper]))  {return -1;}
-    /***********************************************************************************
-    // ********  The code appears to be just slightly faster *without* this ... but maybe context dependent?  so keep it around
-    // make a guess as to where roughly the config is in the index range
-    float  frac  = (config - configs[lower]) / (float)(configs[upper] - configs[lower]);
-    BigInt delta = (BigInt)(frac * (upper - lower));
-    BigInt guess = lower + delta;
-    if (guess < lower)  {guess = lower;}
-    if (guess > upper)  {guess = upper;}
-    // figuring that our guess was either too high or too low, try to bound it
-    if (config == configs[guess])
-        {
-        return guess;
-        }
-    else if (config < configs[guess])
-        {
-        upper = guess;
-        frac  = (configs[upper] - config) / (float)(configs[upper] - configs[lower]);
-        delta = 2 * (BigInt)(frac * (upper - lower));
-        if (delta < 2)  {delta = 2;}
-        guess = upper - delta;
-        if (guess < lower)  {guess = lower;}
-        while (config < configs[guess])
-            {
-            guess -= delta;
-            delta *= 2;
-            if (guess < lower)  {guess = lower;}
-            }
-        lower = guess;
-        }
-    else if (config > configs[guess])
-        {
-        lower = guess;
-        frac  = (config - configs[lower]) / (float)(configs[upper] - configs[lower]);
-        delta = 2 * (BigInt)(frac * (upper - lower));
-        if (delta < 2)  {delta = 2;}
-        guess = lower + delta;
-        if (guess > upper)  {guess = upper;}
-        while (config > configs[guess])
-            {
-            guess += delta;
-            delta *= 2;
-            if (guess > upper)  {guess = upper;}
-            }
-        upper = guess;
-        }
-    ***********************************************************************************/
-    // once bounded, perform the bisection search (this code works even if everything above is deleted ... including the top line, though that one makes things faster)
+    return 8 * sizeof(BigInt);    // pretty safe to assume a byte is 8 bits
+    }
+
+
+
+// The index of a config in an array of configs (given that each configuration requires n_configint BigInts).
+// Returns -1 if config not in configs.  The last two arguments are the inclusive initial bounds.
+// Also needs to be accessible to python.
+// This is where the time goes!!
+PyInt bisect_search(BigInt* config, BigInt* configs, PyInt n_configint, PyInt lower, PyInt upper)
+    {
+    PyInt   i, half;        // Get used repeatedly, ...
+    BigInt  deviation;      // ... so just declare once ...
+    BigInt* test_config;    // ... in the old-fashioned way.
+
+    // Note that we will only ever care if deviation is >, ==, or < zero.  Therefore,
+    // we test the high-order components of two configurations first and we only test
+    // the ones below it if those are equal.  Otherwise, we already have our answer.
+
+    // Make sure config is not below the lower bound
+    deviation = 0;
+    test_config = configs + (lower * n_configint);    // pointer arithmetic for start of test_config
+    for (i=n_configint-1; i>=0 && deviation==0; i--)  {deviation = config[i] - test_config[i];}
+    if (deviation < 0)  {return -1;}
+
+    // Make sure config is not above the upper bound
+    deviation = 0;
+    test_config = configs + (upper * n_configint);    // pointer arithmetic for start of test_config
+    for (i=n_configint-1; i>=0 && deviation==0; i--)  {deviation = config[i] - test_config[i];}
+    if (deviation > 0)  {return -1;}
+
+    // Narrow it down to a choice of one or two numbers.  So any time that the contents of this
+    // loop runs, there are at least three choices, so that half will not be one of the boundaries.
+    // It can happen that this loop ends with upper==lower, which just makes the two code blocks
+    // that follow redundant (but that will not lead to a wrong result).
     while (upper-lower > 1)
         {
-        PyInt half = (lower + upper) / 2;
-        BigInt deviation = config - configs[half];
-        if      (deviation == 0)  {return half;}
+        half = (lower + upper) / 2;
+        deviation = 0;
+        test_config = configs + (half * n_configint);    // pointer arithmetic for start of test_config
+        for (i=n_configint-1; i>=0 && deviation==0; i--)  {deviation = config[i] - test_config[i];}
+        if      (deviation == 0)  {return half;}         // only happens if all components equal
         else if (deviation  > 0)  {lower = half+1;}
         else                      {upper = half-1;}
         }
-    if      (config == configs[lower])  {return lower;}
-    else if (config == configs[upper])  {return upper;}
-    else                                {return    -1;}
-    }
 
-PyInt find_index(PyInt config, BigInt* configs, PyInt n_configs)  {return bisect_search((BigInt)config, configs, 0, n_configs-1);}
+    // If the config is the lower of the two (or one) choices, return that index.
+    deviation = 0;
+    test_config = configs + (lower * n_configint);    // pointer arithmetic for start of test_config
+    for (i=n_configint-1; i>=0 && deviation==0; i--)  {deviation = config[i] - test_config[i];}
+    if (deviation == 0)  {return lower;}              // only happens if all components equal
+
+    // If the config is the upper of the two (or one) choices, return that index.
+    deviation = 0;
+    test_config = configs + (upper * n_configint);    // pointer arithmetic for start of test_config
+    for (i=n_configint-1; i>=0 && deviation==0; i--)  {deviation = config[i] - test_config[i];}
+    if (deviation == 0)  {return upper;}              // only happens if all components equal
+
+    // Else, the default is to announce that the config is not in the configs array.
+    return -1;
+    }
 
 
 
 void opPsi_1e(Double* op,            // tensor of matrix elements (integrals)
               Double* Psi,           // block of row vectors: input vectors to act on
               Double* opPsi,         // block of row vectors: incremented by output
-              BigInt* configs,       // bitwise occupation strings stored as integers ... so, max 64 orbs for FCI ;-) [no checking here!]
-              PyInt   n_orbs,        // edge dimension of the integrals tensor.  cannot be bigger than the number of bits in a BigInt (64)
+              BigInt* configs,       // bitwise occupation strings stored as arrays of integers (packed in one contiguous block, per global comments above)
+              PyInt   n_configint,   // the number of BigInts needed to store a configuration
+              PyInt   n_orbs,        // edge dimension of the integrals tensor
               PyInt   vec_0,         // index of first vector in block to act upon
               PyInt   n_vecs,        // how many vectors we are acting on simultaneously
               PyInt   n_configs,     // how many configurations are there (call signature is ok as long as PyInt not longer than BigInt)
@@ -115,40 +151,51 @@ void opPsi_1e(Double* op,            // tensor of matrix elements (integrals)
     {
     omp_set_num_threads(n_threads);
 
-    // "scratch" space that needs to be maximally n_orbs long
-    // It helps to imagine arrays written right-to-left (opposite the natural direction
-    // for a left-to-right reader), so that they align with the convention of putting
-    // low-order bits on the right (in the integers used to represent confgurations).
-    int occupied[n_orbs];
-    int empty[n_orbs];
-    int cumulative_occ[n_orbs];
+    int n_bits  = orbs_per_configint();            // number of bits/orbitals in a BigInt
+    int n_bytes = n_configint * sizeof(BigInt);    // number of bytes in a config array (for memcpy)
 
-    #pragma omp parallel for private(occupied, empty, cumulative_occ)
+    // "scratch" space that needs to be maximally n_orbs long, allocated once (per thread)
+    int occupied[n_orbs];          // the orbitals that are occupied in a given configuration (not necessarily in order)
+    int empty[n_orbs];             // the orbitals that are empty    in a given configuration (not necessarily in order)
+    int cumulative_occ[n_orbs];    // the number of orbitals below a given index that are occupied (for phase calculations)
+    // "scratch" space for storing configurations generated by field-operator strings, allocated once (per thread)
+    BigInt    q_config[n_configint];
+    BigInt   pq_config[n_configint];
+
+    #pragma omp parallel for private(occupied, empty, cumulative_occ, q_config, pq_config)
     for (PyInt n=0; n<n_configs; n++)
         {
-        int any_significant = 0;
+        int any_significant = 0;    // ie, False.  There are no significant coefficients for this configuration in any vector
         int v = vec_0;
-        while (v<vec_0+n_vecs && !any_significant)
+        while (v<vec_0+n_vecs && !any_significant)    // loop over the vectors we are acting on
             {if (fabs(Psi[(v++)*n_configs+n]) > thresh)  {any_significant = 1;}}
 
-        if (any_significant)
+        if (any_significant)    // all of this is skipped if the configuration has no significan coefficiencts
             {
-            BigInt config = configs[n];
+            BigInt* config = configs + (n * n_configint);    // config[] is now an array of integers collectively holding the present configuration
 
-            int n_occ = 0;
-            int n_emt = 0;
+            int Q;    // integer quotient  (for repeated orbital<->bit mapping manipulations)
+            int R;    // integer remainder (for repeated orbital<->bit mapping manipulations)
+
+            int n_occ = 0;    // count the number of occupied orbitals (also acts as a running index for cataloging their indices)
+            int n_emt = 0;    // count the number of empty    orbitals (also acts as a running index for cataloging their indices)
             for (int i=0; i<n_orbs; i++)
                 {
-                cumulative_occ[i] = n_occ;    // before incrementing (so "not counting this orb")
-                if (((BigInt)1<<i) & config)  {occupied[n_occ++] = i;}
-                else                          {   empty[n_emt++] = i;}
+                cumulative_occ[i] = n_occ;    // before incrementing n_occ (so cumulative occupancy "not counting this orb")
+                Q = i / n_bits;                                              // Which component of config does orbital i belong to? ...
+                R = i % n_bits;                                              // ... and which bit does it correspond to in that component?
+                if (config[Q] & ((BigInt)1<<R))  {occupied[n_occ++] = i;}    // If bit R is "on" in component Q, it is occupied, ...
+                else                             {   empty[n_emt++] = i;}    // ... otherwise it is empty
                 }
 
             for (int q_=0; q_<n_occ; q_++)
                 {
-                int q = occupied[q_];
-                BigInt q_config = config ^ ((BigInt)1<<q);
-                empty[n_emt] = q;
+                int q = occupied[q_];                          // absolute index of the occupied orbital q
+                Q = q / n_bits;
+                R = q % n_bits;
+                memcpy(q_config, config, n_bytes);
+                q_config[Q] = q_config[Q] ^ ((BigInt)1<<R);    // a copy of the original configuration without orbital q
+                empty[n_emt] = q;                              // now q is empty (and loop limit below accounts for this)
                 for (int p_=0; p_<n_emt+1; p_++)
                     {
                     int p = empty[p_];
@@ -157,10 +204,13 @@ void opPsi_1e(Double* op,            // tensor of matrix elements (integrals)
                     // This therefore loops over all q and p that lead to a nonzero
                     // action on config.
                     Double op_pq = op[p*n_orbs + q];
-                    if (fabs(op_pq) > thresh)
+                    if (fabs(op_pq) > thresh)    // cull all of the inner operations if matrix element not significant
                         {
-                        BigInt pq_config = q_config ^ ((BigInt)1<<p);
-                        PyInt m = bisect_search(pq_config, configs, 0, n_configs-1);
+                        Q = p / n_bits;
+                        R = p % n_bits;
+                        memcpy(pq_config, q_config, n_bytes);
+                        pq_config[Q] = pq_config[Q] ^ ((BigInt)1<<R);
+                        PyInt m = bisect_search(pq_config, configs, n_configint, 0, n_configs-1);    // THIS IS THE EXPENSIVE STEP!
                         if (m != -1)
                             {
                             int permute = cumulative_occ[q] - cumulative_occ[p];
@@ -186,8 +236,9 @@ void opPsi_1e(Double* op,            // tensor of matrix elements (integrals)
 void opPsi_2e(Double* op,            // tensor of matrix elements (integrals), assumed antisymmetrized
               Double* Psi,           // block of row vectors: input vectors to act on
               Double* opPsi,         // block of row vectors: incremented by output
-              BigInt* configs,       // bitwise occupation strings stored as integers ... so, max 64 orbs for FCI ;-) [no checking here!]
-              PyInt   n_orbs,        // edge dimension of the integrals tensor.  cannot be bigger than the number of bits in a BigInt (64)
+              BigInt* configs,       // bitwise occupation strings stored as arrays of integers (packed in one contiguous block, per global comments above)
+              PyInt   n_configint,   // the number of BigInts needed to store a configuration
+              PyInt   n_orbs,        // edge dimension of the integrals tensor
               PyInt   vec_0,         // index of first vector in block to act upon
               PyInt   n_vecs,        // how many vectors we are acting on simultaneously
               PyInt   n_configs,     // how many configurations are there (call signature is ok as long as PyInt not longer than BigInt)
@@ -196,49 +247,68 @@ void opPsi_2e(Double* op,            // tensor of matrix elements (integrals), a
     {
     omp_set_num_threads(n_threads);
 
-    // "scratch" space that needs to be maximally n_orbs long
-    // It helps to imagine arrays written right-to-left (opposite the natural direction
-    // for a left-to-right reader), so that they align with the convention of putting
-    // low-order bits on the right (in the integers used to represent confgurations).
-    int occupied[n_orbs];
-    int empty[n_orbs];
-    int cumulative_occ[n_orbs];
+    int n_bits  = orbs_per_configint();            // number of bits/orbitals in a BigInt
+    int n_bytes = n_configint * sizeof(BigInt);    // number of bytes in a config array (for memcpy)
 
-    #pragma omp parallel for private(occupied, empty, cumulative_occ)
+    // "scratch" space that needs to be maximally n_orbs long, allocated once (per thread)
+    int occupied[n_orbs];          // the orbitals that are occupied in a given configuration (not necessarily in order)
+    int empty[n_orbs];             // the orbitals that are empty    in a given configuration (not necessarily in order)
+    int cumulative_occ[n_orbs];    // the number of orbitals below a given index that are occupied (for phase calculations)
+    // "scratch" space for storing configurations generated by field-operator strings, allocated once (per thread)
+    BigInt    r_config[n_configint];
+    BigInt   sr_config[n_configint];
+    BigInt  psr_config[n_configint];
+    BigInt pqsr_config[n_configint];
+
+    #pragma omp parallel for private(occupied, empty, cumulative_occ, r_config, sr_config, psr_config, pqsr_config)
     for (PyInt n=0; n<n_configs; n++)
         {
-        int any_significant = 0;
+        int any_significant = 0;    // ie, False.  There are no significant coefficients for this configuration in any vector
         int v = vec_0;
-        while (v<vec_0+n_vecs && !any_significant)
+        while (v<vec_0+n_vecs && !any_significant)    // loop over the vectors we are acting on
             {if (fabs(Psi[(v++)*n_configs+n]) > thresh)  {any_significant = 1;}}
 
-        if (any_significant)
+        if (any_significant)    // all of this is skipped if the configuration has no significan coefficiencts
             {
-            BigInt config = configs[n];
+            BigInt* config = configs + (n * n_configint);    // config[] is now an array of integers collectively holding the present configuration
 
-            int n_occ = 0;
-            int n_emt = 0;
+            int Q;    // integer quotient  (for repeated orbital<->bit mapping manipulations)
+            int R;    // integer remainder (for repeated orbital<->bit mapping manipulations)
+
+            int n_occ = 0;    // count the number of occupied orbitals (also acts as a running index for cataloging their indices)
+            int n_emt = 0;    // count the number of empty    orbitals (also acts as a running index for cataloging their indices)
             for (int i=0; i<n_orbs; i++)
                 {
-                cumulative_occ[i] = n_occ;    // before incrementing (so "not counting this orb")
-                if (((BigInt)1<<i) & config)  {occupied[n_occ++] = i;}
-                else                          {   empty[n_emt++] = i;}
+                cumulative_occ[i] = n_occ;    // before incrementing n_occ (so cumulative occupancy "not counting this orb")
+                Q = i / n_bits;                                              // Which component of config does orbital i belong to? ...
+                R = i % n_bits;                                              // ... and which bit does it correspond to in that component?
+                if (config[Q] & ((BigInt)1<<R))  {occupied[n_occ++] = i;}    // If bit R is "on" in component Q, it is occupied, ...
+                else                             {   empty[n_emt++] = i;}    // ... otherwise it is empty
                 }
 
             for (int r_=0; r_<n_occ; r_++)
                 {
-                int r = occupied[r_];
-                BigInt r_config = config ^ ((BigInt)1<<r);
-                empty[n_emt] = r;
+                int r = occupied[r_];                          // absolute index of the occupied orbital r
+                Q = r / n_bits;
+                R = r % n_bits;
+                memcpy(r_config, config, n_bytes);
+                r_config[Q] = r_config[Q] ^ ((BigInt)1<<R);    // a copy of the original configuration without orbital r
+                empty[n_emt] = r;                              // now r is empty (and loop limits below account for this)
                 for (int s_=r_+1; s_<n_occ; s_++)
                     {
                     int s = occupied[s_];
-                    BigInt sr_config = r_config ^ ((BigInt)1<<s);
+                    Q = s / n_bits;
+                    R = s % n_bits;
+                    memcpy(sr_config, r_config, n_bytes);
+                    sr_config[Q] = sr_config[Q] ^ ((BigInt)1<<R);
                     empty[n_emt+1] = s;
                     for (int p_=0; p_<n_emt+2; p_++)
                         {
                         int pp = empty[p_];
-                        BigInt psr_config = sr_config ^ ((BigInt)1<<pp);
+                        Q = pp / n_bits;
+                        R = pp % n_bits;
+                        memcpy(psr_config, sr_config, n_bytes);
+                        psr_config[Q] = psr_config[Q] ^ ((BigInt)1<<R);
                         for (int q_=p_+1; q_<n_emt+2; q_++)
                             {
                             int qq = empty[q_];
@@ -255,11 +325,14 @@ void opPsi_2e(Double* op,            // tensor of matrix elements (integrals), a
                             // config.  We keep track of pp and qq separately to avoid
                             // confusing the inner loops, especially the bitwise
                             // configuration-changing mechanism.
-                            Double op_pqrs = 4 * op[((p*n_orbs + q)*n_orbs + r)*n_orbs + s];
-                            if (fabs(op_pqrs) > thresh)
+                            Double op_pqrs = 4 * op[((p*n_orbs + q)*n_orbs + r)*n_orbs + s];    // because integrals antisymmetrized
+                            if (fabs(op_pqrs) > thresh)    // cull all of the inner operations if matrix element not significant
                                 {
-                                BigInt pqsr_config = psr_config ^ ((BigInt)1<<qq);
-                                PyInt m = bisect_search(pqsr_config, configs, 0, n_configs-1);
+                                Q = qq / n_bits;
+                                R = qq % n_bits;
+                                memcpy(pqsr_config, psr_config, n_bytes);
+                                pqsr_config[Q] = pqsr_config[Q] ^ ((BigInt)1<<R);
+                                PyInt m = bisect_search(pqsr_config, configs, n_configint, 0, n_configs-1);    // THIS IS THE EXPENSIVE STEP!
                                 if (m != -1)
                                     {
                                     int permute = (cumulative_occ[r] - cumulative_occ[p]) + (cumulative_occ[s] - cumulative_occ[q]);

@@ -24,8 +24,23 @@ from qode.util.PyC import import_C, Double, BigInt
 # imported.
 
 field_op = import_C("field_op", flags="-O3 -lm -fopenmp")
-field_op.find_index.return_type(int)
+field_op.orbs_per_configint.return_type(int)
+field_op.bisect_search.return_type(int)
 
-find_index = field_op.find_index
+num_bits = field_op.orbs_per_configint()
+
 opPsi_1e   = field_op.opPsi_1e
 opPsi_2e   = field_op.opPsi_2e
+
+
+class packed_configs(object):
+    def __init__(self, configs):
+        self.size = 1
+        self.length = len(configs)
+        self.array = numpy.array(configs, dtype=BigInt.numpy)
+    def __len__(self):
+        return self.length
+
+def find_index(config, configs):
+    C_config = numpy.array([config], dtype=BigInt.numpy)
+    return field_op.bisect_search(C_config, configs.array, configs.size, 0, len(configs)-1)

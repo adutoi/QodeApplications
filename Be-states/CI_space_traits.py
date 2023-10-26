@@ -16,7 +16,7 @@
 #    along with QodeApplications.  If not, see <http://www.gnu.org/licenses/>.
 #
 import numpy
-from qode.util.PyC import import_C, Double, BigInt
+from qode.util.PyC import Double, BigInt
 import field_op
 
 
@@ -25,18 +25,17 @@ class _auxilliary(object):
     def __init__(self, parent):
         self.parent = parent
     def basis_vec(self, config):
-        configs = self.parent.configs    # access at call time because parent not completely set up at init time (could be here, but advertising a general pattern)
-        v = numpy.zeros((1,len(configs)), dtype=Double.numpy)    # nominally a matrix bc Hamiltonian supports block action
         config = int(config, 2)    # config comes in as a string literal of 0 and 1 characters
-        index  = field_op.find_index(config, configs, len(configs))
+        index  = field_op.find_index(config, self.parent.configs)
+        v = numpy.zeros((1,len(self.parent.configs)), dtype=Double.numpy)    # nominally a matrix bc Hamiltonian supports block action
         v[0,index] = 1
         return v
 
 class CI_space_traits(object):
     def __init__(self, configs):
-        self.field = numpy.float64
+        self.field = Double.numpy
         self.aux = _auxilliary(self)
-        self.configs = numpy.array(configs, dtype=BigInt.numpy)
+        self.configs = field_op.packed_configs(configs)
     def check_member(self,v):
         pass
     def check_lin_op(self,op):

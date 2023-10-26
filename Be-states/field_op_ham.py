@@ -36,7 +36,8 @@ class Hamiltonian(object):
         field_op.opPsi_1e(self.h,            # tensor of matrix elements (integrals)
                           Psi,               # block of row vectors: input vectors to act on
                           HPsi,              # block of row vectors: incremented by output
-                          configs,           # bitwise occupation strings stored as integers ... so, max 64 orbs for FCI ;-) [no checking here!]
+                          configs.array,     # bitwise occupation strings stored as integers ... so, max 64 orbs for FCI ;-) [no checking here!]
+                          configs.size,
                           num_spin_orbs,     # edge dimension of the integrals tensor.  cannot be bigger than the number of bits in a BigInt (64)
                           vec_0,             # index of first vector in block to act upon
                           num_vecs,          # how many vectors we are acting on simultaneously
@@ -46,7 +47,8 @@ class Hamiltonian(object):
         field_op.opPsi_2e(self.V,            # tensor of matrix elements (integrals), assumed antisymmetrized
                           Psi,               # block of row vectors: input vectors to act on
                           HPsi,              # block of row vectors: incremented by output
-                          configs,           # bitwise occupation strings stored as integers ... so, max 64 orbs for FCI ;-) [no checking here!]
+                          configs.array,     # bitwise occupation strings stored as integers ... so, max 64 orbs for FCI ;-) [no checking here!]
+                          configs.size,
                           num_spin_orbs,     # edge dimension of the integrals tensor.  cannot be bigger than the number of bits in a BigInt (64)
                           vec_0,             # index of first vector in block to act upon
                           num_vecs,          # how many vectors we are acting on simultaneously
