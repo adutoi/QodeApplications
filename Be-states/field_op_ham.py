@@ -17,7 +17,7 @@
 #
 
 import numpy
-from qode.util.PyC import import_C, Double
+from qode.util.PyC import Double
 import field_op
 
 
@@ -36,7 +36,7 @@ class Hamiltonian(object):
         field_op.opPsi_1e(self.h,            # tensor of matrix elements (integrals)
                           Psi,               # block of row vectors: input vectors to act on
                           HPsi,              # block of row vectors: incremented by output
-                          configs.array,     # bitwise occupation strings stored as integers ... so, max 64 orbs for FCI ;-) [no checking here!]
+                          configs.packed,    # bitwise occupation strings stored as integers ... so, max 64 orbs for FCI ;-) [no checking here!]
                           configs.size,
                           num_spin_orbs,     # edge dimension of the integrals tensor.  cannot be bigger than the number of bits in a BigInt (64)
                           vec_0,             # index of first vector in block to act upon
@@ -47,7 +47,7 @@ class Hamiltonian(object):
         field_op.opPsi_2e(self.V,            # tensor of matrix elements (integrals), assumed antisymmetrized
                           Psi,               # block of row vectors: input vectors to act on
                           HPsi,              # block of row vectors: incremented by output
-                          configs.array,     # bitwise occupation strings stored as integers ... so, max 64 orbs for FCI ;-) [no checking here!]
+                          configs.packed,    # bitwise occupation strings stored as integers ... so, max 64 orbs for FCI ;-) [no checking here!]
                           configs.size,
                           num_spin_orbs,     # edge dimension of the integrals tensor.  cannot be bigger than the number of bits in a BigInt (64)
                           vec_0,             # index of first vector in block to act upon

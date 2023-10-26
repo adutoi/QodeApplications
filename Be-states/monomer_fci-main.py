@@ -105,7 +105,7 @@ configs_atom    = configurations.tensor_product_configs([up_configs_atom,up_conf
 
 CI_space_atom = qode.math.linear_inner_product_space(CI_space_traits(configs_atom))
 H     = CI_space_atom.lin_op(field_op_ham.Hamiltonian(H_1_MO, V_1_MO, n_threads=n_threads))
-guess = CI_space_atom.member(CI_space_atom.aux.basis_vec("000000011000000011"))
+guess = CI_space_atom.member(CI_space_atom.aux.basis_vec([0,1,9,10]))
 
 print((guess|H|guess))
 (Eval,Evec), = qode.math.lanczos.lowest_eigen(H, [guess], thresh=1e-8)
@@ -125,7 +125,7 @@ configs_dimer    = configurations.tensor_product_configs([dn_configs_dimer,up_co
 
 CI_space_dimer = qode.math.linear_inner_product_space(CI_space_traits(configs_dimer))
 H     = CI_space_dimer.lin_op(field_op_ham.Hamiltonian(H_2_MO, V_2_MO, n_threads=n_threads))
-guess = CI_space_dimer.member(CI_space_dimer.aux.basis_vec("000000000000001111000000000000001111"))
+guess = CI_space_dimer.member(CI_space_dimer.aux.basis_vec([0,1,2,3,18,19,20,21]))
 
 print((guess|H|guess) + Enuc_2)
 (Eval,Evec), = qode.math.lanczos.lowest_eigen(H, [guess], thresh=1e-8)

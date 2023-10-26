@@ -35,12 +35,12 @@ opPsi_2e   = field_op.opPsi_2e
 
 class packed_configs(object):
     def __init__(self, configs):
-        self.size = 1
         self.length = len(configs)
-        self.array = numpy.array(configs, dtype=BigInt.numpy)
+        self.size = 1
+        self.packed = numpy.array(configs, dtype=BigInt.numpy)
     def __len__(self):
         return self.length
 
 def find_index(config, configs):
-    C_config = numpy.array([config], dtype=BigInt.numpy)
-    return field_op.bisect_search(C_config, configs.array, configs.size, 0, len(configs)-1)
+    packed_config = numpy.array([config], dtype=BigInt.numpy)
+    return field_op.bisect_search(packed_config, configs.packed, configs.size, 0, len(configs)-1)

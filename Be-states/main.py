@@ -90,7 +90,7 @@ h = T + U
 
 CI_space_atom = qode.math.linear_inner_product_space(CI_space_traits(configs_atom))
 H     = CI_space_atom.lin_op(field_op_ham.Hamiltonian(h,V, n_threads=n_threads))
-guess = CI_space_atom.member(CI_space_atom.aux.basis_vec("000000011000000011"))
+guess = CI_space_atom.member(CI_space_atom.aux.basis_vec([0,1,9,10]))
 
 print((guess|H|guess) + N)
 (Eval,Evec), = qode.math.lanczos.lowest_eigen(H, [guess], thresh=1e-8)
@@ -134,7 +134,7 @@ for p in orbs:
 
 CI_space_dimer = qode.math.linear_inner_product_space(CI_space_traits(configs_dimer))
 H     = CI_space_dimer.lin_op(field_op_ham.Hamiltonian(h,V, n_threads=n_threads))
-guess = CI_space_dimer.member(CI_space_dimer.aux.basis_vec("000000011000000011000000011000000011"))
+guess = CI_space_dimer.member(CI_space_dimer.aux.basis_vec([0,1,9,10,18,19,27,28]))
 
 print((guess|H|guess) + N)
 (Eval,Evec), = qode.math.lanczos.lowest_eigen(H, [guess], thresh=1e-8)

@@ -16,7 +16,7 @@
 #    along with QodeApplications.  If not, see <http://www.gnu.org/licenses/>.
 #
 import numpy
-from qode.util.PyC import Double, BigInt
+from qode.util.PyC import Double
 import field_op
 
 
@@ -24,8 +24,9 @@ import field_op
 class _auxilliary(object):
     def __init__(self, parent):
         self.parent = parent
-    def basis_vec(self, config):
-        config = int(config, 2)    # config comes in as a string literal of 0 and 1 characters
+    def basis_vec(self, occupied):
+        config = 0
+        for p in occupied:  config += 2**p
         index  = field_op.find_index(config, self.parent.configs)
         v = numpy.zeros((1,len(self.parent.configs)), dtype=Double.numpy)    # nominally a matrix bc Hamiltonian supports block action
         v[0,index] = 1
