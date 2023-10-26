@@ -15,6 +15,7 @@
 #    You should have received a copy of the GNU General Public License
 #    along with QodeApplications.  If not, see <http://www.gnu.org/licenses/>.
 #
+import math
 import numpy
 from qode.util.PyC import import_C, Double, BigInt
 
@@ -29,18 +30,30 @@ field_op.bisect_search.return_type(int)
 
 
 
-num_bits = field_op.orbs_per_configint()
+orbs_per_configint = field_op.orbs_per_configint()
 
 class packed_configs(object):
     def __init__(self, configs):
         self.length = len(configs)
-        self.size = 1
-        self.packed = numpy.array(configs, dtype=BigInt.numpy)
+        max_orbs  = math.floor(1 + math.log(configs[-1],2))
+        self.size = 1 + int(max_orbs)//orbs_per_configint
+        self.packed = numpy.zeros(self.length * self.size, dtype=BigInt.numpy)
+        reduction = 2**orbs_per_configint
+        for i,config in enumerate(configs):
+            reduced = config
+            for n in range(self.size):
+                self.packed[i*self.size + n] = reduced % reduction
+                reduced //= reduction
     def __len__(self):
         return self.length
 
 def find_index(config, configs):
-    packed_config = numpy.array([config], dtype=BigInt.numpy)
+    reduction = 2**orbs_per_configint
+    packed_config = numpy.zeros(configs.size, dtype=BigInt.numpy)
+    reduced = config
+    for n in range(configs.size):
+        packed_config[n] = reduced % reduction
+        reduced //= reduction
     return field_op.bisect_search(packed_config, configs.packed, configs.size, 0, len(configs)-1)
 
 def opPsi_1e(HPsi, Psi, h, vec_0, num_vecs, configs, thresh, n_threads):
