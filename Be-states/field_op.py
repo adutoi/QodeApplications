@@ -1,4 +1,4 @@
-#    (C) Copyright 2023 Anthony D. Dutoi
+#    (C) Copyright 2018, 2019, 2023 Yuhong Liu and Anthony Dutoi
 # 
 #    This file is part of QodeApplications.
 # 
@@ -27,11 +27,9 @@ field_op = import_C("field_op", flags="-O3 -lm -fopenmp")
 field_op.orbs_per_configint.return_type(int)
 field_op.bisect_search.return_type(int)
 
+
+
 num_bits = field_op.orbs_per_configint()
-
-opPsi_1e   = field_op.opPsi_1e
-opPsi_2e   = field_op.opPsi_2e
-
 
 class packed_configs(object):
     def __init__(self, configs):
@@ -44,3 +42,29 @@ class packed_configs(object):
 def find_index(config, configs):
     packed_config = numpy.array([config], dtype=BigInt.numpy)
     return field_op.bisect_search(packed_config, configs.packed, configs.size, 0, len(configs)-1)
+
+def opPsi_1e(HPsi, Psi, h, vec_0, num_vecs, configs, thresh, n_threads):
+    field_op.opPsi_1e(h,                 # tensor of matrix elements (integrals)
+                      Psi,               # block of row vectors: input vectors to act on
+                      HPsi,              # block of row vectors: incremented by output
+                      configs.packed,    # bitwise occupation strings stored as arrays of integers (see packed_configs above)
+                      configs.size,      # the number of BigInts needed to store a configuration
+                      h.shape[0],        # edge dimension of the integrals tensor
+                      vec_0,             # index of first vector in block to act upon
+                      num_vecs,          # how many vectors we are acting on simultaneously
+                      len(configs),      # how many configurations are there (call signature is ok as long as PyInt not longer than BigInt)
+                      thresh,            # threshold for ignoring integrals and coefficients (avoiding expensive index search)
+                      n_threads)         # number of OMP threads to spread the work over
+
+def opPsi_2e(HPsi, Psi, V, vec_0, num_vecs, configs, thresh, n_threads):
+    field_op.opPsi_2e(V,                 # tensor of matrix elements (integrals), assumed antisymmetrized
+                      Psi,               # block of row vectors: input vectors to act on
+                      HPsi,              # block of row vectors: incremented by output
+                      configs.packed,    # bitwise occupation strings stored as arrays of integers (see packed_configs above)
+                      configs.size,      # the number of BigInts needed to store a configuration
+                      V.shape[0],        # edge dimension of the integrals tensor
+                      vec_0,             # index of first vector in block to act upon
+                      num_vecs,          # how many vectors we are acting on simultaneously
+                      len(configs),      # how many configurations are there (call signature is ok as long as PyInt not longer than BigInt)
+                      thresh,            # threshold for ignoring integrals and coefficients (avoiding expensive index search)
+                      n_threads)         # number of OMP threads to spread the work over
