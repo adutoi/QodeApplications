@@ -73,7 +73,7 @@
 // Self-standing function because needs to be accessible to python too for packing the configs arrays.
 PyInt orbs_per_configint()
     {
-    return 8 * sizeof(BigInt);    // pretty safe to assume a byte is 8 bits
+    return 8*sizeof(BigInt) - 1;    // pretty safe to assume a byte is 8 bits.  Subtract 1 bit for sign.
     }
 
 
