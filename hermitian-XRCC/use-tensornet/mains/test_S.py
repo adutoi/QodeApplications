@@ -18,7 +18,7 @@
 
 # Usage:
 #     python [-u] <this-file.py> <displacement> <rhos>
-# where <rhos> can be the filestem of any one of the .pkl files in atomic_states/ prepared by Be631g.py.
+# where <rhos> can be the filestem of any one of the .pkl files in atomic_states/rho prepared by Be631g.py.
 
 import sys
 import pickle
@@ -50,7 +50,7 @@ class empty(object):  pass     # Basically just a dictionary class
 # Information about the Be2 supersystem
 n_frag       = 2
 displacement = float(sys.argv[1])
-states       = "atomic_states/{}.pkl".format(sys.argv[2])
+states       = "atomic_states/rho/{}.pkl".format(sys.argv[2])
 
 # "Assemble" the supersystem for the displaced fragments and get integrals
 BeN = []
@@ -99,7 +99,7 @@ for chg in dimer_charges:
                                              "s01s01s10s10", "s01s01s01s10"
                                             ]
                                         },  (0,1), dimer_charges[chg])
-    S2ref = numpy.load("atomic_states/aside/states/16-115-550/load=states:16-115-550:thresh=1e-6:4.5:u.pickle/4.5/S-{}.npy".format(chg))
+    S2ref = numpy.load("atomic_states/states/16-115-550/thresh=1e-6/4.5/S-{}.npy".format(chg))
     S2    -= numpy.identity(S2.shape[0])
     S2ref -= numpy.identity(S2.shape[0])
     print(" {:2d} ".format(chg), end="")
