@@ -94,6 +94,7 @@ for chg in states:
 
 
 print("rho computed, storing {} floating point numbers".format(mem_use))
+states_location = states_location.replace("/", ":")
 pickle.dump(Be, open("rho/Be631g-{}.pkl".format(states_location), "wb"))
 #from qode.math.tensornet import raw
 #numpy.save("test", raw(Be.rho["cccaa"][-1,0][0][0]))

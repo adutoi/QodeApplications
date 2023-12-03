@@ -20,6 +20,7 @@ import numpy
 class fci_space_traits_class(object):
 	def __init__(self):
 		self.field = numpy.float64
+		self.aux = None
 	def check_member(self,v):
 		pass
 	def check_lin_op(self,op):
