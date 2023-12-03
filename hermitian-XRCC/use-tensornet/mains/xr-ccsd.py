@@ -18,7 +18,7 @@
 
 # Usage:
 #     python [-u] <this-file.py> <displacement> <rhos>
-# where <rhos> can be the filestem of any one of the .pkl files in atomic_states/rho prepared by Be631g.py.
+# where <rhos> can be the filestem of any one of the .pkl files in atomic_states/ prepared by Be631g.py.
 
 import sys
 import pickle
@@ -50,7 +50,11 @@ class empty(object):  pass     # Basically just a dictionary class
 # Information about the Be2 supersystem
 n_frag       = 2
 displacement = float(sys.argv[1])
-states       = "atomic_states/rho/{}.pkl".format(sys.argv[2])
+states       = "atomic_states/{}.pkl".format(sys.argv[2])
+project_core = True
+if len(sys.argv)==4:
+    if sys.argv[3]=="no-proj":
+        project_core = False
 
 # "Assemble" the supersystem for the displaced fragments and get integrals
 BeN = []
@@ -60,7 +64,7 @@ for m in range(int(n_frag)):
     for elem,coords in Be.atoms:  coords[2] += m * displacement    # displace along z
     BeN += [Be]
 print("get_ints ...")
-symm_ints, bior_ints, nuc_rep = get_ints(BeN)
+symm_ints, bior_ints, nuc_rep = get_ints(BeN, project_core)
 print("done")
 
 # The engines that build the terms
