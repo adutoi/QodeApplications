@@ -29,8 +29,6 @@ from CI_space_traits import CI_space_traits
 import field_op_ham
 import configurations
 
-from qode.util.PyC import Double
-
 class _empty(object):  pass
 
 n_threads = 1
@@ -42,8 +40,8 @@ frag0 = _empty()
 frag0.atoms = [("Be",[0,0,0])]
 frag0.n_elec_ref = 4	# The number of electrons in the reference state of the monomer ("cation (+1)" and "anion (-1)" and technically interpreted relative to the reference, not zero, as would be the chemical definition)
 frag0.basis = _empty()
-frag0.basis.AOcode = "6-31G"
-frag0.basis.n_spatial_orb = 9
+frag0.basis.AOcode = "cc-pVTZ"
+frag0.basis.n_spatial_orb = 30
 frag0.basis.MOcoeffs = numpy.identity(frag0.basis.n_spatial_orb)    # rest of code assumes spin-restricted orbitals
 frag0.basis.core = [0]	# indices of spatial MOs to freeze in CI portions
 
@@ -70,8 +68,8 @@ frag1 = _empty()
 frag1.atoms = [("Be",[0,0,dist])]
 frag1.n_elec_ref = 4
 frag1.basis = _empty()
-frag1.basis.AOcode = "6-31G"
-frag1.basis.n_spatial_orb = 9
+frag1.basis.AOcode = "cc-pVTZ"
+frag1.basis.n_spatial_orb = 30
 frag1.basis.MOcoeffs = frag0.basis.MOcoeffs
 frag1.basis.core = [0]
 
@@ -90,24 +88,57 @@ configs_atom    = configurations.tensor_product_configs([up_configs_atom,up_conf
 N, S, T, U, V = nuc_rep[0,0], symm_ints.S[0,0], symm_ints.T[0,0], symm_ints.U[0,0,0], symm_ints.V[0,0,0,0]
 h = T + U
 
-
-shift = 60
-factor = 2**shift
-new_configs_atom = [config*factor for config in configs_atom]
-
-dim = h.shape[0]
-new_h = numpy.zeros((dim+shift,dim+shift), dtype=Double.numpy)
-new_V = numpy.zeros((dim+shift,dim+shift,dim+shift,dim+shift), dtype=Double.numpy)
-new_h[shift:shift+dim,shift:shift+dim] = h
-new_V[shift:shift+dim,shift:shift+dim,shift:shift+dim,shift:shift+dim] = V
-
-
-
-
-CI_space_atom = qode.math.linear_inner_product_space(CI_space_traits(new_configs_atom))
-H     = CI_space_atom.lin_op(field_op_ham.Hamiltonian(new_h,new_V, n_threads=n_threads))
-guess = CI_space_atom.member(CI_space_atom.aux.basis_vec([shift+0,shift+1,shift+9,shift+10]))
+CI_space_atom = qode.math.linear_inner_product_space(CI_space_traits(configs_atom))
+H     = CI_space_atom.lin_op(field_op_ham.Hamiltonian(h,V, n_threads=n_threads))
+guess = CI_space_atom.member(CI_space_atom.aux.basis_vec([0,1,30,31]))
 
 print((guess|H|guess) + N)
 (Eval,Evec), = qode.math.lanczos.lowest_eigen(H, [guess], thresh=1e-8)
 print("\nE_gs = {}\n".format(Eval+N))
+
+
+
+dimer_core = frag0.basis.core + [c+frag0.basis.n_spatial_orb for c in frag1.basis.core]
+
+dn_configs_dimer = configurations.all_configs(2*num_spatial_atom, 2*num_elec_atom_dn-len(dimer_core), frozen_occ_orbs=dimer_core)
+up_configs_dimer = configurations.all_configs(2*num_spatial_atom, 2*num_elec_atom_up-len(dimer_core), frozen_occ_orbs=dimer_core)
+dn_configs_decomp = configurations.decompose_configs(dn_configs_dimer, [num_spatial_atom, num_spatial_atom])
+up_configs_decomp = configurations.decompose_configs(up_configs_dimer, [num_spatial_atom, num_spatial_atom])
+combine_configs = configurations.config_combination([num_spatial_atom, num_spatial_atom])
+nested = []
+for config_dn1,configs_dn0 in dn_configs_decomp:
+    for config_up1,configs_up0 in up_configs_decomp:
+        config_1  = combine_configs([config_up1, config_dn1])
+        configs_0 = configurations.tensor_product_configs([configs_up0, configs_dn0], [num_spatial_atom, num_spatial_atom])
+        nested += [(config_1, configs_0)]
+configs_dimer = configurations.recompose_configs(nested, [2*num_spatial_atom, 2*num_spatial_atom])
+
+N = nuc_rep[0,0] + nuc_rep[1,1] + nuc_rep[0,1]
+T = unblock_2(    bior_ints.T, [frag0,frag1], spin_orbs=True)
+U = unblock_last2(bior_ints.U, [frag0,frag1], spin_orbs=True)
+V = unblock_4(    bior_ints.V, [frag0,frag1], spin_orbs=True)
+h = T + U[0] + U[1]
+
+core = dimer_core + [c+2*frag0.basis.n_spatial_orb for c in dimer_core]
+orbs = list(range(4*30))
+for p in orbs:
+    for q in orbs:
+        if (q in core) and (p!=q):  h[p,q] = 0
+        if (p in core) and (p!=q):  h[p,q] = 0
+        for r in orbs:
+            for s in orbs:
+                if (r in core) and (p!=r) and (q!=r):  V[p,q,r,s] = 0
+                if (s in core) and (p!=s) and (q!=s):  V[p,q,r,s] = 0
+                if (p in core) and (p!=r) and (p!=s):  V[p,q,r,s] = 0
+                if (q in core) and (q!=r) and (q!=s):  V[p,q,r,s] = 0
+
+CI_space_dimer = qode.math.linear_inner_product_space(CI_space_traits(configs_dimer))
+H     = CI_space_dimer.lin_op(field_op_ham.Hamiltonian(h,V, thresh=1e-9, n_threads=n_threads))
+guess = CI_space_dimer.member(CI_space_dimer.aux.basis_vec([0,1,30,31,60,61,90,91]))
+
+print((guess|H|guess) + N)
+(Eval,Evec), = qode.math.lanczos.lowest_eigen(H, [guess], thresh=1e-6)
+print("\nE_gs = {}\n".format(Eval+N))
+
+
+

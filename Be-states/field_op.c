@@ -165,12 +165,14 @@ void opPsi_1e(Double* op,            // tensor of matrix elements (integrals)
     #pragma omp parallel for private(occupied, empty, cumulative_occ, q_config, pq_config)
     for (PyInt n=0; n<n_configs; n++)
         {
-        int any_significant = 0;    // ie, False.  There are no significant coefficients for this configuration in any vector
-        int v = vec_0;
-        while (v<vec_0+n_vecs && !any_significant)    // loop over the vectors we are acting on
-            {if (fabs(Psi[(v++)*n_configs+n]) > thresh)  {any_significant = 1;}}
+        Double biggest = 0;                   // The biggest n-th component of all vectors being acted on
+        for (int v=vec_0; v<vec_0+n_vecs; v++)
+            {
+            Double size = fabs(Psi[v*n_configs + n]);
+            if (size > biggest)  {biggest = size;}
+            }
 
-        if (any_significant)    // all of this is skipped if the configuration has no significan coefficiencts
+        if (biggest > thresh)    // all of this is skipped if the configuration has no significan coefficiencts
             {
             BigInt* config = configs + (n * n_configint);    // config[] is now an array of integers collectively holding the present configuration
 
@@ -204,7 +206,7 @@ void opPsi_1e(Double* op,            // tensor of matrix elements (integrals)
                     // This therefore loops over all q and p that lead to a nonzero
                     // action on config.
                     Double op_pq = op[p*n_orbs + q];
-                    if (fabs(op_pq) > thresh)    // cull all of the inner operations if matrix element not significant
+                    if (fabs(op_pq)*biggest > thresh)    // cull all of the inner operations if action on at least one component is not significant
                         {
                         Q = p / n_bits;
                         R = p % n_bits;
@@ -217,7 +219,7 @@ void opPsi_1e(Double* op,            // tensor of matrix elements (integrals)
                             if (p>q)  {permute += 1;}    // correct for asymmetry in counting occs betweeen p and q
                             int phase = (permute%2) ? -1 : 1;
                             op_pq *= phase;
-                            for (v=vec_0; v<vec_0+n_vecs; v++)
+                            for (int v=vec_0; v<vec_0+n_vecs; v++)
                                 {
                                 Double update = op_pq * Psi[v*n_configs+n];
                                 #pragma omp atomic
@@ -263,12 +265,14 @@ void opPsi_2e(Double* op,            // tensor of matrix elements (integrals), a
     #pragma omp parallel for private(occupied, empty, cumulative_occ, r_config, sr_config, psr_config, pqsr_config)
     for (PyInt n=0; n<n_configs; n++)
         {
-        int any_significant = 0;    // ie, False.  There are no significant coefficients for this configuration in any vector
-        int v = vec_0;
-        while (v<vec_0+n_vecs && !any_significant)    // loop over the vectors we are acting on
-            {if (fabs(Psi[(v++)*n_configs+n]) > thresh)  {any_significant = 1;}}
+        Double biggest = 0;                   // The biggest n-th component of all vectors being acted on
+        for (int v=vec_0; v<vec_0+n_vecs; v++)
+            {
+            Double size = fabs(Psi[v*n_configs + n]);
+            if (size > biggest)  {biggest = size;}
+            }
 
-        if (any_significant)    // all of this is skipped if the configuration has no significan coefficiencts
+        if (biggest > thresh)    // all of this is skipped if the configuration has no significan coefficiencts
             {
             BigInt* config = configs + (n * n_configint);    // config[] is now an array of integers collectively holding the present configuration
 
@@ -326,7 +330,7 @@ void opPsi_2e(Double* op,            // tensor of matrix elements (integrals), a
                             // confusing the inner loops, especially the bitwise
                             // configuration-changing mechanism.
                             Double op_pqrs = 4 * op[((p*n_orbs + q)*n_orbs + r)*n_orbs + s];    // because integrals antisymmetrized
-                            if (fabs(op_pqrs) > thresh)    // cull all of the inner operations if matrix element not significant
+                            if (fabs(op_pqrs)*biggest > thresh)    // cull all of the inner operations if matrix element not significant
                                 {
                                 Q = qq / n_bits;
                                 R = qq % n_bits;
@@ -343,7 +347,7 @@ void opPsi_2e(Double* op,            // tensor of matrix elements (integrals), a
                                     if (q<r)   {permute += 1;}    // another way they can "cross"
                                     int phase = (permute%2) ? -1 : 1;
                                     op_pqrs *= phase;
-                                    for (v=vec_0; v<vec_0+n_vecs; v++)
+                                    for (int v=vec_0; v<vec_0+n_vecs; v++)
                                         {
                                         Double update = op_pqrs * Psi[v*n_configs+n];
                                         #pragma omp atomic
