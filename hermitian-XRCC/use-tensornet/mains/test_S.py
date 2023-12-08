@@ -18,7 +18,7 @@
 
 # Usage:
 #     python [-u] <this-file.py> <displacement> <rhos>
-# where <rhos> can be the filestem of any one of the .pkl files in atomic_states/ prepared by Be631g.py.
+# where <rhos> can be the filestem of any one of the .pkl files in atomic_states/rho prepared by Be631g.py.
 
 import sys
 import pickle
@@ -50,22 +50,15 @@ class empty(object):  pass     # Basically just a dictionary class
 # Information about the Be2 supersystem
 n_frag       = 2
 displacement = float(sys.argv[1])
-states       = "atomic_states/{}.pkl".format(sys.argv[2])
-project_core = True
-if len(sys.argv)==4:
-    if sys.argv[3]=="no-proj":
-        project_core = False
+states       = "atomic_states/rho/{}.pkl".format(sys.argv[2])
 
 # "Assemble" the supersystem for the displaced fragments and get integrals
 BeN = []
-print("load states ...")
 for m in range(int(n_frag)):
     Be = pickle.load(open(states,"rb"))
     for elem,coords in Be.atoms:  coords[2] += m * displacement    # displace along z
     BeN += [Be]
-print("get_ints ...")
-symm_ints, bior_ints, nuc_rep = get_ints(BeN, project_core)
-print("done")
+symm_ints, bior_ints, nuc_rep = get_ints(BeN)
 
 # The engines that build the terms
 BeN_rho = [frag.rho for frag in BeN]   # diagrammatic_expansion.blocks should take BeN directly? (n_states and n_elec one level higher)
@@ -94,106 +87,24 @@ all_dimer_charges = [(0,0), (0,+1), (0,-1), (+1,0), (+1,+1), (+1,-1), (-1,0), (-
 # Build and test
 #########
 
-print("starting H1")
-
-H1 = []
-for m in [0,1]:
-    H1_m  = XR_term.monomer_matrix(Sn_blocks, {
-                          1: [
-                              "n00"
-                             ]
-                         }, m, monomer_charges)
-
-    H1_m += XR_term.monomer_matrix(St_blocks_bior, {
-                          1: [
-                              "t00"
-                             ]
-                         }, m, monomer_charges)
-    H1_m += XR_term.monomer_matrix(Su_blocks_bior, {
-                          1: [
-                              "u000"
-                             ]
-                         }, m, monomer_charges)
-
-    H1_m += XR_term.monomer_matrix(Sv_blocks_bior, {
-                          1: [
-                              "v0000"
-                             ]
-                         }, m, monomer_charges)
-    H1 += [H1_m]
-
-
-print("starting S2")
-
-S2     = XR_term.dimer_matrix(S_blocks, {
-                        0: [
-                            "identity"
-                           ]
-                       },  (0,1), all_dimer_charges)
-
-S2inv = qode.math.precise_numpy_inverse(S2)
-
-
-
-print("starting S2H2")
-print("starting N")
-
-S2H2   = XR_term.dimer_matrix(Sn_blocks, {
-                        2: [
-                            "n01"
-                           ]
-                       }, (0,1), all_dimer_charges)
-
-print("starting T")
-S2H2  += XR_term.dimer_matrix(St_blocks_bior, {
-                        2: [
-                            "t01"
-                           ]
-                       }, (0,1), all_dimer_charges)
-print("starting U")
-S2H2  += XR_term.dimer_matrix(Su_blocks_bior, {
-                        2: [
-                            "u100",
-                            "u001", "u101"
-                           ]
-                       }, (0,1), all_dimer_charges)
-
-print("starting V")
-S2H2  += XR_term.dimer_matrix(Sv_blocks_bior, {
-                        2: [
-                            "v0101", "v0010", "v0100", "v0011"
-                           ]
-                       }, (0,1), all_dimer_charges)
-
-
-print("finished H build")
-
-H2blocked = S2inv @ S2H2
-
-# well, this sucks.  reorder the states
-dims0 = [BeN[0].rho['n_states'][chg] for chg in [0,+1,-1]]
-dims1 = [BeN[1].rho['n_states'][chg] for chg in [0,+1,-1]]
-mapping2 = [[None]*sum(dims0) for _ in range(sum(dims1))]
-idx = 0
-beg0 = 0
-for dim0 in dims0:
-    beg1 = 0
-    for dim1 in dims1:
-        for m in range(dim0):
-            for n in range(dim1):
-                mapping2[beg0+m][beg1+n] = idx
-                idx += 1
-        beg1 += dim1
-    beg0 += dim0
-mapping = []
-for m in range(sum(dims0)):
-    for n in range(sum(dims1)):
-        mapping += [mapping2[m][n]]
-H2 = numpy.zeros(H2blocked.shape)
-for i,i_ in enumerate(mapping):
-    for j,j_ in enumerate(mapping):
-        H2[i,j] = H2blocked[i_,j_]
-
-out, resources = qode.util.output(log=qode.util.textlog(echo=True)), qode.util.parallel.resources(1)
-E, T = excitonic.ccsd((H1,[[None,H2],[None,None]]), out, resources)
-out.log("\nTotal Excitonic CCSD Energy (test) = ", E)
+for chg in dimer_charges:
+    S2 = XR_term.dimer_matrix(S_blocks, {
+                                         0: [
+                                             "identity"
+                                            ],
+                                         2: [
+                                             "s01",
+                                             "s01s10", "s01s01",
+                                             "s01s01s10",
+                                             "s01s01s10s10", "s01s01s01s10"
+                                            ]
+                                        },  (0,1), dimer_charges[chg])
+    S2ref = numpy.load("atomic_states/states/16-115-550/thresh=1e-6/4.5/S-{}.npy".format(chg))
+    S2    -= numpy.identity(S2.shape[0])
+    S2ref -= numpy.identity(S2.shape[0])
+    print(" {:2d} ".format(chg), end="")
+    print("Frobenius norm of Sref:    {}".format(numpy.linalg.norm(S2ref)))
+    print("    ", end="")
+    print("Frobenius norm of S:       {}".format(numpy.linalg.norm(S2)))
+    print("    ", end="")
+    print("Frobenius norm of S-Sref:  {}".format(numpy.linalg.norm(S2-S2ref)))

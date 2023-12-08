@@ -9,7 +9,9 @@ mv ../S*_diagrams.py ../get_ints.py ../build_density_tensors.py ../deprecated
 cp  ./alt-diagrams/*  ./get_ints.py  ./build_density_tensors.py ./compress_tensors.py ..
 
 ### This changes the workflow so that density tensors are precomputed on disk.
-### First run Be631g.py as main inside atomic_states/.  Then use the new main scripts here.
+### First run Be631g.py as main inside atomic_states/.  Then use the new main scripts.
+mv    ../mains                    ../deprecated
+cp -r  ./mains                    ..
 mv    ../Be631g.py                ../deprecated
 cp     ./Be631g.py                ../atomic_states
 mv    ../density_tensors.c        ../atomic_states

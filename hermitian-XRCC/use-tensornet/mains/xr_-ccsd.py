@@ -51,6 +51,10 @@ class empty(object):  pass     # Basically just a dictionary class
 n_frag       = 2
 displacement = float(sys.argv[1])
 states       = "atomic_states/{}.pkl".format(sys.argv[2])
+project_core = True
+if len(sys.argv)==4:
+    if sys.argv[3]=="no-proj":
+        project_core = False
 
 # "Assemble" the supersystem for the displaced fragments and get integrals
 BeN = []
@@ -58,7 +62,7 @@ for m in range(int(n_frag)):
     Be = pickle.load(open(states,"rb"))
     for elem,coords in Be.atoms:  coords[2] += m * displacement    # displace along z
     BeN += [Be]
-symm_ints, bior_ints, nuc_rep = get_ints(BeN)
+symm_ints, bior_ints, nuc_rep = get_ints(BeN, project_core)
 
 # The engines that build the terms
 BeN_rho = [frag.rho for frag in BeN]   # diagrammatic_expansion.blocks should take BeN directly? (n_states and n_elec one level higher)
