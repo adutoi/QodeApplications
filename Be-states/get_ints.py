@@ -178,7 +178,7 @@ def get_ints(fragments, spin_ints=True):
         BiFragMO_ints = FragMO_ints
 
     if spin_ints:
-        FragMO_ints   = spin_orb_integrals(  FragMO_ints, rule_wrappers=[tensor_wrapper], cache=True)     # no need to cache? because each block only called once by contraction code
-        BiFragMO_ints = spin_orb_integrals(BiFragMO_ints, rule_wrappers=[tensor_wrapper], cache=True)     # no need to cache? because each block only called once by contraction code
+        FragMO_ints   = spin_orb_integrals(  FragMO_ints, "blocked", rule_wrappers=[tensor_wrapper], cache=True)     # no need to cache? because each block only called once by contraction code
+        BiFragMO_ints = spin_orb_integrals(BiFragMO_ints, "blocked", rule_wrappers=[tensor_wrapper], cache=True)     # no need to cache? because each block only called once by contraction code
 
     return FragMO_ints, BiFragMO_ints, Nuc_repulsion(fragments).matrix
