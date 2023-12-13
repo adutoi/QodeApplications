@@ -105,6 +105,7 @@ up_configs_dimer = configurations.all_configs(2*num_spatial_atom, 2*num_elec_ato
 dn_configs_decomp = configurations.decompose_configs(dn_configs_dimer, [num_spatial_atom, num_spatial_atom])
 up_configs_decomp = configurations.decompose_configs(up_configs_dimer, [num_spatial_atom, num_spatial_atom])
 combine_configs = configurations.config_combination([num_spatial_atom, num_spatial_atom])
+all_configs_1 = list()
 all_configs_0 = set()
 nested = []
 for config_dn1,configs_dn0 in dn_configs_decomp:
@@ -112,21 +113,37 @@ for config_dn1,configs_dn0 in dn_configs_decomp:
         config_1  = combine_configs([config_up1, config_dn1])
         configs_0 = configurations.tensor_product_configs([configs_up0, configs_dn0], [num_spatial_atom, num_spatial_atom])
         nested += [(config_1, configs_0)]
+        all_configs_1 += [config_1]
         all_configs_0 |= set(configs_0)
+all_configs_0 = list(all_configs_0)
 configs_dimer = configurations.recompose_configs(nested, [2*num_spatial_atom, 2*num_spatial_atom])
 
-all_configs_0 = sorted(list(all_configs_0))
+num_elec_dimer = frag0.n_elec_ref + frag1.n_elec_ref
+sorted_configs_1 = [[] for n in range(num_elec_dimer+1)]
+sorted_configs_0 = [[] for n in range(num_elec_dimer+1)]
+for config_1 in all_configs_1:
+    n = config_1.bit_count()
+    sorted_configs_1[n] += [config_1]
+sorted_configs_1 = [sorted(sorted_configs_1_n) for sorted_configs_1_n in sorted_configs_1]
+for config_0 in all_configs_0:
+    n = config_0.bit_count()
+    sorted_configs_0[n] += [config_0]
+sorted_configs_0 = [sorted(sorted_configs_0_n) for sorted_configs_0_n in sorted_configs_0]
+
+frag1_to_dimer = [[[] for _ in range(len(sorted_configs_1_n))] for sorted_configs_1_n in sorted_configs_1]
+frag0_to_dimer = [[[] for _ in range(len(sorted_configs_0_n))] for sorted_configs_0_n in sorted_configs_0]
 dimer_to_frags = []
-frag1_to_dimer = [[] for _ in range(len(nested))]
-frag0_to_dimer = [[] for _ in range(len(all_configs_0))]
-I = 0
-for i1,(config_1,configs_0) in enumerate(nested):
+P = 0
+for config_1,configs_0 in nested:
+    n1 = config_1.bit_count()
+    i1 = sorted_configs_1[n1].index(config_1)
     for config_0 in configs_0:
-        i0 = all_configs_0.index(config_0)
-        dimer_to_frags += [(i1,i0)]
-        frag1_to_dimer[i1] += [I]
-        frag0_to_dimer[i0] += [I]
-        I += 1
+        n0 = config_0.bit_count()
+        i0 = sorted_configs_0[n0].index(config_0)
+        dimer_to_frags += [((n1,i1),(n0,i0))]
+        frag1_to_dimer[n1][i1] += [P]
+        frag0_to_dimer[n0][i0] += [P]
+        P += 1
 
 N = nuc_rep[0,0] + nuc_rep[1,1] + nuc_rep[0,1]
 T = unblock_2(    bior_ints.T, [frag0,frag1], spin_orbs=True)
@@ -155,39 +172,41 @@ print((guess|H|guess) + N)
 (Eval,Evec), = qode.math.lanczos.lowest_eigen(H, [guess], thresh=1e-8)
 print("\nE_gs = {}\n".format(Eval+N))
 
-dim_1 = len(frag1_to_dimer)
-dim_0 = len(frag0_to_dimer)
-rho_1 = numpy.zeros((dim_1,dim_1))
-rho_0 = numpy.zeros((dim_0,dim_0))
-for K_list in frag1_to_dimer:
-    for I in K_list:
-        i1,i0 = dimer_to_frags[I]
-        for J in K_list:
-            j1,j0 = dimer_to_frags[J]
-            rho_0[i0,j0] += Evec.v[0,I] * Evec.v[0,J]    # should have i1==j1
-for K_list in frag0_to_dimer:
-    for I in K_list:
-        i1,i0 = dimer_to_frags[I]
-        for J in K_list:
-            j1,j0 = dimer_to_frags[J]
-            rho_1[i1,j1] += Evec.v[0,I] * Evec.v[0,J]    # should have i0==j0
-            if i0!=j0:  print("error")
+#frag1_to_dimer = [[[] for _ in range(len(sorted_configs_1_n))] for sorted_configs_1_n in sorted_configs_1]
+#frag0_to_dimer = [[[] for _ in range(len(sorted_configs_0_n))] for sorted_configs_0_n in sorted_configs_0]
 
-rho = (rho_1 + rho_0) / 2
-evals, evecs = qode.util.sort_eigen(numpy.linalg.eigh(rho), order="descending")
+dim_1 = [len(frag1_to_dimer_n) for frag1_to_dimer_n in frag1_to_dimer]
+dim_0 = [len(frag0_to_dimer_n) for frag0_to_dimer_n in frag0_to_dimer]
+rho_1 = [(numpy.zeros((dim_1_n,dim_1_n)) if dim_1_n>0 else None) for dim_1_n in dim_1]
+rho_0 = [(numpy.zeros((dim_0_n,dim_0_n)) if dim_0_n>0 else None) for dim_0_n in dim_0]
+for n in range(num_elec_dimer+1):
+    if rho_0[n] is not None:
+        for R_list in frag1_to_dimer[num_elec_dimer-n]:
+            for P in R_list:
+                (n_i1,i1),(n_i0,i0) = dimer_to_frags[P]
+                for Q in R_list:
+                    (n_j1,j1),(n_j0,j0) = dimer_to_frags[Q]
+                    rho_0[n][i0,j0] += Evec.v[0,P] * Evec.v[0,Q]    # should have n_i1==n_j1==num_elec_dimer-n and  i1==j1  and n_i0==n_j0==n
+    if rho_1[n] is not None:
+        for R_list in frag0_to_dimer[num_elec_dimer-n]:
+            for P in R_list:
+                (n_i1,i1),(n_i0,i0) = dimer_to_frags[P]
+                for Q in R_list:
+                    (n_j1,j1),(n_j0,j0) = dimer_to_frags[Q]
+                    rho_1[n][i1,j1] += Evec.v[0,P] * Evec.v[0,Q]    # should have n_i0==n_j0==num_elec_dimer-n and  i0==j0  and n_i1==n_j1==n
 
 thresh = 1e-6
 
-for i,e in enumerate(evals):
-    if e>thresh:
-        print(i)
-        n = None
-        for j,vj in enumerate(evecs[:,i]):
-            if abs(vj)>1e-10:
-                n_ = all_configs_0[j].bit_count()
-                if n is None:  n = n_
-                if n!=n_:  print("error")
-        print("   ", n)
+rho = {}
+for n in range(num_elec_dimer+1):
+    if rho_0[n] is not None:
+        rho[n] = (rho_1[n] + rho_0[n]) / 2    # relies on fragments being the same
+        evals, evecs = qode.util.sort_eigen(numpy.linalg.eigh(rho[n]), order="descending")
+        print(n)
+        i = 0
+        for e in evals:
+            if e>thresh:  i += 1
+        print("    ", i)
 
 
 
