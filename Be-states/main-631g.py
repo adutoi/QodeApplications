@@ -105,13 +105,28 @@ up_configs_dimer = configurations.all_configs(2*num_spatial_atom, 2*num_elec_ato
 dn_configs_decomp = configurations.decompose_configs(dn_configs_dimer, [num_spatial_atom, num_spatial_atom])
 up_configs_decomp = configurations.decompose_configs(up_configs_dimer, [num_spatial_atom, num_spatial_atom])
 combine_configs = configurations.config_combination([num_spatial_atom, num_spatial_atom])
+all_configs_0 = set()
 nested = []
 for config_dn1,configs_dn0 in dn_configs_decomp:
     for config_up1,configs_up0 in up_configs_decomp:
         config_1  = combine_configs([config_up1, config_dn1])
         configs_0 = configurations.tensor_product_configs([configs_up0, configs_dn0], [num_spatial_atom, num_spatial_atom])
         nested += [(config_1, configs_0)]
+        all_configs_0 |= set(configs_0)
 configs_dimer = configurations.recompose_configs(nested, [2*num_spatial_atom, 2*num_spatial_atom])
+
+all_configs_0 = sorted(list(all_configs_0))
+dimer_to_frags = []
+frag1_to_dimer = [[] for _ in range(len(nested))]
+frag0_to_dimer = [[] for _ in range(len(all_configs_0))]
+I = 0
+for i1,(config_1,configs_0) in enumerate(nested):
+    for config_0 in configs_0:
+        i0 = all_configs_0.index(config_0)
+        dimer_to_frags += [(i1,i0)]
+        frag1_to_dimer[i1] += [I]
+        frag0_to_dimer[i0] += [I]
+        I += 1
 
 N = nuc_rep[0,0] + nuc_rep[1,1] + nuc_rep[0,1]
 T = unblock_2(    bior_ints.T, [frag0,frag1], spin_orbs=True)
@@ -139,3 +154,40 @@ guess = CI_space_dimer.member(CI_space_dimer.aux.basis_vec([0,1,9,10,18,19,27,28
 print((guess|H|guess) + N)
 (Eval,Evec), = qode.math.lanczos.lowest_eigen(H, [guess], thresh=1e-8)
 print("\nE_gs = {}\n".format(Eval+N))
+
+dim_1 = len(frag1_to_dimer)
+dim_0 = len(frag0_to_dimer)
+rho_1 = numpy.zeros((dim_1,dim_1))
+rho_0 = numpy.zeros((dim_0,dim_0))
+for K_list in frag1_to_dimer:
+    for I in K_list:
+        i1,i0 = dimer_to_frags[I]
+        for J in K_list:
+            j1,j0 = dimer_to_frags[J]
+            rho_0[i0,j0] += Evec.v[0,I] * Evec.v[0,J]    # should have i1==j1
+for K_list in frag0_to_dimer:
+    for I in K_list:
+        i1,i0 = dimer_to_frags[I]
+        for J in K_list:
+            j1,j0 = dimer_to_frags[J]
+            rho_1[i1,j1] += Evec.v[0,I] * Evec.v[0,J]    # should have i0==j0
+            if i0!=j0:  print("error")
+
+rho = (rho_1 + rho_0) / 2
+evals, evecs = qode.util.sort_eigen(numpy.linalg.eigh(rho), order="descending")
+
+thresh = 1e-6
+
+for i,e in enumerate(evals):
+    if e>thresh:
+        print(i)
+        n = None
+        for j,vj in enumerate(evecs[:,i]):
+            if abs(vj)>1e-10:
+                n_ = all_configs_0[j].bit_count()
+                if n is None:  n = n_
+                if n!=n_:  print("error")
+        print("   ", n)
+
+
+
