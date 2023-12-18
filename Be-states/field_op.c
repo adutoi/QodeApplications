@@ -67,7 +67,8 @@
 
 #include <stdio.h>        // fprintf(stderr, "...")  Can be eliminated when debugged
 
-
+#define OP_ACTION 1
+#define COMPUTE_D 2
 
 // The number of orbitals represented by a single BigInt.
 // Self-standing function because needs to be accessible to python too for packing the configs arrays.
@@ -137,6 +138,124 @@ PyInt bisect_search(BigInt* config, BigInt* configs, PyInt n_configint, PyInt lo
 
 
 
+
+
+
+void resolve(
+int     mode,
+PyInt   n_create,
+PyInt   n_destroy,
+
+Double *op_tensor,
+PyInt   n_orbs,
+
+Double *Psi_left,
+Double *Psi_right,
+int     Psi_left_0,
+int     Psi_left_N,
+int     Psi_right_0,
+int     Psi_right_N,
+
+int*    occupied,
+int     n_occ,
+int     occ_0,
+int*    empty,
+int     n_emt,
+int     emt_0,
+int*    cum_occ,
+
+int     permute,
+BigInt* config,
+PyInt   config0_idx,
+
+BigInt* configs,
+PyInt   n_configs,
+PyInt   n_configint,
+
+BigInt  op_idx,
+BigInt  stride,
+PyFloat thresh,
+int     factor
+)
+    {
+    if (n_destroy != 0)
+        {
+        int    n_bits  = orbs_per_configint();            // number of bits/orbitals in a BigInt
+        int    n_bytes_config = n_configint * sizeof(BigInt);    // number of bytes in a config array (for memcpy)
+        int    n_bytes_cumocc = n_orbs * sizeof(int);
+        BigInt p_config[n_configint];
+        int    p_cum_occ[n_orbs];    // the number of orbitals at or below a given index that are occupied (for phase calculations)
+	for (int p_=occ_0; p_<n_occ; p_++)
+            {
+            int p = occupied[p_];                          // absolute index of the occupied orbital p
+            int Q = p / n_bits;
+            int R = p % n_bits;
+            int p_permute = permute + cum_occ[n_orbs-1] - cum_occ[p];
+            memcpy(p_config, config, n_bytes_config);
+            p_config[Q] = p_config[Q] ^ ((BigInt)1<<R);    // a copy of the original configuration without orbital q
+            memcpy(p_cum_occ, cum_occ, n_bytes_cumocc);
+            for (int i=p; i<n_orbs; i++) {p_cum_occ[i] -= 1;}
+            empty[n_emt] = p;                              // now q is empty (and loop limit below accounts for this)
+            resolve(mode, n_create, n_destroy-1, op_tensor, n_orbs, Psi_left, Psi_right, Psi_left_0, Psi_left_N, Psi_right_0, Psi_right_N, occupied, n_occ, p_+1, empty, n_emt+1, emt_0, p_cum_occ, p_permute, p_config, config0_idx, configs, n_configs, n_configint, op_idx+p*stride, stride*n_orbs, thresh, factor*n_destroy);
+            }
+        }
+    else if (n_create != 0)
+        {
+        int    n_bits  = orbs_per_configint();            // number of bits/orbitals in a BigInt
+        int    n_bytes_config = n_configint * sizeof(BigInt);    // number of bytes in a config array (for memcpy)
+        int    n_bytes_cumocc = n_orbs * sizeof(int);
+        BigInt p_config[n_configint];
+        int    p_cum_occ[n_orbs];    // the number of orbitals at or below a given index that are occupied (for phase calculations)
+	for (int p_=emt_0; p_<n_emt; p_++)
+            {
+            int p = empty[p_];                          // absolute index of the occupied orbital p
+            int Q = p / n_bits;
+            int R = p % n_bits;
+            int p_permute = permute + cum_occ[n_orbs-1] - cum_occ[p];
+            memcpy(p_config, config, n_bytes_config);
+            p_config[Q] = p_config[Q] ^ ((BigInt)1<<R);    // a copy of the original configuration without orbital q
+            memcpy(p_cum_occ, cum_occ, n_bytes_cumocc);
+            for (int i=p; i<n_orbs; i++) {p_cum_occ[i] += 1;}
+            resolve(mode, n_create-1, n_destroy, op_tensor, n_orbs, Psi_left, Psi_right, Psi_left_0, Psi_left_N, Psi_right_0, Psi_right_N, occupied, n_occ, occ_0, empty, n_emt, p_+1, p_cum_occ, p_permute, p_config, config0_idx, configs, n_configs, n_configint, op_idx+p*stride, stride*n_orbs, thresh, factor*n_create);
+            }
+        }
+    else
+        {
+        if (mode == OP_ACTION)
+            {
+            Double val = factor * op_tensor[op_idx];
+            if (fabs(val) > thresh)
+                {
+                PyInt op_config0_idx = bisect_search(config, configs, n_configint, 0, n_configs-1);    // THIS IS THE EXPENSIVE STEP!
+                if (op_config0_idx != -1)
+                    {
+                    int phase = (permute%2) ? -1 : 1;
+                    val *= phase;
+                    for (int v=Psi_right_0; v<Psi_right_N; v++)
+                        {
+                        Double update = val * Psi_right[v*n_configs + config0_idx];
+                        #pragma omp atomic
+                        Psi_left[v*n_configs + op_config0_idx] += update;
+                        }
+                    }
+                }
+            }
+        else  // mode == COMPUTE_D
+            {
+            }
+        }
+    return;
+    }
+
+
+
+
+
+
+
+
+
+
 void opPsi_1e(Double* op,            // tensor of matrix elements (integrals)
               Double* Psi,           // block of row vectors: input vectors to act on
               Double* opPsi,         // block of row vectors: incremented by output
@@ -150,23 +269,14 @@ void opPsi_1e(Double* op,            // tensor of matrix elements (integrals)
               PyInt   n_threads)     // number of OMP threads to spread the work over
     {
     omp_set_num_threads(n_threads);
-
-    int n_bits  = orbs_per_configint();            // number of bits/orbitals in a BigInt
-    int n_bytes = n_configint * sizeof(BigInt);    // number of bytes in a config array (for memcpy)
-
-    int n_bytes2 = n_orbs * sizeof(int);
+    int    n_bits  = orbs_per_configint();            // number of bits/orbitals in a BigInt
 
     // "scratch" space that needs to be maximally n_orbs long, allocated once (per thread)
-    int occupied[n_orbs];          // the orbitals that are occupied in a given configuration (not necessarily in order)
-    int empty[n_orbs];             // the orbitals that are empty    in a given configuration (not necessarily in order)
-    // "scratch" space for storing configurations generated by field-operator strings, allocated once (per thread)
-    BigInt    q_config[n_configint];
-    BigInt   pq_config[n_configint];
+    int occupied[n_orbs];   // the orbitals that are occupied in a given configuration (not necessarily in order)
+    int empty[n_orbs];      // the orbitals that are empty    in a given configuration (not necessarily in order)
+    int cum_occ[n_orbs];    // the number of orbitals below a given index that are occupied (for phase calculations)
 
-    int   cum_occ[n_orbs];    // the number of orbitals below a given index that are occupied (for phase calculations)
-    int q_cum_occ[n_orbs];    // the number of orbitals below a given index that are occupied (for phase calculations)
-
-    #pragma omp parallel for private(occupied, empty, cum_occ, q_cum_occ, q_config, pq_config)
+    #pragma omp parallel for private(occupied, empty, cum_occ)
     for (PyInt n=0; n<n_configs; n++)
         {
         Double biggest = 0;                   // The biggest n-th component of all vectors being acted on
@@ -180,64 +290,29 @@ void opPsi_1e(Double* op,            // tensor of matrix elements (integrals)
             {
             BigInt* config = configs + (n * n_configint);    // config[] is now an array of integers collectively holding the present configuration
 
-            int Q;    // integer quotient  (for repeated orbital<->bit mapping manipulations)
-            int R;    // integer remainder (for repeated orbital<->bit mapping manipulations)
-
             int n_occ = 0;    // count the number of occupied orbitals (also acts as a running index for cataloging their indices)
             int n_emt = 0;    // count the number of empty    orbitals (also acts as a running index for cataloging their indices)
             for (int i=0; i<n_orbs; i++)
                 {
-                Q = i / n_bits;                                              // Which component of config does orbital i belong to? ...
-                R = i % n_bits;                                              // ... and which bit does it correspond to in that component?
+                int Q = i / n_bits;                                              // Which component of config does orbital i belong to? ...
+                int R = i % n_bits;                                              // ... and which bit does it correspond to in that component?
                 if (config[Q] & ((BigInt)1<<R))  {occupied[n_occ++] = i;}    // If bit R is "on" in component Q, it is occupied, ...
                 else                             {   empty[n_emt++] = i;}    // ... otherwise it is empty
                 cum_occ[i] = n_occ;    // after incrementing n_occ (so cumulative occupancy "counting this orb")
                 }
 
-            for (int q_=0; q_<n_occ; q_++)
-                {
-                int q = occupied[q_];                          // absolute index of the occupied orbital q
-                Q = q / n_bits;
-                R = q % n_bits;
-                int q_permute = cum_occ[n_orbs-1] - cum_occ[q];
-                memcpy(q_config, config, n_bytes);
-                q_config[Q] = q_config[Q] ^ ((BigInt)1<<R);    // a copy of the original configuration without orbital q
-                memcpy(q_cum_occ, cum_occ, n_bytes2);
-                for (int i=q; i<n_orbs; i++) {q_cum_occ[i] -= 1;}
-                empty[n_emt] = q;                              // now q is empty (and loop limit below accounts for this)
-                for (int p_=0; p_<n_emt+1; p_++)
-                    {
-                    int p = empty[p_];
-                    // Interpret the component being looped over as the operator:
-                    //     op_pq * a+_p a_q
-                    // This therefore loops over all q and p that lead to a nonzero
-                    // action on config.
-                    Double op_pq = op[p*n_orbs + q];
-                    if (fabs(op_pq)*biggest > thresh)    // cull all of the inner operations if action on at least one component is not significant
-                        {
-                        Q = p / n_bits;
-                        R = p % n_bits;
-                        memcpy(pq_config, q_config, n_bytes);
-                        pq_config[Q] = pq_config[Q] ^ ((BigInt)1<<R);
-                        PyInt m = bisect_search(pq_config, configs, n_configint, 0, n_configs-1);    // THIS IS THE EXPENSIVE STEP!
-                        if (m != -1)
-                            {
-                            int pq_permute = q_permute + q_cum_occ[n_orbs-1] - q_cum_occ[p];
-                            int phase = (pq_permute%2) ? -1 : 1;
-                            op_pq *= phase;
-                            for (int v=vec_0; v<vec_0+n_vecs; v++)
-                                {
-                                Double update = op_pq * Psi[v*n_configs+n];
-                                #pragma omp atomic
-                                opPsi[v*n_configs+m] += update;
-                                }
-                            }
-                        }
-                    }
-                }
+            resolve(OP_ACTION, 1, 1, op, n_orbs, opPsi, Psi, vec_0, vec_0+n_vecs, vec_0, vec_0+n_vecs, occupied, n_occ, 0, empty, n_emt, 0, cum_occ, 0, config, n, configs, n_configs, n_configint, 0, 1, thresh/biggest, 1);
             }
         }
+    return;
     }
+
+
+
+
+
+
+
 
 
 
