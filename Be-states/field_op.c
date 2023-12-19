@@ -154,10 +154,8 @@ void resolve(int     mode,           // OP_ACTION or COMPUTE_D, depending on whe
              int     Psi_right_N,    // highest index to use in array Psi_right (for OP_ACTION, must have same number of states on left and right)
              int*    occupied,       // the orbitals that were occupied in the configuration at the *top* layer of recursion
              int     n_occ,          // the number of orbitals that were occupied at the *top* layer of recursion
-             int     occ_0,          // the first occupied orbital in the present loop (if a destruction operator)
              int*    empty,          // the orbitals that were empty (not necessarily in order) after the action of all the destruction operators
              int     n_emt,          // the number of orbitals that were empty after the action of all the destruction operators
-             int     emt_0,          // the orbital index with which to start the present loop over emptys (if creation)
              int*    cum_occ,        // the number of orbitals at or below a given absolute index that are occupied at present layer (for phase calculations)
              int     permute,        // keep track of the number of permutations associated with field-operator action (at present layer of recursion)
              BigInt* config,         // array of integers collectively holding the configuration being acted upon (at present layer of recursion)
@@ -168,47 +166,52 @@ void resolve(int     mode,           // OP_ACTION or COMPUTE_D, depending on whe
              BigInt  op_idx,         // recursively built index of the op_tensor array (must start as zero)
              BigInt  stride,         // the stride to be applied to each successive loop index in order to build op_idx
              PyFloat thresh,         // a threshold used to abort most expensive actions if not going to matter
-             int     factor)         // a symmetry factor to apply to matrix elements to avoid looping over redundant matrix elements (may come in as -1 to account for reordering)
+             int     factor, int p_0)         // a symmetry factor to apply to matrix elements to avoid looping over redundant matrix elements (may come in as -1 to account for reordering)
     {
-    if (n_destroy != 0)
+    if (n_destroy + n_create > 0)
         {
         int    n_bits  = orbs_per_configint();            // number of bits/orbitals in a BigInt
         int    n_bytes_config = n_configint * sizeof(BigInt);    // number of bytes in a config array (for memcpy)
         int    n_bytes_cumocc = n_orbs * sizeof(int);
         BigInt p_config[n_configint];
         int    p_cum_occ[n_orbs];    // the number of orbitals at or below a given index that are occupied (for phase calculations)
-	for (int p_=occ_0; p_<n_occ; p_++)
+        int    reset_p_0 = 0;
+        int p_n, delta;
+        int* orb_list;
+        int* other;
+        if (n_destroy > 0)
             {
-            int p = occupied[p_];                          // absolute index of the occupied orbital p
-            int Q = p / n_bits;
-            int R = p % n_bits;
-            int p_permute = permute + cum_occ[n_orbs-1] - cum_occ[p];
-            memcpy(p_config, config, n_bytes_config);
-            p_config[Q] = p_config[Q] ^ ((BigInt)1<<R);    // a copy of the original configuration without orbital q
-            memcpy(p_cum_occ, cum_occ, n_bytes_cumocc);
-            for (int i=p; i<n_orbs; i++) {p_cum_occ[i] -= 1;}
-            empty[n_emt] = p;                              // now q is empty (and loop limit below accounts for this)
-            resolve(mode, n_create, n_destroy-1, op_tensor, n_orbs, Psi_left, Psi_right, Psi_left_0, Psi_left_N, Psi_right_0, Psi_right_N, occupied, n_occ, p_+1, empty, n_emt+1, emt_0, p_cum_occ, p_permute, p_config, config0_idx, configs, n_configs, n_configint, op_idx+p*stride, stride*n_orbs, thresh, factor*n_destroy);
+            p_n = n_occ;
+            orb_list = occupied;
+            delta = -1;
+            other = empty + n_emt++;
+            factor *= n_destroy;
+            n_destroy--;
+            if (n_destroy == 0) {reset_p_0 = 1;}
             }
-        }
-    else if (n_create != 0)
-        {
-        int    n_bits  = orbs_per_configint();            // number of bits/orbitals in a BigInt
-        int    n_bytes_config = n_configint * sizeof(BigInt);    // number of bytes in a config array (for memcpy)
-        int    n_bytes_cumocc = n_orbs * sizeof(int);
-        BigInt p_config[n_configint];
-        int    p_cum_occ[n_orbs];    // the number of orbitals at or below a given index that are occupied (for phase calculations)
-	for (int p_=emt_0; p_<n_emt; p_++)
+	else
             {
-            int p = empty[p_];                          // absolute index of the occupied orbital p
+            p_n = n_emt;
+            orb_list = empty;
+            delta = +1;
+            other = occupied + n_occ++;
+            factor *= n_create;
+            n_create--;
+            }
+        for (int p_=p_0; p_<p_n; p_++)
+            {
+            int p = orb_list[p_];                          // absolute index of the occupied orbital p
             int Q = p / n_bits;
             int R = p % n_bits;
             int p_permute = permute + cum_occ[n_orbs-1] - cum_occ[p];
             memcpy(p_config, config, n_bytes_config);
             p_config[Q] = p_config[Q] ^ ((BigInt)1<<R);    // a copy of the original configuration without orbital q
             memcpy(p_cum_occ, cum_occ, n_bytes_cumocc);
-            for (int i=p; i<n_orbs; i++) {p_cum_occ[i] += 1;}
-            resolve(mode, n_create-1, n_destroy, op_tensor, n_orbs, Psi_left, Psi_right, Psi_left_0, Psi_left_N, Psi_right_0, Psi_right_N, occupied, n_occ, occ_0, empty, n_emt, p_+1, p_cum_occ, p_permute, p_config, config0_idx, configs, n_configs, n_configint, op_idx+p*stride, stride*n_orbs, thresh, factor*n_create);
+            for (int i=p; i<n_orbs; i++) {p_cum_occ[i] -= delta;}
+            int q_0 = p_ + 1;
+            if (reset_p_0)  {q_0 = 0;}
+            other[0] = p;                              // now q is empty (and loop limit below accounts for this)
+            resolve(mode, n_create, n_destroy, op_tensor, n_orbs, Psi_left, Psi_right, Psi_left_0, Psi_left_N, Psi_right_0, Psi_right_N, occupied, n_occ, empty, n_emt, p_cum_occ, p_permute, p_config, config0_idx, configs, n_configs, n_configint, op_idx+p*stride, stride*n_orbs, thresh, factor, q_0);
             }
         }
     else
@@ -265,8 +268,8 @@ void opPsi(PyInt   n_elec,        // electron order of the operator
     int    n_bits  = orbs_per_configint();            // number of bits/orbitals in a BigInt
 
     // "scratch" space that needs to be maximally n_orbs long, allocated once (per thread)
-    int occupied[n_orbs];   // the orbitals that are occupied in a given configuration (not necessarily in order)
-    int empty[n_orbs];      // the orbitals that are empty    in a given configuration (not necessarily in order)
+    int occupied[2*n_orbs];   // the orbitals that are occupied in a given configuration (not necessarily in order)
+    int empty[2*n_orbs];      // the orbitals that are empty    in a given configuration (not necessarily in order)
     int cum_occ[n_orbs];    // the number of orbitals below a given index that are occupied (for phase calculations)
 
     #pragma omp parallel for private(occupied, empty, cum_occ)
@@ -296,12 +299,12 @@ void opPsi(PyInt   n_elec,        // electron order of the operator
 
             if (n_elec == 1)
                {
-               resolve(OP_ACTION, 1, 1, op, n_orbs, opPsi, Psi, vec_0, vec_0+n_vecs, vec_0, vec_0+n_vecs, occupied, n_occ, 0, empty, n_emt, 0, cum_occ, 0, config, n, configs, n_configs, n_configint, 0, 1, thresh/biggest, 1);
+               resolve(OP_ACTION, 1, 1, op, n_orbs, opPsi, Psi, vec_0, vec_0+n_vecs, vec_0, vec_0+n_vecs, occupied, n_occ, empty, n_emt, cum_occ, 0, config, n, configs, n_configs, n_configint, 0, 1, thresh/biggest, 1, 0);
                }
             else if (n_elec == 2)
                {
                // mind the minus sign in the last argument!
-               resolve(OP_ACTION, 2, 2, op, n_orbs, opPsi, Psi, vec_0, vec_0+n_vecs, vec_0, vec_0+n_vecs, occupied, n_occ, 0, empty, n_emt, 0, cum_occ, 0, config, n, configs, n_configs, n_configint, 0, 1, thresh/biggest, -1);
+               resolve(OP_ACTION, 2, 2, op, n_orbs, opPsi, Psi, vec_0, vec_0+n_vecs, vec_0, vec_0+n_vecs, occupied, n_occ, empty, n_emt, cum_occ, 0, config, n, configs, n_configs, n_configint, 0, 1, thresh/biggest, -1, 0);
                }
             }
         }
