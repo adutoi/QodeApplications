@@ -248,17 +248,18 @@ void resolve(int     mode,           // OP_ACTION or COMPUTE_D, depending on whe
 
 
 
-void opPsi_1e(Double* op,            // tensor of matrix elements (integrals)
-              Double* Psi,           // block of row vectors: input vectors to act on
-              Double* opPsi,         // block of row vectors: incremented by output
-              BigInt* configs,       // bitwise occupation strings stored as arrays of integers (packed in one contiguous block, per global comments above)
-              PyInt   n_configint,   // the number of BigInts needed to store a configuration
-              PyInt   n_orbs,        // edge dimension of the integrals tensor
-              PyInt   vec_0,         // index of first vector in block to act upon
-              PyInt   n_vecs,        // how many vectors we are acting on simultaneously
-              PyInt   n_configs,     // how many configurations are there (call signature is ok as long as PyInt not longer than BigInt)
-              PyFloat thresh,        // threshold for ignoring integrals and coefficients (avoiding expensive index search)
-              PyInt   n_threads)     // number of OMP threads to spread the work over
+void opPsi(PyInt   n_elec,        // electron order of the operator
+           Double* op,            // tensor of matrix elements (integrals), assumed antisymmetrized
+           Double* Psi,           // block of row vectors: input vectors to act on
+           Double* opPsi,         // block of row vectors: incremented by output
+           BigInt* configs,       // bitwise occupation strings stored as arrays of integers (packed in one contiguous block, per global comments above)
+           PyInt   n_configint,   // the number of BigInts needed to store a configuration
+           PyInt   n_orbs,        // edge dimension of the integrals tensor
+           PyInt   vec_0,         // index of first vector in block to act upon
+           PyInt   n_vecs,        // how many vectors we are acting on simultaneously
+           PyInt   n_configs,     // how many configurations are there (call signature is ok as long as PyInt not longer than BigInt)
+           PyFloat thresh,        // threshold for ignoring integrals and coefficients (avoiding expensive index search)
+           PyInt   n_threads)     // number of OMP threads to spread the work over
     {
     omp_set_num_threads(n_threads);
     int    n_bits  = orbs_per_configint();            // number of bits/orbitals in a BigInt
@@ -293,61 +294,15 @@ void opPsi_1e(Double* op,            // tensor of matrix elements (integrals)
                 cum_occ[i] = n_occ;    // after incrementing n_occ (so cumulative occupancy "counting this orb")
                 }
 
-            resolve(OP_ACTION, 1, 1, op, n_orbs, opPsi, Psi, vec_0, vec_0+n_vecs, vec_0, vec_0+n_vecs, occupied, n_occ, 0, empty, n_emt, 0, cum_occ, 0, config, n, configs, n_configs, n_configint, 0, 1, thresh/biggest, 1);
-            }
-        }
-    return;
-    }
-
-
-
-void opPsi_2e(Double* op,            // tensor of matrix elements (integrals), assumed antisymmetrized
-              Double* Psi,           // block of row vectors: input vectors to act on
-              Double* opPsi,         // block of row vectors: incremented by output
-              BigInt* configs,       // bitwise occupation strings stored as arrays of integers (packed in one contiguous block, per global comments above)
-              PyInt   n_configint,   // the number of BigInts needed to store a configuration
-              PyInt   n_orbs,        // edge dimension of the integrals tensor
-              PyInt   vec_0,         // index of first vector in block to act upon
-              PyInt   n_vecs,        // how many vectors we are acting on simultaneously
-              PyInt   n_configs,     // how many configurations are there (call signature is ok as long as PyInt not longer than BigInt)
-              PyFloat thresh,        // threshold for ignoring integrals and coefficients (avoiding expensive index search)
-              PyInt   n_threads)     // number of OMP threads to spread the work over
-    {
-    omp_set_num_threads(n_threads);
-    int    n_bits  = orbs_per_configint();            // number of bits/orbitals in a BigInt
-
-    // "scratch" space that needs to be maximally n_orbs long, allocated once (per thread)
-    int occupied[n_orbs];          // the orbitals that are occupied in a given configuration (not necessarily in order)
-    int empty[n_orbs];             // the orbitals that are empty    in a given configuration (not necessarily in order)
-    int cum_occ[n_orbs];    // the number of orbitals below a given index that are occupied (for phase calculations)
-
-    #pragma omp parallel for private(occupied, empty, cum_occ)
-    for (PyInt n=0; n<n_configs; n++)
-        {
-        Double biggest = 0;                   // The biggest n-th component of all vectors being acted on
-        for (int v=vec_0; v<vec_0+n_vecs; v++)
-            {
-            Double size = fabs(Psi[v*n_configs + n]);
-            if (size > biggest)  {biggest = size;}
-            }
-
-        if (biggest > thresh)    // all of this is skipped if the configuration has no significan coefficiencts
-            {
-            BigInt* config = configs + (n * n_configint);    // config[] is now an array of integers collectively holding the present configuration
-
-            int n_occ = 0;    // count the number of occupied orbitals (also acts as a running index for cataloging their indices)
-            int n_emt = 0;    // count the number of empty    orbitals (also acts as a running index for cataloging their indices)
-            for (int i=0; i<n_orbs; i++)
-                {
-                int Q = i / n_bits;                                              // Which component of config does orbital i belong to? ...
-                int R = i % n_bits;                                              // ... and which bit does it correspond to in that component?
-                if (config[Q] & ((BigInt)1<<R))  {occupied[n_occ++] = i;}    // If bit R is "on" in component Q, it is occupied, ...
-                else                             {   empty[n_emt++] = i;}    // ... otherwise it is empty
-                cum_occ[i] = n_occ;    // after incrementing n_occ (so cumulative occupancy "counting this orb")
-                }
-
-            // mind the minus sign in the last argument!
-            resolve(OP_ACTION, 2, 2, op, n_orbs, opPsi, Psi, vec_0, vec_0+n_vecs, vec_0, vec_0+n_vecs, occupied, n_occ, 0, empty, n_emt, 0, cum_occ, 0, config, n, configs, n_configs, n_configint, 0, 1, thresh/biggest, -1);
+            if (n_elec == 1)
+               {
+               resolve(OP_ACTION, 1, 1, op, n_orbs, opPsi, Psi, vec_0, vec_0+n_vecs, vec_0, vec_0+n_vecs, occupied, n_occ, 0, empty, n_emt, 0, cum_occ, 0, config, n, configs, n_configs, n_configint, 0, 1, thresh/biggest, 1);
+               }
+            else if (n_elec == 2)
+               {
+               // mind the minus sign in the last argument!
+               resolve(OP_ACTION, 2, 2, op, n_orbs, opPsi, Psi, vec_0, vec_0+n_vecs, vec_0, vec_0+n_vecs, occupied, n_occ, 0, empty, n_emt, 0, cum_occ, 0, config, n, configs, n_configs, n_configint, 0, 1, thresh/biggest, -1);
+               }
             }
         }
     return;
