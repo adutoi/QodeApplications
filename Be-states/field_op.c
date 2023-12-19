@@ -168,21 +168,30 @@ void resolve(int     mode,           // OP_ACTION or COMPUTE_D, depending on whe
              PyFloat thresh,         // a threshold used to abort most expensive actions if not going to matter
              int     factor, int p_0)         // a symmetry factor to apply to matrix elements to avoid looping over redundant matrix elements (may come in as -1 to account for reordering)
     {
+    int    n_bits  = orbs_per_configint();            // number of bits/orbitals in a BigInt
+    int    n_bytes_config = n_configint * sizeof(BigInt);    // number of bytes in a config array (for memcpy)
+    BigInt p_config[n_configint];
+    int p_n;
+    int* orb_list;
+    if (n_destroy > 0)
+        {
+        p_n = n_occ;
+        orb_list = occupied;
+        }
+    else
+        {
+        p_n = n_emt;
+        orb_list = empty;
+        }
     if (n_destroy + n_create > 1)
         {
-        int    n_bits  = orbs_per_configint();            // number of bits/orbitals in a BigInt
-        int    n_bytes_config = n_configint * sizeof(BigInt);    // number of bytes in a config array (for memcpy)
         int    n_bytes_cumocc = n_orbs * sizeof(int);
-        BigInt p_config[n_configint];
         int    p_cum_occ[n_orbs];    // the number of orbitals at or below a given index that are occupied (for phase calculations)
         int    reset_p_0 = 0;
-        int p_n, delta;
-        int* orb_list;
+        int delta;
         int* other;
         if (n_destroy > 0)
             {
-            p_n = n_occ;
-            orb_list = occupied;
             delta = -1;
             other = empty + n_emt++;
             factor *= n_destroy;
@@ -191,8 +200,6 @@ void resolve(int     mode,           // OP_ACTION or COMPUTE_D, depending on whe
             }
 	else
             {
-            p_n = n_emt;
-            orb_list = empty;
             delta = +1;
             other = occupied + n_occ++;
             factor *= n_create;
@@ -216,21 +223,6 @@ void resolve(int     mode,           // OP_ACTION or COMPUTE_D, depending on whe
         }
     else if (mode == OP_ACTION)
         {
-        int    n_bits  = orbs_per_configint();            // number of bits/orbitals in a BigInt
-        int    n_bytes_config = n_configint * sizeof(BigInt);    // number of bytes in a config array (for memcpy)
-        BigInt p_config[n_configint];
-        int p_n;
-        int* orb_list;
-        if (n_destroy > 0)
-            {
-            p_n = n_occ;
-            orb_list = occupied;
-            }
-	else
-            {
-            p_n = n_emt;
-            orb_list = empty;
-            }
         for (int p_=p_0; p_<p_n; p_++)
             {
             int p = orb_list[p_];                          // absolute index of the occupied orbital p
