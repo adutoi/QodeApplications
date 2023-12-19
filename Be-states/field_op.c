@@ -168,7 +168,7 @@ void resolve(int     mode,           // OP_ACTION or COMPUTE_D, depending on whe
              PyFloat thresh,         // a threshold used to abort most expensive actions if not going to matter
              int     factor, int p_0)         // a symmetry factor to apply to matrix elements to avoid looping over redundant matrix elements (may come in as -1 to account for reordering)
     {
-    if (n_destroy + n_create > 0)
+    if (n_destroy + n_create > 1)
         {
         int    n_bits  = orbs_per_configint();            // number of bits/orbitals in a BigInt
         int    n_bytes_config = n_configint * sizeof(BigInt);    // number of bytes in a config array (for memcpy)
@@ -214,17 +214,38 @@ void resolve(int     mode,           // OP_ACTION or COMPUTE_D, depending on whe
             resolve(mode, n_create, n_destroy, op_tensor, n_orbs, Psi_left, Psi_right, Psi_left_0, Psi_left_N, Psi_right_0, Psi_right_N, occupied, n_occ, empty, n_emt, p_cum_occ, p_permute, p_config, config0_idx, configs, n_configs, n_configint, op_idx+p*stride, stride*n_orbs, thresh, factor, q_0);
             }
         }
-    else
+    else if (mode == OP_ACTION)
         {
-        if (mode == OP_ACTION)
+        int    n_bits  = orbs_per_configint();            // number of bits/orbitals in a BigInt
+        int    n_bytes_config = n_configint * sizeof(BigInt);    // number of bytes in a config array (for memcpy)
+        BigInt p_config[n_configint];
+        int p_n;
+        int* orb_list;
+        if (n_destroy > 0)
             {
-            Double val = factor * op_tensor[op_idx];
+            p_n = n_occ;
+            orb_list = occupied;
+            }
+	else
+            {
+            p_n = n_emt;
+            orb_list = empty;
+            }
+        for (int p_=p_0; p_<p_n; p_++)
+            {
+            int p = orb_list[p_];                          // absolute index of the occupied orbital p
+            Double val = factor * op_tensor[op_idx + p*stride];
             if (fabs(val) > thresh)
                 {
-                PyInt op_config0_idx = bisect_search(config, configs, n_configint, 0, n_configs-1);    // THIS IS THE EXPENSIVE STEP!
+                int Q = p / n_bits;
+                int R = p % n_bits;
+                memcpy(p_config, config, n_bytes_config);
+                p_config[Q] = p_config[Q] ^ ((BigInt)1<<R);    // a copy of the original configuration without orbital q
+                PyInt op_config0_idx = bisect_search(p_config, configs, n_configint, 0, n_configs-1);    // THIS IS THE EXPENSIVE STEP!
                 if (op_config0_idx != -1)
                     {
-                    int phase = (permute%2) ? -1 : 1;
+                    int p_permute = permute + cum_occ[n_orbs-1] - cum_occ[p];
+                    int phase = (p_permute%2) ? -1 : 1;
                     val *= phase;
                     for (int v=Psi_right_0; v<Psi_right_N; v++)
                         {
@@ -235,9 +256,9 @@ void resolve(int     mode,           // OP_ACTION or COMPUTE_D, depending on whe
                     }
                 }
             }
-        else  // mode == COMPUTE_D
-            {
-            }
+        }
+    else  // mode == COMPUTE_D
+        {
         }
     return;
     }
