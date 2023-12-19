@@ -141,42 +141,34 @@ PyInt bisect_search(BigInt* config, BigInt* configs, PyInt n_configint, PyInt lo
 
 
 
-void resolve(
-int     mode,
-PyInt   n_create,
-PyInt   n_destroy,
-
-Double *op_tensor,
-PyInt   n_orbs,
-
-Double *Psi_left,
-Double *Psi_right,
-int     Psi_left_0,
-int     Psi_left_N,
-int     Psi_right_0,
-int     Psi_right_N,
-
-int*    occupied,
-int     n_occ,
-int     occ_0,
-int*    empty,
-int     n_emt,
-int     emt_0,
-int*    cum_occ,
-
-int     permute,
-BigInt* config,
-PyInt   config0_idx,
-
-BigInt* configs,
-PyInt   n_configs,
-PyInt   n_configint,
-
-BigInt  op_idx,
-BigInt  stride,
-PyFloat thresh,
-int     factor
-)
+void resolve(int     mode,           // OP_ACTION or COMPUTE_D, depending on whether producing new states via operator action, or building densities
+             PyInt   n_create,       // number of creation operators in the strings looped over (always vacuum normal ordered)
+             PyInt   n_destroy,      // number of destruction operators in the strings looped over (always vacuum normal ordered)
+             Double *op_tensor,      // tensor of matrix elements (integrals) either read for OP_ACTION or produces for COMPUTE_D
+             PyInt   n_orbs,         // edge dimension of the integrals tensor
+             Double *Psi_left,       // the states being produced (LHS of equation) for OP_ACTION; states in the bra for COMPUTE_D
+             Double *Psi_right,      // the states being acted on (RHS of equation) for OP_ACTION; states in the ket for COMPUTE_D
+             int     Psi_left_0,     // lowest index to use in array Psi_left
+             int     Psi_left_N,     // highest index to use in array Psi_left
+             int     Psi_right_0,    // lowest index to use in array Psi_right
+             int     Psi_right_N,    // highest index to use in array Psi_right (for OP_ACTION, must have same number of states on left and right)
+             int*    occupied,       // the orbitals that were occupied in the configuration at the *top* layer of recursion
+             int     n_occ,          // the number of orbitals that were occupied at the *top* layer of recursion
+             int     occ_0,          // the first occupied orbital in the present loop (if a destruction operator)
+             int*    empty,          // the orbitals that were empty (not necessarily in order) after the action of all the destruction operators
+             int     n_emt,          // the number of orbitals that were empty after the action of all the destruction operators
+             int     emt_0,          // the orbital index with which to start the present loop over emptys (if creation)
+             int*    cum_occ,        // the number of orbitals at or below a given absolute index that are occupied at present layer (for phase calculations)
+             int     permute,        // keep track of the number of permutations associated with field-operator action (at present layer of recursion)
+             BigInt* config,         // array of integers collectively holding the configuration being acted upon (at present layer of recursion)
+             PyInt   config0_idx,    // index of the configuration being acted upon at the *top* layer of recursion
+             BigInt* configs,        // bitwise occupation strings stored as arrays of integers (packed in one contiguous block, per global comments above)
+             PyInt   n_configs,      // how many configurations are there
+             PyInt   n_configint,    // the number of BigInts needed to store a configuration
+             BigInt  op_idx,         // recursively built index of the op_tensor array (must start as zero)
+             BigInt  stride,         // the stride to be applied to each successive loop index in order to build op_idx
+             PyFloat thresh,         // a threshold used to abort most expensive actions if not going to matter
+             int     factor)         // a symmetry factor to apply to matrix elements to avoid looping over redundant matrix elements (may come in as -1 to account for reordering)
     {
     if (n_destroy != 0)
         {
