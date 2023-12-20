@@ -194,7 +194,7 @@ void resolve(int     mode,           // OP_ACTION or COMPUTE_D, depending on whe
             {
             delta = -1;
             other = empty + n_emt++;
-            factor *= n_destroy;
+            if (mode == OP_ACTION) {factor *= n_destroy;}
             n_destroy--;
             if (n_destroy == 0) {reset_p_0 = 1;}
             }
@@ -202,7 +202,7 @@ void resolve(int     mode,           // OP_ACTION or COMPUTE_D, depending on whe
             {
             delta = +1;
             other = occupied + n_occ++;
-            factor *= n_create;
+            if (mode == OP_ACTION) {factor *= n_create;}
             n_create--;
             }
         for (int p_=p_0; p_<p_n; p_++)
@@ -251,11 +251,37 @@ void resolve(int     mode,           // OP_ACTION or COMPUTE_D, depending on whe
         }
     else  // mode == COMPUTE_D
         {
+        int block_size = stride * n_orbs;
+        for (int p_=p_0; p_<p_n; p_++)
+            {
+            int p = orb_list[p_];                          // absolute index of the occupied orbital p
+            int p_op_idx = op_idx + p*stride;
+            int Q = p / n_bits;
+            int R = p % n_bits;
+            memcpy(p_config, config, n_bytes_config);
+            p_config[Q] = p_config[Q] ^ ((BigInt)1<<R);    // a copy of the original configuration without orbital q
+            PyInt op_config0_idx = bisect_search(p_config, configs, n_configint, 0, n_configs-1);    // THIS IS THE EXPENSIVE STEP!
+            if (op_config0_idx != -1)
+                {
+                int p_permute = permute + cum_occ[n_orbs-1] - cum_occ[p];
+                int phase = (p_permute%2) ? -1 : 1;
+                int offset = 0;
+                for (int vL=Psi_left_0; vL<Psi_left_N; vL++)
+                    {
+                    Double Z = phase * Psi_left[vL*n_configs + op_config0_idx];
+                    for (int vR=Psi_right_0; vR<Psi_right_N; vR++)
+                        {
+                        Double update = Z * Psi_right[vR*n_configs + config0_idx];
+                        #pragma omp atomic
+                        op_tensor[offset + op_idx]+= update;
+                        offset += block_size;
+                        }
+                    }
+                }
+            }
         }
     return;
     }
-
-
 
 
 
