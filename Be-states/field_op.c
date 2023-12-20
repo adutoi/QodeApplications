@@ -144,7 +144,7 @@ PyInt bisect_search(BigInt* config, BigInt* configs, PyInt n_configint, PyInt lo
 void resolve(int     mode,           // OP_ACTION or COMPUTE_D, depending on whether producing new states via operator action, or building densities
              PyInt   n_create,       // number of creation operators in the strings looped over (always vacuum normal ordered)
              PyInt   n_destroy,      // number of destruction operators in the strings looped over (always vacuum normal ordered)
-             Double *op_tensor,      // tensor of matrix elements (integrals) either read for OP_ACTION or produces for COMPUTE_D
+             Double **op_tensor,      // tensor of matrix elements (integrals) either read for OP_ACTION or produces for COMPUTE_D
              PyInt   n_orbs,         // edge dimension of the integrals tensor
              Double **Psi_left,       // the states being produced (LHS of equation) for OP_ACTION; states in the bra for COMPUTE_D
              Double **Psi_right,      // the states being acted on (RHS of equation) for OP_ACTION; states in the ket for COMPUTE_D
@@ -226,7 +226,7 @@ void resolve(int     mode,           // OP_ACTION or COMPUTE_D, depending on whe
         for (int p_=p_0; p_<p_n; p_++)
             {
             int p = orb_list[p_];                          // absolute index of the occupied orbital p
-            Double val = factor * op_tensor[op_idx + p*stride];
+            Double val = factor * op_tensor[0][op_idx + p*stride];
             if (fabs(val) > thresh)
                 {
                 int Q = p / n_bits;
@@ -251,7 +251,6 @@ void resolve(int     mode,           // OP_ACTION or COMPUTE_D, depending on whe
         }
     else  // mode == COMPUTE_D
         {
-        int block_size = stride * n_orbs;
         for (int p_=p_0; p_<p_n; p_++)
             {
             int p = orb_list[p_];                          // absolute index of the occupied orbital p
@@ -265,7 +264,7 @@ void resolve(int     mode,           // OP_ACTION or COMPUTE_D, depending on whe
                 {
                 int p_permute = permute + cum_occ[n_orbs-1] - cum_occ[p];
                 int phase = (p_permute%2) ? -1 : 1;
-                int offset = 0;
+                int block = 0;
                 for (int vL=Psi_left_0; vL<Psi_left_N; vL++)
                     {
                     Double Z = phase * Psi_left[vL][op_config0_idx];
@@ -273,8 +272,7 @@ void resolve(int     mode,           // OP_ACTION or COMPUTE_D, depending on whe
                         {
                         Double update = Z * Psi_right[vR][config0_idx];
                         #pragma omp atomic
-                        op_tensor[offset + op_idx]+= update;
-                        offset += block_size;
+                        op_tensor[block++][op_idx]+= update;
                         }
                     }
                 }
@@ -338,12 +336,12 @@ void opPsi(PyInt   n_elec,        // electron order of the operator
 
             if (n_elec == 1)
                {
-               resolve(OP_ACTION, 1, 1, op, n_orbs, opPsi, Psi, vec_0, vec_0+n_vecs, vec_0, vec_0+n_vecs, occupied, n_occ, empty, n_emt, cum_occ, 0, config, n, configs, n_configs, n_configint, 0, 1, thresh/biggest, 1, 0);
+               resolve(OP_ACTION, 1, 1, &op, n_orbs, opPsi, Psi, vec_0, vec_0+n_vecs, vec_0, vec_0+n_vecs, occupied, n_occ, empty, n_emt, cum_occ, 0, config, n, configs, n_configs, n_configint, 0, 1, thresh/biggest, 1, 0);
                }
             else if (n_elec == 2)
                {
                // mind the minus sign in the last argument!
-               resolve(OP_ACTION, 2, 2, op, n_orbs, opPsi, Psi, vec_0, vec_0+n_vecs, vec_0, vec_0+n_vecs, occupied, n_occ, empty, n_emt, cum_occ, 0, config, n, configs, n_configs, n_configint, 0, 1, thresh/biggest, -1, 0);
+               resolve(OP_ACTION, 2, 2, &op, n_orbs, opPsi, Psi, vec_0, vec_0+n_vecs, vec_0, vec_0+n_vecs, occupied, n_occ, empty, n_emt, cum_occ, 0, config, n, configs, n_configs, n_configint, 0, 1, thresh/biggest, -1, 0);
                }
             }
         }
