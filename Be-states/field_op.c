@@ -302,16 +302,16 @@ void opPsi(PyInt   n_elec,        // electron order of the operator
            PyInt   n_threads)     // number of OMP threads to spread the work over
     {
     omp_set_num_threads(n_threads);
-    int    n_bits  = orbs_per_configint();            // number of bits/orbitals in a BigInt
+    int n_bits = orbs_per_configint();            // number of bits/orbitals in a BigInt
 
-    // "scratch" space that needs to be maximally n_orbs long, allocated once (per thread)
-    int occupied[2*n_orbs];   // the orbitals that are occupied in a given configuration (not necessarily in order)
-    int empty[2*n_orbs];      // the orbitals that are empty    in a given configuration (not necessarily in order)
-    int cum_occ[n_orbs];    // the number of orbitals below a given index that are occupied (for phase calculations)
-
-    #pragma omp parallel for private(occupied, empty, cum_occ)
+    #pragma omp parallel for
     for (PyInt n=0; n<n_configs; n++)
         {
+        // "scratch" space that needs to be maximally n_orbs long, allocated once (per thread)
+        int occupied[n_orbs];   // the orbitals that are occupied in a given configuration (not necessarily in order)
+        int empty[n_orbs];      // the orbitals that are empty    in a given configuration (not necessarily in order)
+        int cum_occ[n_orbs];    // the number of orbitals below a given index that are occupied (for phase calculations)
+
         Double biggest = 0;                   // The biggest n-th component of all vectors being acted on
         for (int v=vec_0; v<vec_0+n_vecs; v++)
             {
