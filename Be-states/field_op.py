@@ -56,30 +56,30 @@ def find_index(config, configs):
         reduced //= reduction
     return field_op.bisect_search(packed_config, configs.packed, configs.size, 0, len(configs)-1)
 
-def opPsi_1e(HPsi, Psi, h, vec_0, num_vecs, configs, thresh, n_threads):
+def opPsi_1e(HPsi, Psi, h, configs, thresh, n_threads):
     field_op.opPsi(1,                 # electron order of the operator
                    h,                 # tensor of matrix elements (integrals)
-                   Psi,               # block of row vectors: input vectors to act on
-                   HPsi,              # block of row vectors: incremented by output
+                   [Psi],               # block of row vectors: input vectors to act on
+                   [HPsi],              # block of row vectors: incremented by output
                    configs.packed,    # bitwise occupation strings stored as arrays of integers (see packed_configs above)
                    configs.size,      # the number of BigInts needed to store a configuration
                    h.shape[0],        # edge dimension of the integrals tensor
-                   vec_0,             # index of first vector in block to act upon
-                   num_vecs,          # how many vectors we are acting on simultaneously
+                   0,             # index of first vector in block to act upon
+                   1,          # how many vectors we are acting on simultaneously
                    len(configs),      # how many configurations are there (call signature is ok as long as PyInt not longer than BigInt)
                    thresh,            # threshold for ignoring integrals and coefficients (avoiding expensive index search)
                    n_threads)         # number of OMP threads to spread the work over
 
-def opPsi_2e(HPsi, Psi, V, vec_0, num_vecs, configs, thresh, n_threads):
+def opPsi_2e(HPsi, Psi, V, configs, thresh, n_threads):
     field_op.opPsi(2,                 # electron order of the operator
                    V,                 # tensor of matrix elements (integrals), assumed antisymmetrized
-                   Psi,               # block of row vectors: input vectors to act on
-                   HPsi,              # block of row vectors: incremented by output
+                   [Psi],               # block of row vectors: input vectors to act on
+                   [HPsi],              # block of row vectors: incremented by output
                    configs.packed,    # bitwise occupation strings stored as arrays of integers (see packed_configs above)
                    configs.size,      # the number of BigInts needed to store a configuration
                    V.shape[0],        # edge dimension of the integrals tensor
-                   vec_0,             # index of first vector in block to act upon
-                   num_vecs,          # how many vectors we are acting on simultaneously
+                   0,             # index of first vector in block to act upon
+                   1,          # how many vectors we are acting on simultaneously
                    len(configs),      # how many configurations are there (call signature is ok as long as PyInt not longer than BigInt)
                    thresh,            # threshold for ignoring integrals and coefficients (avoiding expensive index search)
                    n_threads)         # number of OMP threads to spread the work over

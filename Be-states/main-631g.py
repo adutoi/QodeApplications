@@ -186,14 +186,14 @@ for n in range(num_elec_dimer+1):
                 (n_i1,i1),(n_i0,i0) = dimer_to_frags[P]
                 for Q in R_list:
                     (n_j1,j1),(n_j0,j0) = dimer_to_frags[Q]
-                    rho_0[n][i0,j0] += Evec.v[0,P] * Evec.v[0,Q]    # should have n_i1==n_j1==num_elec_dimer-n and  i1==j1  and n_i0==n_j0==n
+                    rho_0[n][i0,j0] += Evec.v[P] * Evec.v[Q]    # should have n_i1==n_j1==num_elec_dimer-n and  i1==j1  and n_i0==n_j0==n
     if rho_1[n] is not None:
         for R_list in frag0_to_dimer[num_elec_dimer-n]:
             for P in R_list:
                 (n_i1,i1),(n_i0,i0) = dimer_to_frags[P]
                 for Q in R_list:
                     (n_j1,j1),(n_j0,j0) = dimer_to_frags[Q]
-                    rho_1[n][i1,j1] += Evec.v[0,P] * Evec.v[0,Q]    # should have n_i0==n_j0==num_elec_dimer-n and  i0==j0  and n_i1==n_j1==n
+                    rho_1[n][i1,j1] += Evec.v[P] * Evec.v[Q]    # should have n_i0==n_j0==num_elec_dimer-n and  i0==j0  and n_i1==n_j1==n
 
 thresh = 1e-6
 

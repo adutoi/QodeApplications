@@ -146,8 +146,8 @@ void resolve(int     mode,           // OP_ACTION or COMPUTE_D, depending on whe
              PyInt   n_destroy,      // number of destruction operators in the strings looped over (always vacuum normal ordered)
              Double *op_tensor,      // tensor of matrix elements (integrals) either read for OP_ACTION or produces for COMPUTE_D
              PyInt   n_orbs,         // edge dimension of the integrals tensor
-             Double *Psi_left,       // the states being produced (LHS of equation) for OP_ACTION; states in the bra for COMPUTE_D
-             Double *Psi_right,      // the states being acted on (RHS of equation) for OP_ACTION; states in the ket for COMPUTE_D
+             Double **Psi_left,       // the states being produced (LHS of equation) for OP_ACTION; states in the bra for COMPUTE_D
+             Double **Psi_right,      // the states being acted on (RHS of equation) for OP_ACTION; states in the ket for COMPUTE_D
              int     Psi_left_0,     // lowest index to use in array Psi_left
              int     Psi_left_N,     // highest index to use in array Psi_left
              int     Psi_right_0,    // lowest index to use in array Psi_right
@@ -241,9 +241,9 @@ void resolve(int     mode,           // OP_ACTION or COMPUTE_D, depending on whe
                     val *= phase;
                     for (int v=Psi_right_0; v<Psi_right_N; v++)
                         {
-                        Double update = val * Psi_right[v*n_configs + config0_idx];
+                        Double update = val * Psi_right[v][config0_idx];
                         #pragma omp atomic
-                        Psi_left[v*n_configs + op_config0_idx] += update;
+                        Psi_left[v][op_config0_idx] += update;
                         }
                     }
                 }
@@ -268,10 +268,10 @@ void resolve(int     mode,           // OP_ACTION or COMPUTE_D, depending on whe
                 int offset = 0;
                 for (int vL=Psi_left_0; vL<Psi_left_N; vL++)
                     {
-                    Double Z = phase * Psi_left[vL*n_configs + op_config0_idx];
+                    Double Z = phase * Psi_left[vL][op_config0_idx];
                     for (int vR=Psi_right_0; vR<Psi_right_N; vR++)
                         {
-                        Double update = Z * Psi_right[vR*n_configs + config0_idx];
+                        Double update = Z * Psi_right[vR][config0_idx];
                         #pragma omp atomic
                         op_tensor[offset + op_idx]+= update;
                         offset += block_size;
@@ -292,8 +292,8 @@ void resolve(int     mode,           // OP_ACTION or COMPUTE_D, depending on whe
 
 void opPsi(PyInt   n_elec,        // electron order of the operator
            Double* op,            // tensor of matrix elements (integrals), assumed antisymmetrized
-           Double* Psi,           // block of row vectors: input vectors to act on
-           Double* opPsi,         // block of row vectors: incremented by output
+           Double** Psi,           // block of row vectors: input vectors to act on
+           Double** opPsi,         // block of row vectors: incremented by output
            BigInt* configs,       // bitwise occupation strings stored as arrays of integers (packed in one contiguous block, per global comments above)
            PyInt   n_configint,   // the number of BigInts needed to store a configuration
            PyInt   n_orbs,        // edge dimension of the integrals tensor
@@ -317,7 +317,7 @@ void opPsi(PyInt   n_elec,        // electron order of the operator
         Double biggest = 0;                   // The biggest n-th component of all vectors being acted on
         for (int v=vec_0; v<vec_0+n_vecs; v++)
             {
-            Double size = fabs(Psi[v*n_configs + n]);
+            Double size = fabs(Psi[v][n]);
             if (size > biggest)  {biggest = size;}
             }
 

@@ -28,8 +28,8 @@ class _auxilliary(object):
         config = 0
         for p in occupied:  config += 2**p
         index  = field_op.find_index(config, self.parent.configs)
-        v = numpy.zeros((1,len(self.parent.configs)), dtype=Double.numpy)    # nominally a matrix bc Hamiltonian supports block action
-        v[0,index] = 1
+        v = numpy.zeros(len(self.parent.configs), dtype=Double.numpy)
+        v[index] = 1
         return v
 
 class CI_space_traits(object):
@@ -53,7 +53,7 @@ class CI_space_traits(object):
         else:     v += c*w
     @staticmethod
     def dot(v,w):
-        return (v.dot(w.T)).item()    # Here we have to remember that vecs are actually 1xlen(configs) 2-tensors
+        return v.dot(w)
     def act_on_vec(self, op, v):
         return op(v, self.configs)
     def back_act_on_vec(self, v, op):
