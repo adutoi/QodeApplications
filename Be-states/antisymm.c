@@ -15,13 +15,7 @@
  *   You should have received a copy of the GNU General Public License
  *   along with QodeApplications.  If not, see <http://www.gnu.org/licenses/>.
  */
-#include <string.h>       // memcpy()
 #include "PyC_types.h"    // PyInt, BigInt
-
-#ifdef _OPENMP
-#include <omp.h>
-#endif
-
 #include <stdio.h>        // fprintf(stderr, "...")  Can be eliminated when debugged
 
 // This takes a tensor with an arbitrary number of axes (all of the same length), whereby the only
@@ -29,15 +23,15 @@
 // The "elements" of the tensor may themselves be vectors.  When this function runs, it completes
 // the tensor in an antisymmetric way by copying phased versions of the meaningful values.
 //
-void antisymmetrize(Double* tensor,               // the input/output tensor
-                    PyInt   num_axes,             // the number of tensor axes
-                    PyInt   len_axis,             // the length of the axes
-                    PyInt*  strides,              // the vector length of the "elements" of the tensor (given as a reference!))
-                    PyInt   p_0,                  // for recursive use.  0 on first input
-                    PyInt   old_len_orderings,    // for recursive use.  0 on first input
-                    PyInt   old_num_orderings,    // for recursive use.  1 on first input
-                    PyInt** old_orderings,        // for recursive use.  NULL on first input
-                    PyInt*  old_phases)           // for recursive use.  [1] on first input
+void antisymmetrize_recur(Double* tensor,               // the input/output tensor
+                          PyInt   num_axes,             // the number of tensor axes
+                          PyInt   len_axis,             // the length of the axes
+                          PyInt*  strides,              // the vector length of the "elements" of the tensor (given as a reference!)
+                          PyInt   p_0,                  // for recursive use.  0 on first input
+                          PyInt   old_len_orderings,    // for recursive use.  0 on first input
+                          PyInt   old_num_orderings,    // for recursive use.  1 on first input
+                          PyInt** old_orderings,        // for recursive use.  NULL on first input
+                          PyInt*  old_phases)           // for recursive use.  [1] on first input
     {
     PyInt len_orderings = old_len_orderings + 1;                // Dimensions of the array that holds ...
     PyInt num_orderings = old_num_orderings * len_orderings;    // ... different ordering of fixed indices.
@@ -72,7 +66,7 @@ void antisymmetrize(Double* tensor,               // the input/output tensor
         for (PyInt m=0; m<num_orderings; m++) {insert[m][0] = p;}    // fill in its location in the orderings
         if (len_orderings < num_axes)     // If there is another index, keep going ...
             {
-            antisymmetrize(tensor, num_axes, len_axis, new_strides, p+1, len_orderings, num_orderings, orderings, phases);
+            antisymmetrize_recur(tensor, num_axes, len_axis, new_strides, p+1, len_orderings, num_orderings, orderings, phases);
             }
         else                              // ... otherwise it is time to do the copying finally.
             {
@@ -97,3 +91,41 @@ void antisymmetrize(Double* tensor,               // the input/output tensor
 
     return;
     }
+
+
+
+
+void antisymmetrize(Double* tensor,
+                    PyInt   n_orbs,
+                    PyInt   n_create,
+                    PyInt   n_destroy)
+
+    {
+    PyInt one = 1;
+
+    PyInt limit = 1;
+    for (int i=0; i<n_create;  i++) {limit *= n_orbs;}
+    PyInt stride = 1;
+    for (int i=0; i<n_destroy; i++) {stride *= n_orbs;}
+
+    if (n_destroy > 1)
+        {
+        Double* subtensor = tensor;
+        for (int i=0; i<limit; i++)
+            {
+            printf("%d", i);
+            antisymmetrize_recur(subtensor, n_destroy, n_orbs, &one, 0, 0, 1, NULL, &one);
+            subtensor += stride;
+            }
+        }
+
+    if (n_create > 1)
+        {
+        antisymmetrize_recur(tensor, n_create, n_orbs, &stride, 0, 0, 1, NULL, &one);
+        }
+
+    return;
+    }
+
+
+
