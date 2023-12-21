@@ -347,3 +347,155 @@ void opPsi(PyInt   n_elec,        // electron order of the operator
         }
     return;
     }
+
+
+
+
+
+
+
+void densities(PyInt   n_create,      // number of creation operators
+               PyInt   n_destroy,     // number of destruction operators
+               Double** rho,            // pointers to storate for density tensors for each pair of states
+               Double** bras,           // block of row vectors: input vectors to act on
+               Double** kets,         // block of row vectors: incremented by output
+               BigInt* configs,       // bitwise occupation strings stored as arrays of integers (packed in one contiguous block, per global comments above)
+               PyInt   n_configint,   // the number of BigInts needed to store a configuration
+               PyInt   n_orbs,        // edge dimension of the integrals tensor
+               PyInt   n_bras,        // how many vectors we are acting on simultaneously
+               PyInt   n_kets,        // how many vectors we are acting on simultaneously
+               PyInt   n_configs,     // how many configurations are there (call signature is ok as long as PyInt not longer than BigInt)
+               PyFloat thresh,        // threshold for ignoring integrals and coefficients (avoiding expensive index search)
+               PyInt   n_threads)     // number of OMP threads to spread the work over
+    {
+    omp_set_num_threads(n_threads);
+    int n_bits = orbs_per_configint();            // number of bits/orbitals in a BigInt
+
+    int permute = (n_destroy/2) % 2;
+
+    #pragma omp parallel for
+    for (PyInt n=0; n<n_configs; n++)
+        {
+        // "scratch" space that needs to be maximally n_orbs long, allocated once (per thread)
+        int occupied[n_orbs];   // the orbitals that are occupied in a given configuration (not necessarily in order)
+        int empty[n_orbs];      // the orbitals that are empty    in a given configuration (not necessarily in order)
+        int cum_occ[n_orbs];    // the number of orbitals below a given index that are occupied (for phase calculations)
+
+        Double biggest = 0;                   // The biggest n-th component of all vectors being acted on
+        for (int v=0; v<n_kets; v++)
+            {
+            Double size = fabs(kets[v][n]);
+            if (size > biggest)  {biggest = size;}
+            }
+
+        if (biggest > thresh)    // all of this is skipped if the configuration has no significan coefficiencts
+            {
+            BigInt* config = configs + (n * n_configint);    // config[] is now an array of integers collectively holding the present configuration
+
+            int n_occ = 0;    // count the number of occupied orbitals (also acts as a running index for cataloging their indices)
+            int n_emt = 0;    // count the number of empty    orbitals (also acts as a running index for cataloging their indices)
+            for (int i=0; i<n_orbs; i++)
+                {
+                int Q = i / n_bits;                                              // Which component of config does orbital i belong to? ...
+                int R = i % n_bits;                                              // ... and which bit does it correspond to in that component?
+                if (config[Q] & ((BigInt)1<<R))  {occupied[n_occ++] = i;}    // If bit R is "on" in component Q, it is occupied, ...
+                else                             {   empty[n_emt++] = i;}    // ... otherwise it is empty
+                cum_occ[i] = n_occ;    // after incrementing n_occ (so cumulative occupancy "counting this orb")
+                }
+
+            resolve(COMPUTE_D, n_create, n_destroy, rho, n_orbs, bras, kets, 0, n_bras, 0, n_kets, occupied, n_occ, empty, n_emt, cum_occ, permute, config, n, configs, n_configs, n_configint, 0, 1, thresh/biggest, 1, 0);
+            }
+        }
+
+
+    for (int nk=0; nk<n_kets; nk++)
+        {
+        for (int nb; nb<n_bras; nb++)
+            {
+
+            }
+        }
+
+
+
+    return;
+    }
+
+
+
+
+
+
+
+
+
+
+orderings = NULL
+n_orderings = 1
+len_orderings = 0
+
+void antisymmetrize(Double *tensor, int len_elem, int dim, int n_dim, int** orderings, int n_orderings, int len_orderings, int* strides, int p_0, int* phases)
+    {
+    new_len_orderings = len_orderings + 1;
+    new_n_orderings   = n_orderings * new_len_orderings;
+
+    int  new_strides[new_len_orderings];
+    int  new_orderings[n_orderings][len_orderings];
+    int* insert[new_n_orderings];
+    int  new_phases[new_n_orderings];
+
+    if (len_orderings == 0)
+        {
+        new_strides[0] = len_elem;
+        }
+    else
+        {
+        for (int i=0; i<len_orderings; i++) {new_strides[i] = strides[i];}
+        new_strides[i] = strides[i-1] * dim;
+        }
+
+    int m = 0;
+    for (int n=0; n<n_orderings; n++)
+        {
+        phase = 1;
+        for (int i=new_len_orderings-1; i>=0; i--)
+            {
+            new_phases[m] = phases[n] * phase;
+            insert[m] = &(new_orderings[m][i]);
+            for (int j=0; j<i;             j++) {new_orderings[m][j]   = orderings[n][j];}
+            for (int j=i; j<len_orderings; j++) {new_orderings[m][j+1] = orderings[n][j];}
+            phase *= -1;
+            m++;
+            }
+        }
+
+    for (int p=p_0; p<dim; p++)
+        {
+        for (int m=0; m<new_n_orderings; m++) {insert[m][0] = p;}
+        if (new_len_orderings < n_dim)
+            {
+            antisymmetrize(tensor, len_elem, dim, n_dim, new_orderings, new_n_orderings, new_len_orderings, p_0+1);
+            }
+        else
+            {
+            int idx_0 = 0;
+            for (int i=0; i<new_len_orderings; i++) {idx += new_orderings[0][i] * new_strides[i];}
+            for (int m=0; m<new_n_orderings; m++)
+               {
+               int idx = 0;
+               for (int i=0; i<new_len_orderings; i++) {idx += new_orderings[m][i] * new_strides[i];}
+               for (int k=0; k<len_elem; k++) {tensor[idx+k] = new_phases[m] * tensor[idx_0+k];}
+               }
+            }
+        }
+
+    return;
+    }
+
+
+
+
+
+
+
+
