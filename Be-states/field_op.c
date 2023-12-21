@@ -141,17 +141,17 @@ PyInt bisect_search(BigInt* config, BigInt* configs, PyInt n_configint, PyInt lo
 
 
 
-void resolve(int     mode,           // OP_ACTION or COMPUTE_D, depending on whether producing new states via operator action, or building densities
+void resolve_recur(int     mode,           // OP_ACTION or COMPUTE_D, depending on whether producing new states via operator action, or building densities
              PyInt   n_create,       // number of creation operators in the strings looped over (always vacuum normal ordered)
              PyInt   n_destroy,      // number of destruction operators in the strings looped over (always vacuum normal ordered)
              Double **op_tensor,      // tensor of matrix elements (integrals) either read for OP_ACTION or produces for COMPUTE_D
              PyInt   n_orbs,         // edge dimension of the integrals tensor
-             Double **Psi_left,       // the states being produced (LHS of equation) for OP_ACTION; states in the bra for COMPUTE_D
-             Double **Psi_right,      // the states being acted on (RHS of equation) for OP_ACTION; states in the ket for COMPUTE_D
-             int     Psi_left_0,     // lowest index to use in array Psi_left
-             int     Psi_left_N,     // highest index to use in array Psi_left
-             int     Psi_right_0,    // lowest index to use in array Psi_right
-             int     Psi_right_N,    // highest index to use in array Psi_right (for OP_ACTION, must have same number of states on left and right)
+             Double **Psi_L,       // the states being produced (LHS of equation) for OP_ACTION; states in the bra for COMPUTE_D
+             Double **Psi_R,      // the states being acted on (RHS of equation) for OP_ACTION; states in the ket for COMPUTE_D
+             int     Psi_L_0,     // lowest index to use in array Psi_L
+             int     Psi_L_N,     // highest index to use in array Psi_L
+             int     Psi_R_0,    // lowest index to use in array Psi_R
+             int     Psi_R_N,    // highest index to use in array Psi_R (for OP_ACTION, must have same number of states on left and right)
              int*    occupied,       // the orbitals that were occupied in the configuration at the *top* layer of recursion
              int     n_occ,          // the number of orbitals that were occupied at the *top* layer of recursion
              int*    empty,          // the orbitals that were empty (not necessarily in order) after the action of all the destruction operators
@@ -218,7 +218,7 @@ void resolve(int     mode,           // OP_ACTION or COMPUTE_D, depending on whe
             int q_0 = p_ + 1;
             if (reset_p_0)  {q_0 = 0;}
             other[0] = p;                              // now q is empty (and loop limit below accounts for this)
-            resolve(mode, n_create, n_destroy, op_tensor, n_orbs, Psi_left, Psi_right, Psi_left_0, Psi_left_N, Psi_right_0, Psi_right_N, occupied, n_occ, empty, n_emt, p_cum_occ, p_permute, p_config, config0_idx, configs, n_configs, n_configint, op_idx+p*stride, stride*n_orbs, thresh, factor, q_0);
+            resolve_recur(mode, n_create, n_destroy, op_tensor, n_orbs, Psi_L, Psi_R, Psi_L_0, Psi_L_N, Psi_R_0, Psi_R_N, occupied, n_occ, empty, n_emt, p_cum_occ, p_permute, p_config, config0_idx, configs, n_configs, n_configint, op_idx+p*stride, stride*n_orbs, thresh, factor, q_0);
             }
         }
     else if (mode == OP_ACTION)
@@ -239,11 +239,11 @@ void resolve(int     mode,           // OP_ACTION or COMPUTE_D, depending on whe
                     int p_permute = permute + cum_occ[n_orbs-1] - cum_occ[p];
                     int phase = (p_permute%2) ? -1 : 1;
                     val *= phase;
-                    for (int v=Psi_right_0; v<Psi_right_N; v++)
+                    for (int v=Psi_R_0; v<Psi_R_N; v++)
                         {
-                        Double update = val * Psi_right[v][config0_idx];
+                        Double update = val * Psi_R[v][config0_idx];
                         #pragma omp atomic
-                        Psi_left[v][op_config0_idx] += update;
+                        Psi_L[v][op_config0_idx] += update;
                         }
                     }
                 }
@@ -265,12 +265,12 @@ void resolve(int     mode,           // OP_ACTION or COMPUTE_D, depending on whe
                 int p_permute = permute + cum_occ[n_orbs-1] - cum_occ[p];
                 int phase = (p_permute%2) ? -1 : 1;
                 int block = 0;
-                for (int vL=Psi_left_0; vL<Psi_left_N; vL++)
+                for (int vL=Psi_L_0; vL<Psi_L_N; vL++)
                     {
-                    Double Z = phase * Psi_left[vL][op_config0_idx];
-                    for (int vR=Psi_right_0; vR<Psi_right_N; vR++)
+                    Double Z = phase * Psi_L[vL][op_config0_idx];
+                    for (int vR=Psi_R_0; vR<Psi_R_N; vR++)
                         {
-                        Double update = Z * Psi_right[vR][config0_idx];
+                        Double update = Z * Psi_R[vR][config0_idx];
                         #pragma omp atomic
                         op_tensor[block++][op_idx]+= update;
                         }
@@ -288,21 +288,26 @@ void resolve(int     mode,           // OP_ACTION or COMPUTE_D, depending on whe
 
 
 
-void opPsi(PyInt   n_elec,        // electron order of the operator
-           Double* op,            // tensor of matrix elements (integrals), assumed antisymmetrized
-           Double** Psi,           // block of row vectors: input vectors to act on
-           Double** opPsi,         // block of row vectors: incremented by output
+void resolve(int     mode,
+           PyInt   n_create,
+           PyInt   n_destroy,
+           Double** tensors,            // tensor of matrix elements (integrals), assumed antisymmetrized
+           Double** Psi_L,           // block of row vectors: input vectors to act on
+           Double** Psi_R,         // block of row vectors: incremented by output
            BigInt* configs,       // bitwise occupation strings stored as arrays of integers (packed in one contiguous block, per global comments above)
            PyInt   n_configint,   // the number of BigInts needed to store a configuration
            PyInt   n_orbs,        // edge dimension of the integrals tensor
            PyInt   vec_0,         // index of first vector in block to act upon
-           PyInt   n_vecs,        // how many vectors we are acting on simultaneously
+           PyInt   n_vecs_L,        // how many vectors we are acting on simultaneously
+           PyInt   n_vecs_R,        // how many vectors we are acting on simultaneously
            PyInt   n_configs,     // how many configurations are there (call signature is ok as long as PyInt not longer than BigInt)
            PyFloat thresh,        // threshold for ignoring integrals and coefficients (avoiding expensive index search)
            PyInt   n_threads)     // number of OMP threads to spread the work over
     {
     omp_set_num_threads(n_threads);
     int n_bits = orbs_per_configint();            // number of bits/orbitals in a BigInt
+
+    int permute = (n_destroy/2) % 2;
 
     #pragma omp parallel for
     for (PyInt n=0; n<n_configs; n++)
@@ -313,9 +318,9 @@ void opPsi(PyInt   n_elec,        // electron order of the operator
         int cum_occ[n_orbs];    // the number of orbitals below a given index that are occupied (for phase calculations)
 
         Double biggest = 0;                   // The biggest n-th component of all vectors being acted on
-        for (int v=vec_0; v<vec_0+n_vecs; v++)
+        for (int v=vec_0; v<vec_0+n_vecs_R; v++)
             {
-            Double size = fabs(Psi[v][n]);
+            Double size = fabs(Psi_R[v][n]);
             if (size > biggest)  {biggest = size;}
             }
 
@@ -334,16 +339,45 @@ void opPsi(PyInt   n_elec,        // electron order of the operator
                 cum_occ[i] = n_occ;    // after incrementing n_occ (so cumulative occupancy "counting this orb")
                 }
 
-            if (n_elec == 1)
-                {
-                resolve(OP_ACTION, 1, 1, &op, n_orbs, opPsi, Psi, vec_0, vec_0+n_vecs, vec_0, vec_0+n_vecs, occupied, n_occ, empty, n_emt, cum_occ, 0, config, n, configs, n_configs, n_configint, 0, 1, thresh/biggest, 1, 0);
-                }
-            else if (n_elec == 2)
-                {
-                // mind the non-zero starting permutation
-                resolve(OP_ACTION, 2, 2, &op, n_orbs, opPsi, Psi, vec_0, vec_0+n_vecs, vec_0, vec_0+n_vecs, occupied, n_occ, empty, n_emt, cum_occ, 1, config, n, configs, n_configs, n_configint, 0, 1, thresh/biggest, 1, 0);
-                }
+            resolve_recur(mode, n_create, n_destroy, tensors, n_orbs, Psi_L, Psi_R, vec_0, vec_0+n_vecs_L, vec_0, vec_0+n_vecs_R, occupied, n_occ, empty, n_emt, cum_occ, permute, config, n, configs, n_configs, n_configint, 0, 1, thresh/biggest, 1, 0);
             }
         }
+    return;
+    }
+
+
+
+void opPsi(PyInt   n_elec,        // electron order of the operator
+           Double* op,            // tensor of matrix elements (integrals), assumed antisymmetrized
+           Double** Psi,           // block of row vectors: input vectors to act on
+           Double** opPsi,         // block of row vectors: incremented by output
+           BigInt* configs,       // bitwise occupation strings stored as arrays of integers (packed in one contiguous block, per global comments above)
+           PyInt   n_configint,   // the number of BigInts needed to store a configuration
+           PyInt   n_orbs,        // edge dimension of the integrals tensor
+           PyInt   vec_0,         // index of first vector in block to act upon
+           PyInt   n_vecs,        // how many vectors we are acting on simultaneously
+           PyInt   n_configs,     // how many configurations are there (call signature is ok as long as PyInt not longer than BigInt)
+           PyFloat thresh,        // threshold for ignoring integrals and coefficients (avoiding expensive index search)
+           PyInt   n_threads)     // number of OMP threads to spread the work over
+    {
+    resolve(OP_ACTION, n_elec, n_elec, &op, opPsi, Psi, configs, n_configint, n_orbs, vec_0, n_vecs, n_vecs, n_configs, thresh, n_threads);
+    return;
+    }
+
+void densities(PyInt   n_create,      // number of creation operators
+               PyInt   n_destroy,     // number of destruction operators
+               Double** rho,            // pointers to storate for density tensors for each pair of states
+               Double** bras,           // block of row vectors: input vectors to act on
+               Double** kets,         // block of row vectors: incremented by output
+               BigInt* configs,       // bitwise occupation strings stored as arrays of integers (packed in one contiguous block, per global comments above)
+               PyInt   n_configint,   // the number of BigInts needed to store a configuration
+               PyInt   n_orbs,        // edge dimension of the integrals tensor
+               PyInt   n_bras,        // how many vectors we are acting on simultaneously
+               PyInt   n_kets,        // how many vectors we are acting on simultaneously
+               PyInt   n_configs,     // how many configurations are there (call signature is ok as long as PyInt not longer than BigInt)
+               PyFloat thresh,        // threshold for ignoring integrals and coefficients (avoiding expensive index search)
+               PyInt   n_threads)     // number of OMP threads to spread the work over
+    {
+    resolve(COMPUTE_D, n_create, n_destroy, rho, bras, kets, configs, n_configint, n_orbs, 0, n_bras, n_kets, n_configs, thresh, n_threads);
     return;
     }

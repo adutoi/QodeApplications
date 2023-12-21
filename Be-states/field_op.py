@@ -28,6 +28,8 @@ field_op = import_C("field_op", flags="-O3 -lm -fopenmp")
 field_op.orbs_per_configint.return_type(int)
 field_op.bisect_search.return_type(int)
 
+antisymm = import_C("antisymm", flags="-O3")
+
 
 
 orbs_per_configint = field_op.orbs_per_configint()
@@ -83,3 +85,9 @@ def opPsi_2e(HPsi, Psi, V, configs, thresh, n_threads):
                    len(configs),      # how many configurations are there (call signature is ok as long as PyInt not longer than BigInt)
                    thresh,            # threshold for ignoring integrals and coefficients (avoiding expensive index search)
                    n_threads)         # number of OMP threads to spread the work over
+
+def antisymmetrize(density, n_orbs, c, a):
+    antisymm.antisymmetrize(density,    # the density to antisymmetrize
+                            n_orbs,     # the number of orbitals
+                            c, a)       # the respective number of creation and annihilation operators
+
