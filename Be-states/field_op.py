@@ -66,7 +66,6 @@ def opPsi_1e(HPsi, Psi, h, configs, thresh, n_threads):
                     configs.packed,    # bitwise occupation strings stored as arrays of integers (see packed_configs above)
                     configs.size,      # the number of BigInts needed to store a configuration
                     h.shape[0],        # edge dimension of the integrals tensor
-                    0,                 # index of first vector in block to act upon
                     1,                 # how many vectors we are acting on simultaneously
                     len(configs),      # how many configurations are there (call signature is ok as long as PyInt not longer than BigInt)
                     thresh,            # threshold for ignoring integrals and coefficients (avoiding expensive index search)
@@ -80,7 +79,6 @@ def opPsi_2e(HPsi, Psi, V, configs, thresh, n_threads):
                     configs.packed,    # bitwise occupation strings stored as arrays of integers (see packed_configs above)
                     configs.size,      # the number of BigInts needed to store a configuration
                     V.shape[0],        # edge dimension of the integrals tensor
-                    0,                 # index of first vector in block to act upon
                     1,                 # how many vectors we are acting on simultaneously
                     len(configs),      # how many configurations are there (call signature is ok as long as PyInt not longer than BigInt)
                     thresh,            # threshold for ignoring integrals and coefficients (avoiding expensive index search)
