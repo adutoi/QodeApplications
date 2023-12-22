@@ -353,8 +353,8 @@ void resolve(int     mode,
 
 void op_Psi(PyInt   n_elec,        // electron order of the operator
            Double* op,            // tensor of matrix elements (integrals), assumed antisymmetrized
-           Double** Psi,           // block of row vectors: input vectors to act on
            Double** opPsi,         // block of row vectors: incremented by output
+           Double** Psi,           // block of row vectors: input vectors to act on
            BigInt* configs,       // bitwise occupation strings stored as arrays of integers (packed in one contiguous block, per global comments above)
            PyInt   n_configint,   // the number of BigInts needed to store a configuration
            PyInt   n_orbs,        // edge dimension of the integrals tensor

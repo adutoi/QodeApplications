@@ -29,7 +29,11 @@ from CI_space_traits import CI_space_traits
 import field_op_ham
 import configurations
 
+from qode.util.PyC import Double
+
 import densities
+
+import pickle
 
 class empty(object):  pass
 
@@ -204,13 +208,18 @@ for n in range(num_elec_dimer+1):
     if rho_0[n] is not None:
         rho = (rho_1[n] + rho_0[n]) / 2    # relies on fragments being the same
         evals, evecs = qode.util.sort_eigen(numpy.linalg.eigh(rho), order="descending")
+        n_config_n = len(evals)
+        print("n_config_n", n_config_n)
         for i,e in enumerate(evals):
             if e>thresh:
                 if chg not in states:
                     states[chg] = empty()
                     states[chg].configs = sorted_configs_0[n]  # relies on fragments being the same
                     states[chg].coeffs  = []
-                states[chg].coeffs += [evecs[:,i]]
+                tmp = numpy.zeros(n_config_n, dtype=Double.numpy)
+                tmp[:] = evecs[:,i]
+                states[chg].coeffs += [tmp]
+                #states[chg].coeffs += [evecs[:,i].copy()]      # copy or else not contiguous (needed for C processing)
 
 for chg,states_chg in states.items():
     num_states = len(states_chg.coeffs)
@@ -229,4 +238,4 @@ for i in range(len(states[ref_chg].coeffs)):
 for chg in states:
     if chg!=ref_chg:  frag0.state_indices += [(chg,i) for i in range(len(states[chg].coeffs))]
 
-pickle.dump(frag0, open("Be631g.pkl", "wb"))
+#pickle.dump(frag0, open("Be631g.pkl", "wb"))

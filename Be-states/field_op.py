@@ -61,8 +61,8 @@ def find_index(config, configs):
 def opPsi_1e(HPsi, Psi, h, configs, thresh, n_threads):
     field_op.op_Psi(1,                 # electron order of the operator
                     h,                 # tensor of matrix elements (integrals), assumed antisymmetrized
-                    [Psi],             # block of row vectors: input vectors to act on
                     [HPsi],            # block of row vectors: incremented by output
+                    [Psi],             # block of row vectors: input vectors to act on
                     configs.packed,    # bitwise occupation strings stored as arrays of integers (see packed_configs above)
                     configs.size,      # the number of BigInts needed to store a configuration
                     h.shape[0],        # edge dimension of the integrals tensor
@@ -75,8 +75,8 @@ def opPsi_1e(HPsi, Psi, h, configs, thresh, n_threads):
 def opPsi_2e(HPsi, Psi, V, configs, thresh, n_threads):
     field_op.op_Psi(2,                 # electron order of the operator
                     V,                 # tensor of matrix elements (integrals), assumed antisymmetrized
-                    [Psi],             # block of row vectors: input vectors to act on
                     [HPsi],            # block of row vectors: incremented by output
+                    [Psi],             # block of row vectors: input vectors to act on
                     configs.packed,    # bitwise occupation strings stored as arrays of integers (see packed_configs above)
                     configs.size,      # the number of BigInts needed to store a configuration
                     V.shape[0],        # edge dimension of the integrals tensor
@@ -88,14 +88,15 @@ def opPsi_2e(HPsi, Psi, V, configs, thresh, n_threads):
 
 def build_densities(op_string, n_orbs, bras, kets, bra_configs, ket_configs, thresh, n_threads):
     n_create  = op_string.count("c")
-    n_destroy = op_string.count("a")
-    if (op_string != "c"*n_create + "a"*n_destroy):  raise ValueError("density operator string is not vacuum normal ordered")
-    shape = [n_orbs] * (n_create + n_destroy)
+    n_annihil = op_string.count("a")
+    if (op_string != "c"*n_create + "a"*n_annihil):  raise ValueError("density operator string is not vacuum normal ordered")
+    shape = [n_orbs] * (n_create + n_annihil)
+    print("c,a,shape:", n_create, n_annihil, shape)
     rho = []
     for _ in range(len(bras) * len(kets)):
-        rho += [numpy.array(shape, dtype=Double.numpy)]
+        rho += [numpy.zeros(shape, dtype=Double.numpy)]
     field_op.densities(n_create,           # number of creation operators
-                       n_destroy,          # number of destruction operators
+                       n_annihil,          # number of destruction operators
                        rho,                # storage for density tensor for each pair of states in linear list
                        bras,               # block of row vectors: bra states
                        kets,               # block of row vectors: ket states
@@ -110,11 +111,11 @@ def build_densities(op_string, n_orbs, bras, kets, bra_configs, ket_configs, thr
                        len(ket_configs),       # how many configurations are there (call signature is ok as long as PyInt not longer than BigInt)
                        thresh,             # threshold for ignoring coefficients (avoiding expensive index search)
                        n_threads)          # number of OMP threads to spread the work over
-    antisymm.antisymmetrize(rho,    # the density to antisymmetrize
-                            len(rho),
-                            n_orbs,     # the number of orbitals
-                            n_create,
-                            n_destroy)       # the respective number of creation and annihilation operators
+    #antisymm.antisymmetrize(rho,    # the density to antisymmetrize
+    #                        len(rho),
+    #                        n_orbs,     # the number of orbitals
+    #                        n_create,
+    #                        n_annihil)       # the respective number of creation and annihilation operators
     return [rho[i*len(kets):(i+1)*len(kets)] for i in range(len(bras))]
 
 

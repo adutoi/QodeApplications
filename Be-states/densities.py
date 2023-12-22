@@ -26,14 +26,21 @@ def build_tensors(states, n_orbs, thresh=1e-10, n_threads=1):
 
     op_strings = {2:["aa", "caaa"], 1:["a", "caa", "ccaaa"], 0:["ca", "ccaa"], -1:["c", "cca", "cccaa"], -2:["cc", "ccca"]}
     for bra_chg in states:
+        print(bra_chg)
+        #print(states[bra_chg].coeffs)
+        #print(states[bra_chg].configs)
         bra_coeffs  = states[bra_chg].coeffs
         bra_configs = field_op.packed_configs(states[bra_chg].configs)
         for ket_chg in states:
+            print("  ", ket_chg)
+            #print("  ", states[ket_chg].coeffs)
+            #print("  ", states[ket_chg].configs)
             ket_coeffs  = states[ket_chg].coeffs
             ket_configs = field_op.packed_configs(states[ket_chg].configs)
             chg_diff = bra_chg - ket_chg
             if chg_diff in op_strings:
                 for op_string in op_strings[chg_diff]:
+                    if op_string not in densities:  densities[op_string] = {}
                     print(op_string, bra_chg, ket_chg)
                     densities[op_string][bra_chg,ket_chg] = field_op.build_densities(op_string, n_orbs, bra_coeffs, ket_coeffs, bra_configs, ket_configs, thresh, n_threads)
 
