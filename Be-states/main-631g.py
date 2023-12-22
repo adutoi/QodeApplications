@@ -29,17 +29,17 @@ from CI_space_traits import CI_space_traits
 import field_op_ham
 import configurations
 
-class _empty(object):  pass
+class empty(object):  pass
 
 n_threads = 1
 dist = float(sys.argv[1])
 if len(sys.argv)==3:  n_threads = int(sys.argv[2])
 
 
-frag0 = _empty()
+frag0 = empty()
 frag0.atoms = [("Be",[0,0,0])]
 frag0.n_elec_ref = 4	# The number of electrons in the reference state of the monomer ("cation (+1)" and "anion (-1)" and technically interpreted relative to the reference, not zero, as would be the chemical definition)
-frag0.basis = _empty()
+frag0.basis = empty()
 frag0.basis.AOcode = "6-31G"
 frag0.basis.n_spatial_orb = 9
 frag0.basis.MOcoeffs = numpy.identity(frag0.basis.n_spatial_orb)    # rest of code assumes spin-restricted orbitals
@@ -64,10 +64,10 @@ print(E)
 
 
 
-frag1 = _empty()
+frag1 = empty()
 frag1.atoms = [("Be",[0,0,dist])]
 frag1.n_elec_ref = 4
-frag1.basis = _empty()
+frag1.basis = empty()
 frag1.basis.AOcode = "6-31G"
 frag1.basis.n_spatial_orb = 9
 frag1.basis.MOcoeffs = frag0.basis.MOcoeffs
@@ -83,7 +83,7 @@ num_spatial_atom = frag0.basis.n_spatial_orb
 
 dn_configs_atom = configurations.all_configs(num_spatial_atom, num_elec_atom_dn-len(frag0.basis.core), frozen_occ_orbs=frag0.basis.core)
 up_configs_atom = configurations.all_configs(num_spatial_atom, num_elec_atom_up-len(frag0.basis.core), frozen_occ_orbs=frag0.basis.core)
-configs_atom    = configurations.tensor_product_configs([up_configs_atom,up_configs_atom], [num_spatial_atom,num_spatial_atom])
+configs_atom    = configurations.tensor_product_configs([dn_configs_atom,up_configs_atom], [num_spatial_atom,num_spatial_atom])
 
 N, S, T, U, V = nuc_rep[0,0], symm_ints.S[0,0], symm_ints.T[0,0], symm_ints.U[0,0,0], symm_ints.V[0,0,0,0]
 h = T + U
@@ -172,8 +172,7 @@ print((guess|H|guess) + N)
 (Eval,Evec), = qode.math.lanczos.lowest_eigen(H, [guess], thresh=1e-8)
 print("\nE_gs = {}\n".format(Eval+N))
 
-#frag1_to_dimer = [[[] for _ in range(len(sorted_configs_1_n))] for sorted_configs_1_n in sorted_configs_1]
-#frag0_to_dimer = [[[] for _ in range(len(sorted_configs_0_n))] for sorted_configs_0_n in sorted_configs_0]
+
 
 dim_1 = [len(frag1_to_dimer_n) for frag1_to_dimer_n in frag1_to_dimer]
 dim_0 = [len(frag0_to_dimer_n) for frag0_to_dimer_n in frag0_to_dimer]
@@ -197,16 +196,29 @@ for n in range(num_elec_dimer+1):
 
 thresh = 1e-6
 
-rho = {}
+states = {}
 for n in range(num_elec_dimer+1):
     if rho_0[n] is not None:
-        rho[n] = (rho_1[n] + rho_0[n]) / 2    # relies on fragments being the same
-        evals, evecs = qode.util.sort_eigen(numpy.linalg.eigh(rho[n]), order="descending")
-        print(n)
-        i = 0
-        for e in evals:
-            if e>thresh:  i += 1
-        print("    ", i)
+        rho = (rho_1[n] + rho_0[n]) / 2    # relies on fragments being the same
+        evals, evecs = qode.util.sort_eigen(numpy.linalg.eigh(rho), order="descending")
+        for i,e in enumerate(evals):
+            if e>thresh:
+                if n not in states:
+                    states[n] = empty()
+                    states[n].configs = sorted_configs_0[n]  # relies on fragments being the same
+                    states[n].coeffs  = []
+                states[n].coeffs += [evecs[:,i]]
+
+for n,states_n in states.items():
+    num_states = len(states_n.coeffs)
+    if num_states>0:
+        print("{}: {}".format(n, num_states))
+        print(states_n.coeffs[0].shape)
+        #for c0,c1 in zip(sorted_configs_0[n], sorted_configs_1[n]):
+        #    print("  {:018b}  {:018b}".format(c0, c1))
+        for config in states_n.configs:
+            print("  {:018b}".format(config))
+
 
 
 

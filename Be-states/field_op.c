@@ -160,17 +160,18 @@ void resolve_recur(int     mode,           // OP_ACTION or COMPUTE_D, depending 
              int     permute,        // keep track of the number of permutations associated with field-operator action (at present layer of recursion)
              BigInt* config,         // array of integers collectively holding the configuration being acted upon (at present layer of recursion)
              PyInt   config0_idx,    // index of the configuration being acted upon at the *top* layer of recursion
-             BigInt* configs,        // bitwise occupation strings stored as arrays of integers (packed in one contiguous block, per global comments above)
-             PyInt   n_configs,      // how many configurations are there
-             PyInt   n_configint,    // the number of BigInts needed to store a configuration
+             BigInt* configs_L,        // bitwise occupation strings stored as arrays of integers (packed in one contiguous block, per global comments above)
+             PyInt   n_configs_L,      // how many configurations are there
+             PyInt   n_configint_L,    // the number of BigInts needed to store a configuration
+             PyInt   n_configint_R,    // the number of BigInts needed to store a configuration
              BigInt  op_idx,         // recursively built index of the op_tensor array (must start as zero)
              BigInt  stride,         // the stride to be applied to each successive loop index in order to build op_idx
              PyFloat thresh,         // a threshold used to abort most expensive actions if not going to matter
              int     factor, int p_0)         // a symmetry factor to apply to matrix elements to avoid looping over redundant matrix elements (may come in as -1 to account for reordering)
     {
     int    n_bits  = orbs_per_configint();            // number of bits/orbitals in a BigInt
-    int    n_bytes_config = n_configint * sizeof(BigInt);    // number of bytes in a config array (for memcpy)
-    BigInt p_config[n_configint];
+    int    n_bytes_config = n_configint_R * sizeof(BigInt);    // number of bytes in a config array (for memcpy)
+    BigInt p_config[n_configint_R];
     int p_n;
     int* orb_list;
     if (n_destroy > 0)
@@ -218,7 +219,7 @@ void resolve_recur(int     mode,           // OP_ACTION or COMPUTE_D, depending 
             int q_0 = p_ + 1;
             if (reset_p_0)  {q_0 = 0;}
             other[0] = p;                              // now q is empty (and loop limit below accounts for this)
-            resolve_recur(mode, n_create, n_destroy, op_tensor, n_orbs, Psi_L, Psi_R, Psi_L_0, Psi_L_N, Psi_R_0, Psi_R_N, occupied, n_occ, empty, n_emt, p_cum_occ, p_permute, p_config, config0_idx, configs, n_configs, n_configint, op_idx+p*stride, stride*n_orbs, thresh, factor, q_0);
+            resolve_recur(mode, n_create, n_destroy, op_tensor, n_orbs, Psi_L, Psi_R, Psi_L_0, Psi_L_N, Psi_R_0, Psi_R_N, occupied, n_occ, empty, n_emt, p_cum_occ, p_permute, p_config, config0_idx, configs_L, n_configs_L, n_configint_L, n_configint_R, op_idx+p*stride, stride*n_orbs, thresh, factor, q_0);
             }
         }
     else if (mode == OP_ACTION)
@@ -233,7 +234,7 @@ void resolve_recur(int     mode,           // OP_ACTION or COMPUTE_D, depending 
                 int R = p % n_bits;
                 memcpy(p_config, config, n_bytes_config);
                 p_config[Q] = p_config[Q] ^ ((BigInt)1<<R);    // a copy of the original configuration without orbital q
-                PyInt op_config0_idx = bisect_search(p_config, configs, n_configint, 0, n_configs-1);    // THIS IS THE EXPENSIVE STEP!
+                PyInt op_config0_idx = bisect_search(p_config, configs_L, n_configint_L, 0, n_configs_L-1);    // THIS IS THE EXPENSIVE STEP!
                 if (op_config0_idx != -1)
                     {
                     int p_permute = permute + cum_occ[n_orbs-1] - cum_occ[p];
@@ -259,7 +260,7 @@ void resolve_recur(int     mode,           // OP_ACTION or COMPUTE_D, depending 
             int R = p % n_bits;
             memcpy(p_config, config, n_bytes_config);
             p_config[Q] = p_config[Q] ^ ((BigInt)1<<R);    // a copy of the original configuration without orbital q
-            PyInt op_config0_idx = bisect_search(p_config, configs, n_configint, 0, n_configs-1);    // THIS IS THE EXPENSIVE STEP!
+            PyInt op_config0_idx = bisect_search(p_config, configs_L, n_configint_L, 0, n_configs_L-1);    // THIS IS THE EXPENSIVE STEP!
             if (op_config0_idx != -1)
                 {
                 int p_permute = permute + cum_occ[n_orbs-1] - cum_occ[p];
@@ -294,13 +295,16 @@ void resolve(int     mode,
            Double** tensors,            // tensor of matrix elements (integrals), assumed antisymmetrized
            Double** Psi_L,           // block of row vectors: input vectors to act on
            Double** Psi_R,         // block of row vectors: incremented by output
-           BigInt* configs,       // bitwise occupation strings stored as arrays of integers (packed in one contiguous block, per global comments above)
-           PyInt   n_configint,   // the number of BigInts needed to store a configuration
+           BigInt* configs_L,       // bitwise occupation strings stored as arrays of integers (packed in one contiguous block, per global comments above)
+           BigInt* configs_R,       // bitwise occupation strings stored as arrays of integers (packed in one contiguous block, per global comments above)
+           PyInt   n_configint_L,   // the number of BigInts needed to store a configuration
+           PyInt   n_configint_R,   // the number of BigInts needed to store a configuration
            PyInt   n_orbs,        // edge dimension of the integrals tensor
            PyInt   vec_0,         // index of first vector in block to act upon
            PyInt   n_vecs_L,        // how many vectors we are acting on simultaneously
            PyInt   n_vecs_R,        // how many vectors we are acting on simultaneously
-           PyInt   n_configs,     // how many configurations are there (call signature is ok as long as PyInt not longer than BigInt)
+           PyInt   n_configs_L,     // how many configurations are there (call signature is ok as long as PyInt not longer than BigInt)
+           PyInt   n_configs_R,     // how many configurations are there (call signature is ok as long as PyInt not longer than BigInt)
            PyFloat thresh,        // threshold for ignoring integrals and coefficients (avoiding expensive index search)
            PyInt   n_threads)     // number of OMP threads to spread the work over
     {
@@ -310,7 +314,7 @@ void resolve(int     mode,
     int permute = (n_destroy/2) % 2;
 
     #pragma omp parallel for
-    for (PyInt n=0; n<n_configs; n++)
+    for (PyInt n=0; n<n_configs_R; n++)
         {
         // "scratch" space that needs to be maximally n_orbs long, allocated once (per thread)
         int occupied[n_orbs];   // the orbitals that are occupied in a given configuration (not necessarily in order)
@@ -326,7 +330,7 @@ void resolve(int     mode,
 
         if (biggest > thresh)    // all of this is skipped if the configuration has no significan coefficiencts
             {
-            BigInt* config = configs + (n * n_configint);    // config[] is now an array of integers collectively holding the present configuration
+            BigInt* config = configs_R + (n * n_configint_R);    // config[] is now an array of integers collectively holding the present configuration
 
             int n_occ = 0;    // count the number of occupied orbitals (also acts as a running index for cataloging their indices)
             int n_emt = 0;    // count the number of empty    orbitals (also acts as a running index for cataloging their indices)
@@ -339,7 +343,7 @@ void resolve(int     mode,
                 cum_occ[i] = n_occ;    // after incrementing n_occ (so cumulative occupancy "counting this orb")
                 }
 
-            resolve_recur(mode, n_create, n_destroy, tensors, n_orbs, Psi_L, Psi_R, vec_0, vec_0+n_vecs_L, vec_0, vec_0+n_vecs_R, occupied, n_occ, empty, n_emt, cum_occ, permute, config, n, configs, n_configs, n_configint, 0, 1, thresh/biggest, 1, 0);
+            resolve_recur(mode, n_create, n_destroy, tensors, n_orbs, Psi_L, Psi_R, vec_0, vec_0+n_vecs_L, vec_0, vec_0+n_vecs_R, occupied, n_occ, empty, n_emt, cum_occ, permute, config, n, configs_L, n_configs_L, n_configint_L, n_configint_R, 0, 1, thresh/biggest, 1, 0);
             }
         }
     return;
@@ -347,7 +351,7 @@ void resolve(int     mode,
 
 
 
-void opPsi(PyInt   n_elec,        // electron order of the operator
+void op_Psi(PyInt   n_elec,        // electron order of the operator
            Double* op,            // tensor of matrix elements (integrals), assumed antisymmetrized
            Double** Psi,           // block of row vectors: input vectors to act on
            Double** opPsi,         // block of row vectors: incremented by output
@@ -360,7 +364,7 @@ void opPsi(PyInt   n_elec,        // electron order of the operator
            PyFloat thresh,        // threshold for ignoring integrals and coefficients (avoiding expensive index search)
            PyInt   n_threads)     // number of OMP threads to spread the work over
     {
-    resolve(OP_ACTION, n_elec, n_elec, &op, opPsi, Psi, configs, n_configint, n_orbs, vec_0, n_vecs, n_vecs, n_configs, thresh, n_threads);
+    resolve(OP_ACTION, n_elec, n_elec, &op, opPsi, Psi, configs, configs, n_configint, n_configint, n_orbs, vec_0, n_vecs, n_vecs, n_configs, n_configs, thresh, n_threads);
     return;
     }
 
@@ -369,15 +373,18 @@ void densities(PyInt   n_create,      // number of creation operators
                Double** rho,            // pointers to storate for density tensors for each pair of states
                Double** bras,           // block of row vectors: input vectors to act on
                Double** kets,         // block of row vectors: incremented by output
-               BigInt* configs,       // bitwise occupation strings stored as arrays of integers (packed in one contiguous block, per global comments above)
-               PyInt   n_configint,   // the number of BigInts needed to store a configuration
+               BigInt* configs_L,       // bitwise occupation strings stored as arrays of integers (packed in one contiguous block, per global comments above)
+               BigInt* configs_R,       // bitwise occupation strings stored as arrays of integers (packed in one contiguous block, per global comments above)
+               PyInt   n_configint_L,   // the number of BigInts needed to store a configuration
+               PyInt   n_configint_R,   // the number of BigInts needed to store a configuration
                PyInt   n_orbs,        // edge dimension of the integrals tensor
                PyInt   n_bras,        // how many vectors we are acting on simultaneously
                PyInt   n_kets,        // how many vectors we are acting on simultaneously
-               PyInt   n_configs,     // how many configurations are there (call signature is ok as long as PyInt not longer than BigInt)
+               PyInt   n_configs_L,     // how many configurations are there (call signature is ok as long as PyInt not longer than BigInt)
+               PyInt   n_configs_R,     // how many configurations are there (call signature is ok as long as PyInt not longer than BigInt)
                PyFloat thresh,        // threshold for ignoring integrals and coefficients (avoiding expensive index search)
                PyInt   n_threads)     // number of OMP threads to spread the work over
     {
-    resolve(COMPUTE_D, n_create, n_destroy, rho, bras, kets, configs, n_configint, n_orbs, 0, n_bras, n_kets, n_configs, thresh, n_threads);
+    resolve(COMPUTE_D, n_create, n_destroy, rho, bras, kets, configs_L, configs_R, n_configint_L, n_configint_R, n_orbs, 0, n_bras, n_kets, n_configs_L, n_configs_R, thresh, n_threads);
     return;
     }
