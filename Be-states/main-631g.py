@@ -29,6 +29,8 @@ from CI_space_traits import CI_space_traits
 import field_op_ham
 import configurations
 
+import densities
+
 class empty(object):  pass
 
 n_threads = 1
@@ -198,27 +200,33 @@ thresh = 1e-6
 
 states = {}
 for n in range(num_elec_dimer+1):
+    chg = frag0.n_elec_ref - n
     if rho_0[n] is not None:
         rho = (rho_1[n] + rho_0[n]) / 2    # relies on fragments being the same
         evals, evecs = qode.util.sort_eigen(numpy.linalg.eigh(rho), order="descending")
         for i,e in enumerate(evals):
             if e>thresh:
-                if n not in states:
-                    states[n] = empty()
-                    states[n].configs = sorted_configs_0[n]  # relies on fragments being the same
-                    states[n].coeffs  = []
-                states[n].coeffs += [evecs[:,i]]
+                if chg not in states:
+                    states[chg] = empty()
+                    states[chg].configs = sorted_configs_0[n]  # relies on fragments being the same
+                    states[chg].coeffs  = []
+                states[chg].coeffs += [evecs[:,i]]
 
-for n,states_n in states.items():
-    num_states = len(states_n.coeffs)
+for chg,states_chg in states.items():
+    num_states = len(states_chg.coeffs)
     if num_states>0:
-        print("{}: {}".format(n, num_states))
-        print(states_n.coeffs[0].shape)
-        #for c0,c1 in zip(sorted_configs_0[n], sorted_configs_1[n]):
-        #    print("  {:018b}  {:018b}".format(c0, c1))
-        for config in states_n.configs:
+        print("{}: {}".format(chg, num_states))
+        print(states_chg.coeffs[0].shape)
+        for config in states_chg.configs:
             print("  {:018b}".format(config))
 
+frag0.rho = densities.build_tensors(states, 2 * frag0.basis.n_spatial_orb, thresh=1e-12, n_threads=n_threads)
 
+ref_chg, ref_idx = 0, 0
+frag0.state_indices = [(ref_chg,ref_idx)]                # List of all charge and state indices, reference state needs to be first, but otherwise irrelevant order
+for i in range(len(states[ref_chg].coeffs)):
+    if   i!=ref_idx:  frag0.state_indices += [(ref_chg,i)]
+for chg in states:
+    if chg!=ref_chg:  frag0.state_indices += [(chg,i) for i in range(len(states[chg].coeffs))]
 
-
+pickle.dump(frag0, open("Be631g.pkl", "wb"))

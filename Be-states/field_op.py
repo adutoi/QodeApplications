@@ -86,7 +86,7 @@ def opPsi_2e(HPsi, Psi, V, configs, thresh, n_threads):
                     thresh,            # threshold for ignoring integrals and coefficients (avoiding expensive index search)
                     n_threads)         # number of OMP threads to spread the work over
 
-def build_densities(op_string, n_orbs, bras, kets, configs, thresh, n_threads):
+def build_densities(op_string, n_orbs, bras, kets, bra_configs, ket_configs, thresh, n_threads):
     n_create  = op_string.count("c")
     n_destroy = op_string.count("a")
     if (op_string != "c"*n_create + "a"*n_destroy):  raise ValueError("density operator string is not vacuum normal ordered")
@@ -99,22 +99,23 @@ def build_densities(op_string, n_orbs, bras, kets, configs, thresh, n_threads):
                        rho,                # storage for density tensor for each pair of states in linear list
                        bras,               # block of row vectors: bra states
                        kets,               # block of row vectors: ket states
-                       configs.packed,     # bitwise occupation strings stored as arrays of integers (packed in one contiguous block, per global comments above)
-                       configs.size,       # the number of BigInts needed to store a configuration
+                       bra_configs.packed,     # bitwise occupation strings stored as arrays of integers (packed in one contiguous block, per global comments above)
+                       ket_configs.packed,     # bitwise occupation strings stored as arrays of integers (packed in one contiguous block, per global comments above)
+                       bra_configs.size,       # the number of BigInts needed to store a configuration
+                       ket_configs.size,       # the number of BigInts needed to store a configuration
                        n_orbs,             # edge dimension of the density tensors
                        len(bras),          # how many bra states
                        len(kets),          # how many ket states
-                       len(configs),       # how many configurations are there (call signature is ok as long as PyInt not longer than BigInt)
+                       len(bra_configs),       # how many configurations are there (call signature is ok as long as PyInt not longer than BigInt)
+                       len(ket_configs),       # how many configurations are there (call signature is ok as long as PyInt not longer than BigInt)
                        thresh,             # threshold for ignoring coefficients (avoiding expensive index search)
                        n_threads)          # number of OMP threads to spread the work over
+    antisymm.antisymmetrize(rho,    # the density to antisymmetrize
+                            len(rho),
+                            n_orbs,     # the number of orbitals
+                            n_create,
+                            n_destroy)       # the respective number of creation and annihilation operators
     return [rho[i*len(kets):(i+1)*len(kets)] for i in range(len(bras))]
-
-
-#def antisymmetrize(density, n_orbs, c, a):
-#    antisymm.antisymmetrize(density,    # the density to antisymmetrize
-#                            n_orbs,     # the number of orbitals
-#                            c, a)       # the respective number of creation and annihilation operators
-
 
 
 
