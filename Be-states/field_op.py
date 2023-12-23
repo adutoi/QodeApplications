@@ -89,10 +89,8 @@ def build_densities(op_string, n_orbs, bras, kets, bra_configs, ket_configs, thr
     n_annihil = op_string.count("a")
     if (op_string != "c"*n_create + "a"*n_annihil):  raise ValueError("density operator string is not vacuum normal ordered")
     shape = [n_orbs] * (n_create + n_annihil)
-    print("c,a,shape:", n_create, n_annihil, shape)
-    rho = []
-    for _ in range(len(bras) * len(kets)):
-        rho += [numpy.zeros(shape, dtype=Double.numpy)]
+    print("####", op_string, "->", shape, "x", len(bras)*len(kets))
+    rho = [numpy.zeros(shape, dtype=Double.numpy) for _ in range(len(bras)*len(kets))]
     field_op.densities(n_create,              # number of creation operators
                        n_annihil,             # number of annihilation operators
                        rho,                   # array of storage for density tensors (for each bra-ket pair in linear list)
