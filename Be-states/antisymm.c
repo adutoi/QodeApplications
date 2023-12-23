@@ -32,7 +32,8 @@ void antisymmetrize_recur(Double** tensors,              // the input/output ten
                           PyInt    old_len_orderings,    // for recursive use.  0 on first input
                           PyInt    old_num_orderings,    // for recursive use.  1 on first input
                           PyInt**  old_orderings,        // for recursive use.  NULL on first input
-                          PyInt*   old_phases)           // for recursive use.  [1] on first input
+                          PyInt*   old_phases,           // for recursive use.  [1] on first input
+                          PyInt*   native)
     {
     PyInt len_orderings = old_len_orderings + 1;                // Dimensions of the array that holds ...
     PyInt num_orderings = old_num_orderings * len_orderings;    // ... different ordering of fixed indices.
@@ -64,10 +65,10 @@ void antisymmetrize_recur(Double** tensors,              // the input/output ten
 
     for (PyInt p=p_0; p<len_axis; p++)    // loop over the next index
         {
-        for (PyInt m=0; m<num_orderings; m++) {insert[m][0] = p;}    // fill in its location in the orderings
+        for (PyInt m=0; m<num_orderings; m++) {insert[m][0] = native[p];}    // fill in its location in the orderings
         if (len_orderings < num_axes)     // If there is another index, keep going ...
             {
-            antisymmetrize_recur(tensors, num_tensors, num_axes, len_axis, new_strides, p+1, len_orderings, num_orderings, orderings, phases);
+            antisymmetrize_recur(tensors, num_tensors, num_axes, len_axis, new_strides, p+1, len_orderings, num_orderings, orderings, phases, native);
             }
         else                              // ... otherwise it is time to do the copying finally.
             {
@@ -104,7 +105,8 @@ void antisymmetrize(Double** tensors,      // array of density tensors to antisy
                     PyInt    n_tensors,    // number of density tensors to antisymmetrize
                     PyInt    n_orbs,       // number of orbitals (edge dimension of tensors)
                     PyInt    n_create,     // number of creation operators
-                    PyInt    n_annihil)    // number of annihilation operators
+                    PyInt    n_annihil,    // number of annihilation operators
+                    PyInt*   native)
     {
     printf("-# c^%d a^%d -> %d^%d x %d\n", n_create, n_annihil, n_orbs, n_create+n_annihil, n_tensors);
 
@@ -130,14 +132,14 @@ void antisymmetrize(Double** tensors,      // array of density tensors to antisy
 
         //
         printf("antisymmetrizing %d a-string subtensors of dimension %d^%d, with length-1 elements\n", n_tensors*n_subtensors, n_orbs, n_annihil);
-        antisymmetrize_recur(all_tensors, n_tensors*n_subtensors, n_annihil, n_orbs, &one,    0, 0, 1, NULL, &one);
+        antisymmetrize_recur(all_tensors, n_tensors*n_subtensors, n_annihil, n_orbs, &one,    0, 0, 1, NULL, &one, native);
         }
 
     if (n_create > 1)    // then antisymmetrize the among the former indices by treating the entire a-string subtensor as an "element" of the c-string tensor
         {
         //
         printf("antisymmetrizing %d c-string subtensors of dimension %d^%d, with length-%d elements\n", n_tensors, n_orbs, n_create, stride);
-        antisymmetrize_recur(    tensors, n_tensors,              n_create,  n_orbs, &stride, 0, 0, 1, NULL, &one);
+        antisymmetrize_recur(    tensors, n_tensors,              n_create,  n_orbs, &stride, 0, 0, 1, NULL, &one, native);
         }
 
     return;

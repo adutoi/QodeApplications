@@ -111,5 +111,6 @@ def build_densities(op_string, n_orbs, bras, kets, bra_configs, ket_configs, thr
                             len(rho),     # number of density tensors to antisymmetrize
                             n_orbs,       # number of orbitals
                             n_create,     # number of creation operators
-                            n_annihil)    # number of annihilation operators
+                            n_annihil,    # number of annihilation operators
+                            list(reversed(range(n_orbs))))
     return [rho[i*len(kets):(i+1)*len(kets)] for i in range(len(bras))]

@@ -226,8 +226,8 @@ for chg,states_chg in states.items():
     if num_states>0:
         print("{}: {}".format(chg, num_states))
         print(states_chg.coeffs[0].shape)
-        for config in states_chg.configs:
-            print("  {:018b}".format(config))
+        #for config in states_chg.configs:
+        #    print("  {:018b}".format(config))
 
 frag0.rho = densities.build_tensors(states, 2 * frag0.basis.n_spatial_orb, thresh=1e-12, n_threads=n_threads)
 
