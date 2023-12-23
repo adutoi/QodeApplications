@@ -66,8 +66,8 @@ def opPsi_1e(HPsi, Psi, h, configs, thresh, n_threads):
                     [Psi],             # array of row vectors: input vectors to act on
                     1,                 # how many vectors we are acting on and producing simultaneously in Psi and opPsi
                     configs.packed,    # configuration strings representing the basis for the states in Psi and opPsi (see packed_configs above)
-                    len(configs),      # the number of configurations in the configs basis (call signature ok if PyInt not longer than BigInt)
-                    configs.size,      # the number of BigInts needed to store a single configuration in configs
+                    len(configs),      # number of configurations in the configs basis (call signature ok if PyInt not longer than BigInt)
+                    configs.size,      # number of BigInts needed to store a single configuration in configs
                     thresh,            # perform no further work if result will be smaller than this
                     n_threads)         # number of threads to spread the work over
 
@@ -79,8 +79,8 @@ def opPsi_2e(HPsi, Psi, V, configs, thresh, n_threads):
                     [Psi],             # array of row vectors: input vectors to act on
                     1,                 # how many vectors we are acting on and producing simultaneously in Psi and opPsi
                     configs.packed,    # configuration strings representing the basis for the states in Psi and opPsi (see packed_configs above)
-                    len(configs),      # the number of configurations in the configs basis (call signature ok if PyInt not longer than BigInt)
-                    configs.size,      # the number of BigInts needed to store a single configuration in configs
+                    len(configs),      # number of configurations in the configs basis (call signature ok if PyInt not longer than BigInt)
+                    configs.size,      # number of BigInts needed to store a single configuration in configs
                     thresh,            # perform no further work if result will be smaller than this
                     n_threads)         # number of threads to spread the work over
 
@@ -100,18 +100,18 @@ def build_densities(op_string, n_orbs, bras, kets, bra_configs, ket_configs, thr
                        bras,                  # array of row vectors: bras for transition-density tensors
                        len(bras),             # number of bras
                        bra_configs.packed,    # configuration strings representing the basis for the bras (see packed_configs above)
-                       len(bra_configs),      # the number of configurations in the bra basis (call signature ok if PyInt not longer than BigInt)
-                       bra_configs.size,      # the number of BigInts needed to store a single configuration in the bra basis
+                       len(bra_configs),      # number of configurations in the bra basis (call signature ok if PyInt not longer than BigInt)
+                       bra_configs.size,      # number of BigInts needed to store a single configuration in the bra basis
                        kets,                  # array of row vectors: kets for transition-density tensors
                        len(kets),             # number of kets
                        ket_configs.packed,    # configuration strings representing the basis for the kets (see packed_configs above)
-                       len(ket_configs),      # the number of configurations in the ket basis (call signature ok if PyInt not longer than BigInt)
-                       ket_configs.size,      # the number of BigInts needed to store a single configuration in the ket basis
+                       len(ket_configs),      # number of configurations in the ket basis (call signature ok if PyInt not longer than BigInt)
+                       ket_configs.size,      # number of BigInts needed to store a single configuration in the ket basis
                        thresh,                # perform no further work if result will be smaller than this
                        n_threads)             # number of threads to spread the work over
-    #antisymm.antisymmetrize(rho,    # the density to antisymmetrize
-    #                        len(rho),
-    #                        n_orbs,     # the number of orbitals
-    #                        n_create,
-    #                        n_annihil)       # the respective number of creation and annihilation operators
+    antisymm.antisymmetrize(rho,          # linear array of density tensors to antisymmetrize
+                            len(rho),     # number of density tensors to antisymmetrize
+                            n_orbs,       # number of orbitals
+                            n_create,     # number of creation operators
+                            n_annihil)    # number of annihilation operators
     return [rho[i*len(kets):(i+1)*len(kets)] for i in range(len(bras))]

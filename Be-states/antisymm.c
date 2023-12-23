@@ -15,6 +15,7 @@
  *   You should have received a copy of the GNU General Public License
  *   along with QodeApplications.  If not, see <http://www.gnu.org/licenses/>.
  */
+#include <stdio.h>
 #include "PyC_types.h"    // PyInt, Double
 
 // This takes a tensor with an arbitrary number of axes (all of the same length), whereby the only
@@ -70,22 +71,33 @@ void antisymmetrize_recur(Double** tensors,              // the input/output ten
             }
         else                              // ... otherwise it is time to do the copying finally.
             {
+            printf("==========\n");
             PyInt idx_0 = 0;                                                                    // Build the linear index ...
-            for (PyInt i=0; i<len_orderings; i++) {idx_0 += orderings[0][i] * strides[i];}      // ... for ascending-order case.
+            for (PyInt i=0; i<len_orderings; i++) {printf("%7d", strides[i]);}
+            printf("\n");
+            for (PyInt i=0; i<len_orderings; i++) {printf("%7d", orderings[0][i]);
+                idx_0 += orderings[0][i] * strides[i];}      // ... for ascending-order case.
+            printf("   ->\n");
             for (PyInt m=1; m<num_orderings; m++)    // loop over other arrangements of the indices
                 {
                 PyInt idx = 0;                                                                  // Build the linear index ...
-                for (PyInt i=0; i<len_orderings; i++) {idx += orderings[m][i] * strides[i];}    // ... for the alternate arrangement.
-                for (PyInt t=0; t<num_tensors; t++)
-                    {
-                    for (PyInt k=0; k<strides[len_orderings-1]; k++) {tensors[t][idx+k] = phases[m] * tensors[t][idx_0+k];}    // Fill in redundant elements (to within a phase).
-                    }
+                for (PyInt i=0; i<len_orderings; i++) {printf("%7d", orderings[m][i]);
+                    idx += orderings[m][i] * strides[i];}    // ... for the alternate arrangement.
+                printf("   x %2d  (%d)\n", phases[m], strides[len_orderings-1]);
+                //for (PyInt t=0; t<num_tensors; t++)
+                //    {
+                //    for (PyInt k=0; k<strides[len_orderings-1]; k++) {tensors[t][idx+k] = phases[m] * tensors[t][idx_0+k];}    // Fill in redundant elements (to within a phase).
+                //    }
                 }
+            printf("==========\n");
             }
         }
 
     return;
     }
+
+
+
 
 
 

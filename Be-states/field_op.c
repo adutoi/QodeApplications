@@ -164,26 +164,26 @@ PyInt bisect_search(BigInt* config, BigInt* configs, PyInt n_configint, PyInt lo
 void resolve_recur(int      mode,             // OP_ACTION or COMPUTE_D (determines whether using Psi_L for storing new states or as bras)
                    PyInt    n_create,         // number of creation operators at present level of recursion
                    PyInt    n_annihil,        // number of annihilation operators at present level of recursion
-                   Double** Psi_L,            // the states being produced (LHS of equation) for OP_ACTION; states in the bra (on left) for COMPUTE_D
+                   Double** Psi_L,            // states being produced (LHS of equation) for OP_ACTION; states in the bra (on left) for COMPUTE_D
                    PyInt    n_Psi_L,          // number of states in Psi_L (for OP_ACTION, must have n_Psi_L==n_Psi_R, below)
                    BigInt*  configs_L,        // configuration strings representing the basis for the states in Psi_L
-                   PyInt    n_configs_L,      // the number of configurations in the basis configs_L
-                   PyInt    n_configint_L,    // the number of BigInts needed to store a single configuration in configs_L
-                   Double** Psi_R,            // the states being acted on (RHS of equation) for OP_ACTION; states in the ket (on right) for COMPUTE_D
+                   PyInt    n_configs_L,      // number of configurations in the basis configs_L
+                   PyInt    n_configint_L,    // number of BigInts needed to store a single configuration in configs_L
+                   Double** Psi_R,            // states being acted on (RHS of equation) for OP_ACTION; states in the ket (on right) for COMPUTE_D
                    PyInt    n_Psi_R,          // number of states in Psi_R (for OP_ACTION, must have n_Psi_L==n_Psi_R, above)
-                   BigInt*  config_R,         // the ket (right-hand) configuration being acted upon at present layer of recursion
+                   BigInt*  config_R,         // ket (right-hand) configuration being acted upon at present layer of recursion
                    PyInt    config_idx_R,     // index of the configuration (in the right-hand basis) acted upon at the *top* layer of recursion
-                   PyInt    n_configint_R,    // the number of BigInts needed to store the ket configuration being acted on, at any level of recursion
+                   PyInt    n_configint_R,    // number of BigInts needed to store the ket configuration being acted on, at any level of recursion
                    Double** tensors,          // tensor of matrix elements (sole entry) for OP_ACTION, or storage for output (array of arrays) for COMPUTE_D
                    PyInt    n_orbs,           // edge dimension of the tensor(s)
                    int*     occupied,         // indices of orbitals that are occupied in the configuration at the present level of recursion (not necessarily in order)
                    int      n_occ,            // number of orbitals that are occupied at the present level of recursion
                    int*     empty,            // indices of orbitals that are empty in the configuration at the present level of recursion (not necessarily in order)
                    int      n_emt,            // number of orbitals that are empty at the present level of recursion
-                   int*     cum_occ,          // the cumulative number of orbitals at or below a given index that are occupied at present level of recursion
-                   int      permute,          // the number of permutations performed so far to satisfy the field-operator prepend convention for ket orbitals in descending order
+                   int*     cum_occ,          // cumulative number of orbitals at or below a given index that are occupied at present level of recursion
+                   int      permute,          // number of permutations performed so far to satisfy the field-operator prepend convention for ket orbitals in descending order
                    int      op_idx,           // recursive build of index for the tensors array
-                   int      stride,           // the stride to be applied at this level of recursion in order to build op_idx (must start as 1)
+                   int      stride,           // stride to be applied at this level of recursion in order to build op_idx (must start as 1)
                    int      factor,           // recursive build of factor to avoid looping over redundant matrix elements (must start as 1)
                    int      p_0,              // initial orbital index at this level, to avoid looping over redundant matrix elements (must start as 0)
                    Double   thresh)           // perform no further work if result will be smaller than this
@@ -338,19 +338,19 @@ void resolve_recur(int      mode,             // OP_ACTION or COMPUTE_D (determi
 void resolve(int      mode,             // OP_ACTION or COMPUTE_D (determines whether using Psi_L for storing new states or as bras)
              PyInt    n_create,         // number of creation operators
              PyInt    n_annihil,        // number of annihilation operators
-             Double** Psi_L,            // the states being produced (LHS of equation) for OP_ACTION; states in the bra (on left) for COMPUTE_D
+             Double** Psi_L,            // states being produced (LHS of equation) for OP_ACTION; states in the bra (on left) for COMPUTE_D
              PyInt    n_Psi_L,          // number of states in Psi_L (for OP_ACTION, must have n_Psi_L==n_Psi_R, below)
              BigInt*  configs_L,        // configuration strings representing the basis for the states in Psi_L
-             PyInt    n_configs_L,      // the number of configurations in the basis configs_L
-             PyInt    n_configint_L,    // the number of BigInts needed to store a single configuration in configs_L
-             Double** Psi_R,            // the states being acted on (RHS of equation) for OP_ACTION; states in the ket (on right) for COMPUTE_D
+             PyInt    n_configs_L,      // number of configurations in the basis configs_L
+             PyInt    n_configint_L,    // number of BigInts needed to store a single configuration in configs_L
+             Double** Psi_R,            // states being acted on (RHS of equation) for OP_ACTION; states in the ket (on right) for COMPUTE_D
              PyInt    n_Psi_R,          // number of states in Psi_R (for OP_ACTION, must have n_Psi_L==n_Psi_R, above)
              BigInt*  configs_R,        // configuration strings representing the basis for the states in Psi_R
-             PyInt    n_configs_R,      // the number of configurations in the basis configs_R
-             PyInt    n_configint_R,    // the number of BigInts needed to store a single configuration in configs_R
+             PyInt    n_configs_R,      // number of configurations in the basis configs_R
+             PyInt    n_configint_R,    // number of BigInts needed to store a single configuration in configs_R
              Double** tensors,          // tensor of matrix elements (sole entry) for OP_ACTION, or storage for output (array of arrays) for COMPUTE_D
              PyInt    n_orbs,           // edge dimension of the tensor(s)
-             int      permute,          // the number of permutations performed at global scope to align sign conventions
+             int      permute,          // number of permutations performed at global scope to align sign conventions
              PyFloat  thresh,           // perform no further work if result will be smaller than this
              PyInt    n_threads)        // number of threads to spread the work over
     {
@@ -360,7 +360,7 @@ void resolve(int      mode,             // OP_ACTION or COMPUTE_D (determines wh
     #pragma omp parallel for               // divide the outermost loop over the threads (omp atomic at update to avoid race condition)
     for (PyInt n=0; n<n_configs_R; n++)    // loop over configurations in ket basis
         {
-        Double biggest = 0;    // the eventual value of the biggest coefficient for a given ket configuration
+        Double biggest = 0;    // eventual value of the biggest coefficient for a given ket configuration
         for (int v=0; v<n_Psi_R; v++)    // loop over ket states
             {
             Double size = fabs(Psi_R[v][n]);          // get the configuration coefficient ...
@@ -374,8 +374,8 @@ void resolve(int      mode,             // OP_ACTION or COMPUTE_D (determines wh
             int occupied[n_orbs];   // for indices of orbitals that are occupied in the present configuration (will be appended out of order in recursion)
             int empty[n_orbs];      // for indices of orbitals that are empty    in the present configuration (will be appended out of order in recursion
             int cum_occ[n_orbs];    // for the cumulative number of orbitals at or below a given index that are occupied (for phase calculations)
-            int n_occ = 0;          // the eventual number of occupied orbitals (also a running index for cataloging their indices below)
-            int n_emt = 0;          // the eventual number of empty    orbitals (also a running index for cataloging their indices below)
+            int n_occ = 0;          // eventual number of occupied orbitals (also a running index for cataloging their indices below)
+            int n_emt = 0;          // eventual number of empty    orbitals (also a running index for cataloging their indices below)
             for (int p=0; p<n_orbs; p++)    // loop over all orbitals
                 {
                 int Q = p / n_bits;                                          // Q=quotient:  in which component of config is orbital p?
@@ -428,8 +428,8 @@ void op_Psi(PyInt    n_elec,        // electron order of the operator
             Double** Psi,           // array of row vectors: input vectors to act on
             PyInt    n_Psi,         // how many vectors we are acting on and producing simultaneously in Psi and opPsi
             BigInt*  configs,       // configuration strings representing the basis for the states in Psi and opPsi (see global comments above about format)
-            PyInt    n_configs,     // the number of configurations in the configs basis (call signature ok if PyInt not longer than BigInt)
-            PyInt    n_configint,   // the number of BigInts needed to store a single configuration in configs
+            PyInt    n_configs,     // number of configurations in the configs basis (call signature ok if PyInt not longer than BigInt)
+            PyInt    n_configint,   // number of BigInts needed to store a single configuration in configs
             PyFloat  thresh,        // perform no further work if result will be smaller than this
             PyInt    n_threads)     // number of threads to spread the work over
     {
@@ -473,13 +473,13 @@ void densities(PyInt    n_create,           // number of creation operators
                Double** bras,               // array of row vectors: bras for transition-density tensors
                PyInt    n_bras,             // number of bras
                BigInt*  configs_bra,        // configuration strings representing the basis for the bras (see global comments above about format)
-               PyInt    n_configs_bra,      // the number of configurations in the basis configs_bra (call signature ok if PyInt not longer than BigInt)
-               PyInt    n_configint_bra,    // the number of BigInts needed to store a single configuration in configs_bra
+               PyInt    n_configs_bra,      // number of configurations in the basis configs_bra (call signature ok if PyInt not longer than BigInt)
+               PyInt    n_configint_bra,    // number of BigInts needed to store a single configuration in configs_bra
                Double** kets,               // array of row vectors: kets for transition-density tensors
                PyInt    n_kets,             // number of kets
                BigInt*  configs_ket,        // configuration strings representing the basis for the kets (see global comments above about format)
-               PyInt    n_configs_ket,      // the number of configurations in the basis configs_ket (call signature ok if PyInt not longer than BigInt)
-               PyInt    n_configint_ket,    // the number of BigInts needed to store a single configuration in configs_ket
+               PyInt    n_configs_ket,      // number of configurations in the basis configs_ket (call signature ok if PyInt not longer than BigInt)
+               PyInt    n_configint_ket,    // number of BigInts needed to store a single configuration in configs_ket
                PyFloat  thresh,             // perform no further work if result will be smaller than this
                PyInt    n_threads)          // number of threads to spread the work over
     {
