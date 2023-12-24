@@ -72,25 +72,28 @@ void antisymmetrize_recur(Double** tensors,              // the input/output ten
             }
         else                              // ... otherwise it is time to do the copying finally.
             {
-            printf("==========\n");
+            printf("==========\n");  fflush(stdout);
             PyInt idx_0 = 0;                                                                    // Build the linear index ...
-            for (PyInt i=0; i<len_orderings; i++) {printf("%7d", strides[i]);}
-            printf("\n");
-            for (PyInt i=0; i<len_orderings; i++) {printf("%7d", orderings[0][i]);
+            for (PyInt i=0; i<len_orderings; i++) {printf("%7d", strides[i]);  fflush(stdout);}
+            printf("\n");  fflush(stdout);
+            for (PyInt i=0; i<len_orderings; i++) {printf("%7d", orderings[0][i]);  fflush(stdout);
                 idx_0 += orderings[0][i] * strides[i];}      // ... for ascending-order case.
-            printf("   ->\n");
+            printf("   ->\n");  fflush(stdout);
             for (PyInt m=1; m<num_orderings; m++)    // loop over other arrangements of the indices
                 {
                 PyInt idx = 0;                                                                  // Build the linear index ...
-                for (PyInt i=0; i<len_orderings; i++) {printf("%7d", orderings[m][i]);
+                for (PyInt i=0; i<len_orderings; i++) {printf("%7d", orderings[m][i]);  fflush(stdout);
                     idx += orderings[m][i] * strides[i];}    // ... for the alternate arrangement.
-                printf("   x %2d  (%d)\n", phases[m], strides[len_orderings-1]);
-                //for (PyInt t=0; t<num_tensors; t++)
-                //    {
-                //    for (PyInt k=0; k<strides[len_orderings-1]; k++) {tensors[t][idx+k] = phases[m] * tensors[t][idx_0+k];}    // Fill in redundant elements (to within a phase).
-                //    }
+                printf("   x %2d  (%d)\n", phases[m], strides[len_orderings-1]);  fflush(stdout);
+                for (PyInt t=0; t<num_tensors; t++)
+                    {
+                    for (PyInt k=0; k<strides[len_orderings-1]; k++)
+                        {
+                        tensors[t][idx+k] = phases[m] * tensors[t][idx_0+k];    // Fill in redundant elements (to within a phase).
+                        }
+                    }
                 }
-            printf("==========\n");
+            printf("==========\n");  fflush(stdout);
             }
         }
 
@@ -108,11 +111,23 @@ void antisymmetrize(Double** tensors,      // array of density tensors to antisy
                     PyInt    n_annihil,    // number of annihilation operators
                     PyInt*   native)
     {
-    printf("-# c^%d a^%d -> %d^%d x %d\n", n_create, n_annihil, n_orbs, n_create+n_annihil, n_tensors);
+    printf("-# c^%d a^%d -> %d^%d x %d\n", n_create, n_annihil, n_orbs, n_create+n_annihil, n_tensors);  fflush(stdout);
 
     PyInt one    = 1;                                      // &one is a PyInt array with one element that is 1: ie, [1]
     PyInt stride = 1;                                      // basically just stride = n_orbs^n_annihil, which is the size of ...
     for (int i=0; i<n_annihil; i++) {stride *= n_orbs;}    // ... the a-string subtensor for each value of c-string indices
+
+    /*
+    PyInt length = 1;
+    for (int i=0; i<n_create+n_annihil; i++) {length *= n_orbs;}
+    for (int i=0; i<n_tensors; i++)
+        {
+        for (int j=0; j<length; j++)
+            {
+            tensors[i][j] = -83629735;
+            }
+        }
+    */
 
     if (n_annihil > 1)    // first antisymmetrize the latter a-string tensor for all values of the c-string indices
         {
@@ -125,20 +140,30 @@ void antisymmetrize(Double** tensors,      // array of density tensors to antisy
             {
             for (int j=0; j<n_subtensors; j++)    // loop over all subtensors of each top-level tensor
                 {
-                all_tensors[k] = tensors[i] + stride;    // store the pointer to that subtensor
-                k++;                                     // increment the running index
+                all_tensors[k] = tensors[i] + j*stride;    // store the pointer to that subtensor
+                k++;                                       // increment the running index
                 }
             }
 
+        /*
+        for (int i=0; i<n_tensors*n_subtensors; i++)
+            {
+            for (int j=0; j<stride; j++)
+                {
+                all_tensors[i][j] = -18362973;
+                }
+            }
+        */
+
         //
-        printf("antisymmetrizing %d a-string subtensors of dimension %d^%d, with length-1 elements\n", n_tensors*n_subtensors, n_orbs, n_annihil);
+        printf("antisymmetrizing %d a-string subtensors of dimension %d^%d, with length-1 elements\n", n_tensors*n_subtensors, n_orbs, n_annihil);  fflush(stdout);
         antisymmetrize_recur(all_tensors, n_tensors*n_subtensors, n_annihil, n_orbs, &one,    0, 0, 1, NULL, &one, native);
         }
 
     if (n_create > 1)    // then antisymmetrize the among the former indices by treating the entire a-string subtensor as an "element" of the c-string tensor
         {
         //
-        printf("antisymmetrizing %d c-string subtensors of dimension %d^%d, with length-%d elements\n", n_tensors, n_orbs, n_create, stride);
+        printf("antisymmetrizing %d c-string subtensors of dimension %d^%d, with length-%d elements\n", n_tensors, n_orbs, n_create, stride);  fflush(stdout);
         antisymmetrize_recur(    tensors, n_tensors,              n_create,  n_orbs, &stride, 0, 0, 1, NULL, &one, native);
         }
 
