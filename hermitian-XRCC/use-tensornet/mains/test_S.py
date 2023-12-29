@@ -49,16 +49,16 @@ class empty(object):  pass     # Basically just a dictionary class
 
 # Information about the Be2 supersystem
 n_frag       = 2
-displacement = float(sys.argv[1])
-states       = "atomic_states/rho/{}.pkl".format(sys.argv[2])
+displacement = sys.argv[1]                                       # need to keep displacement as a string for later
+states       = "atomic_states/rho/Be631g-thresh=1e-6:4.5.pkl"    # hard-coded bc very limited testing
 
 # "Assemble" the supersystem for the displaced fragments and get integrals
 BeN = []
 for m in range(int(n_frag)):
     Be = pickle.load(open(states,"rb"))
-    for elem,coords in Be.atoms:  coords[2] += m * displacement    # displace along z
+    for elem,coords in Be.atoms:  coords[2] += m * float(displacement)    # displace along z
     BeN += [Be]
-symm_ints, bior_ints, nuc_rep = get_ints(BeN)
+symm_ints, bior_ints, nuc_rep = get_ints(BeN, project_core=False)
 
 # The engines that build the terms
 BeN_rho = [frag.rho for frag in BeN]   # diagrammatic_expansion.blocks should take BeN directly? (n_states and n_elec one level higher)
@@ -99,7 +99,8 @@ for chg in dimer_charges:
                                              "s01s01s10s10", "s01s01s01s10"
                                             ]
                                         },  (0,1), dimer_charges[chg])
-    S2ref = numpy.load("atomic_states/states/16-115-550/thresh=1e-6/4.5/S-{}.npy".format(chg))
+    S2ref = numpy.load("atomic_states/states/16-115-550/load=states:16-115-550:thresh=1e-6:4.5:u.pickle/{}/S-{}.npy".format(displacement,chg))
+
     S2    -= numpy.identity(S2.shape[0])
     S2ref -= numpy.identity(S2.shape[0])
     print(" {:2d} ".format(chg), end="")

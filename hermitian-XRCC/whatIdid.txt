@@ -1,0 +1,62 @@
+ 1003  conda activate qode
+ 1139  hg pull
+ 1141  hg update
+ 1174  cd hermitian-XRCC/use-tensornet
+ 1175  ./patch 
+
+ 1177  cd ../atomic_states
+ 1178  ln -s /general/adutoi/programs/Qode/Applications/hermitian-XRCC/atomic_states/integrals
+ 1179  ln -s /general/adutoi/programs/Qode/Applications/hermitian-XRCC/atomic_states/states
+ 1180  ln -s /general/adutoi/programs/Qode/Applications/hermitian-XRCC/atomic_states/rho
+ 1192  python be2_integrals.py 4.5
+ 1037  python be2_integrals.py 4.0
+ 1038  python be2_integrals.py 3.5
+ 1039  python be2_integrals.py 3.0
+ 1040  python be2_integrals.py 2.5
+ 1041  python be2_integrals.py 2.0
+ 1042  python be2_integrals.py 1.5
+ 1199  ./run 4.5 16-115-550 thresh=1e-6 &
+ 1044  ./run 4.0 16-115-550 thresh=1e-6 &
+ 1056  ./run 3.5 16-115-550 thresh=1e-6 &
+  947  ./run 3.0 16-115-550 thresh=1e-6 &
+  952  ./run 2.5 16-115-550 thresh=1e-6 &
+  954  ./run 2.0 16-115-550 thresh=1e-6 &
+  969  ./run 1.5 16-115-550 thresh=1e-6 &
+  978  ./run 4.5 16-115-550 nstates=100 &
+  985  ./run 4.5 16-115-550 nstates=90 &
+  987  ./run 4.5 16-115-550 nstates=80 &
+  989  ./run 4.5 16-115-550 nstates=70 &
+  994  ./run 4.5 16-115-550 nstates=60 &
+  999  ./run 4.5 16-115-550 nstates=50 &
+ 1029  ./run 4.5 16-115-550 nstates=40 &
+ 1030  ./run 4.5 16-115-550 nstates=30 &
+  968  ./run 4.5 16-115-550 load=states:16-115-550:thresh=1e-6:4.5:u.pickle &
+  977  ./run 4.0 16-115-550 load=states:16-115-550:thresh=1e-6:4.5:u.pickle &
+  995  ./run 3.5 16-115-550 load=states:16-115-550:thresh=1e-6:4.5:u.pickle &
+  983  ./run 3.0 16-115-550 load=states:16-115-550:thresh=1e-6:4.5:u.pickle &
+  988  ./run 2.5 16-115-550 load=states:16-115-550:thresh=1e-6:4.5:u.pickle &
+ 1000  ./run 2.0 16-115-550 load=states:16-115-550:thresh=1e-6:4.5:u.pickle &
+ 1002  ./run 1.5 16-115-550 load=states:16-115-550:thresh=1e-6:4.5:u.pickle &
+  993  cd integrals
+  994  cp configs_1e.npy configs_1e-stable.npy
+  995  cp configs_2e.npy configs_2e-stable.npy
+  996  cp configs_3e.npy configs_3e-stable.npy
+  998  cd ..
+  999  python -u Be631g.py thresh=1e-6 &> states/16-115-550/thresh=1e-6/4.5/rho-std.out & 
+  966  python -u Be631g.py nstates=100 &> states/16-115-550/nstates=100/4.5/rho-std.out & 
+  974  python -u Be631g.py nstates=90  &> states/16-115-550/nstates=90/4.5/rho-std.out & 
+ 1029  python -u Be631g.py nstates=80  &> states/16-115-550/nstates=80/4.5/rho-std.out &
+ 1033  python -u Be631g.py nstates=70  &> states/16-115-550/nstates=70/4.5/rho-std.out &
+ 1036  python -u Be631g.py nstates=60  &> states/16-115-550/nstates=60/4.5/rho-std.out &
+ 1038  python -u Be631g.py nstates=50  &> states/16-115-550/nstates=50/4.5/rho-std.out &
+ 1041  python -u Be631g.py nstates=40  &> states/16-115-550/nstates=40/4.5/rho-std.out &
+ 1046  python -u Be631g.py nstates=30  &> states/16-115-550/nstates=30/4.5/rho-std.out &
+
+ 1007  cd ..
+  961  cp mains/* .
+  990  mkdir test_S
+ 1035  python -u test_S.py 4.5 &> test_S/4.5.out &
+	etc
+ 1004  mkdir xr-noproj-1e-6
+ 1005  python -u xr-ccsd.py 4.5 Be631g-thresh=1e-6:4.5 no-proj &> xr-noproj-1e-6/4.5.out
+	etc
