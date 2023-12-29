@@ -30,8 +30,8 @@ class Hamiltonian(object):
         self.n_threads = n_threads
     def set_n_threads(self, n_threads):
         self.n_threads = n_threads
-    def __call__(self, Psi, configs, vec_0=0, num_vecs=1):    # The ability to act on blocks of consecutively stored vectors is not currently used (but it has been tested)
-        HPsi = numpy.zeros((num_vecs,len(configs)), dtype=Double.numpy)
-        field_op.opPsi_1e(HPsi, Psi, self.h, vec_0, num_vecs, configs, self.thresh, self.n_threads)
-        field_op.opPsi_2e(HPsi, Psi, self.V, vec_0, num_vecs, configs, self.thresh, self.n_threads)
+    def __call__(self, Psi, configs):
+        HPsi = numpy.zeros(len(configs), dtype=Double.numpy)
+        field_op.opPsi_1e(HPsi, Psi, self.h, configs, self.thresh, self.n_threads)
+        field_op.opPsi_2e(HPsi, Psi, self.V, configs, self.thresh, self.n_threads)
         return HPsi

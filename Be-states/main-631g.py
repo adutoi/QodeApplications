@@ -29,17 +29,23 @@ from CI_space_traits import CI_space_traits
 import field_op_ham
 import configurations
 
-class _empty(object):  pass
+from qode.util.PyC import Double
+
+import densities
+
+import pickle
+
+class empty(object):  pass
 
 n_threads = 1
 dist = float(sys.argv[1])
 if len(sys.argv)==3:  n_threads = int(sys.argv[2])
 
 
-frag0 = _empty()
+frag0 = empty()
 frag0.atoms = [("Be",[0,0,0])]
 frag0.n_elec_ref = 4	# The number of electrons in the reference state of the monomer ("cation (+1)" and "anion (-1)" and technically interpreted relative to the reference, not zero, as would be the chemical definition)
-frag0.basis = _empty()
+frag0.basis = empty()
 frag0.basis.AOcode = "6-31G"
 frag0.basis.n_spatial_orb = 9
 frag0.basis.MOcoeffs = numpy.identity(frag0.basis.n_spatial_orb)    # rest of code assumes spin-restricted orbitals
@@ -64,10 +70,10 @@ print(E)
 
 
 
-frag1 = _empty()
+frag1 = empty()
 frag1.atoms = [("Be",[0,0,dist])]
 frag1.n_elec_ref = 4
-frag1.basis = _empty()
+frag1.basis = empty()
 frag1.basis.AOcode = "6-31G"
 frag1.basis.n_spatial_orb = 9
 frag1.basis.MOcoeffs = frag0.basis.MOcoeffs
@@ -83,7 +89,7 @@ num_spatial_atom = frag0.basis.n_spatial_orb
 
 dn_configs_atom = configurations.all_configs(num_spatial_atom, num_elec_atom_dn-len(frag0.basis.core), frozen_occ_orbs=frag0.basis.core)
 up_configs_atom = configurations.all_configs(num_spatial_atom, num_elec_atom_up-len(frag0.basis.core), frozen_occ_orbs=frag0.basis.core)
-configs_atom    = configurations.tensor_product_configs([up_configs_atom,up_configs_atom], [num_spatial_atom,num_spatial_atom])
+configs_atom    = configurations.tensor_product_configs([dn_configs_atom,up_configs_atom], [num_spatial_atom,num_spatial_atom])
 
 N, S, T, U, V = nuc_rep[0,0], symm_ints.S[0,0], symm_ints.T[0,0], symm_ints.U[0,0,0], symm_ints.V[0,0,0,0]
 h = T + U
@@ -105,13 +111,45 @@ up_configs_dimer = configurations.all_configs(2*num_spatial_atom, 2*num_elec_ato
 dn_configs_decomp = configurations.decompose_configs(dn_configs_dimer, [num_spatial_atom, num_spatial_atom])
 up_configs_decomp = configurations.decompose_configs(up_configs_dimer, [num_spatial_atom, num_spatial_atom])
 combine_configs = configurations.config_combination([num_spatial_atom, num_spatial_atom])
+all_configs_1 = list()
+all_configs_0 = set()
 nested = []
 for config_dn1,configs_dn0 in dn_configs_decomp:
     for config_up1,configs_up0 in up_configs_decomp:
         config_1  = combine_configs([config_up1, config_dn1])
         configs_0 = configurations.tensor_product_configs([configs_up0, configs_dn0], [num_spatial_atom, num_spatial_atom])
         nested += [(config_1, configs_0)]
+        all_configs_1 += [config_1]
+        all_configs_0 |= set(configs_0)
+all_configs_0 = list(all_configs_0)
 configs_dimer = configurations.recompose_configs(nested, [2*num_spatial_atom, 2*num_spatial_atom])
+
+num_elec_dimer = frag0.n_elec_ref + frag1.n_elec_ref
+sorted_configs_1 = [[] for n in range(num_elec_dimer+1)]
+sorted_configs_0 = [[] for n in range(num_elec_dimer+1)]
+for config_1 in all_configs_1:
+    n = config_1.bit_count()
+    sorted_configs_1[n] += [config_1]
+sorted_configs_1 = [sorted(sorted_configs_1_n) for sorted_configs_1_n in sorted_configs_1]
+for config_0 in all_configs_0:
+    n = config_0.bit_count()
+    sorted_configs_0[n] += [config_0]
+sorted_configs_0 = [sorted(sorted_configs_0_n) for sorted_configs_0_n in sorted_configs_0]
+
+frag1_to_dimer = [[[] for _ in range(len(sorted_configs_1_n))] for sorted_configs_1_n in sorted_configs_1]
+frag0_to_dimer = [[[] for _ in range(len(sorted_configs_0_n))] for sorted_configs_0_n in sorted_configs_0]
+dimer_to_frags = []
+P = 0
+for config_1,configs_0 in nested:
+    n1 = config_1.bit_count()
+    i1 = sorted_configs_1[n1].index(config_1)
+    for config_0 in configs_0:
+        n0 = config_0.bit_count()
+        i0 = sorted_configs_0[n0].index(config_0)
+        dimer_to_frags += [((n1,i1),(n0,i0))]
+        frag1_to_dimer[n1][i1] += [P]
+        frag0_to_dimer[n0][i0] += [P]
+        P += 1
 
 N = nuc_rep[0,0] + nuc_rep[1,1] + nuc_rep[0,1]
 T = unblock_2(    bior_ints.T, [frag0,frag1], spin_orbs=True)
@@ -139,3 +177,65 @@ guess = CI_space_dimer.member(CI_space_dimer.aux.basis_vec([0,1,9,10,18,19,27,28
 print((guess|H|guess) + N)
 (Eval,Evec), = qode.math.lanczos.lowest_eigen(H, [guess], thresh=1e-8)
 print("\nE_gs = {}\n".format(Eval+N))
+
+
+
+dim_1 = [len(frag1_to_dimer_n) for frag1_to_dimer_n in frag1_to_dimer]
+dim_0 = [len(frag0_to_dimer_n) for frag0_to_dimer_n in frag0_to_dimer]
+rho_1 = [(numpy.zeros((dim_1_n,dim_1_n)) if dim_1_n>0 else None) for dim_1_n in dim_1]
+rho_0 = [(numpy.zeros((dim_0_n,dim_0_n)) if dim_0_n>0 else None) for dim_0_n in dim_0]
+for n in range(num_elec_dimer+1):
+    if rho_0[n] is not None:
+        for R_list in frag1_to_dimer[num_elec_dimer-n]:
+            for P in R_list:
+                (n_i1,i1),(n_i0,i0) = dimer_to_frags[P]
+                for Q in R_list:
+                    (n_j1,j1),(n_j0,j0) = dimer_to_frags[Q]
+                    rho_0[n][i0,j0] += Evec.v[P] * Evec.v[Q]    # should have n_i1==n_j1==num_elec_dimer-n and  i1==j1  and n_i0==n_j0==n
+    if rho_1[n] is not None:
+        for R_list in frag0_to_dimer[num_elec_dimer-n]:
+            for P in R_list:
+                (n_i1,i1),(n_i0,i0) = dimer_to_frags[P]
+                for Q in R_list:
+                    (n_j1,j1),(n_j0,j0) = dimer_to_frags[Q]
+                    rho_1[n][i1,j1] += Evec.v[P] * Evec.v[Q]    # should have n_i0==n_j0==num_elec_dimer-n and  i0==j0  and n_i1==n_j1==n
+
+thresh = 1e-6
+
+states = {}
+for n in range(num_elec_dimer+1):
+    chg = frag0.n_elec_ref - n
+    if rho_0[n] is not None:
+        rho = (rho_1[n] + rho_0[n]) / 2    # relies on fragments being the same
+        evals, evecs = qode.util.sort_eigen(numpy.linalg.eigh(rho), order="descending")
+        n_config_n = len(evals)
+        print("n_config_n", n_config_n)
+        for i,e in enumerate(evals):
+            if e>thresh:
+                if chg not in states:
+                    states[chg] = empty()
+                    states[chg].configs = sorted_configs_0[n]  # relies on fragments being the same
+                    states[chg].coeffs  = []
+                tmp = numpy.zeros(n_config_n, dtype=Double.numpy)
+                tmp[:] = evecs[:,i]
+                states[chg].coeffs += [tmp]
+                #states[chg].coeffs += [evecs[:,i].copy()]      # copy or else not contiguous (needed for C processing)
+
+for chg,states_chg in states.items():
+    num_states = len(states_chg.coeffs)
+    if num_states>0:
+        print("{}: {}".format(chg, num_states))
+        print(states_chg.coeffs[0].shape)
+        #for config in states_chg.configs:
+        #    print("  {:018b}".format(config))
+
+frag0.rho = densities.build_tensors(states, 2 * frag0.basis.n_spatial_orb, thresh=1e-12, n_threads=n_threads)
+
+ref_chg, ref_idx = 0, 0
+frag0.state_indices = [(ref_chg,ref_idx)]                # List of all charge and state indices, reference state needs to be first, but otherwise irrelevant order
+for i in range(len(states[ref_chg].coeffs)):
+    if   i!=ref_idx:  frag0.state_indices += [(ref_chg,i)]
+for chg in states:
+    if chg!=ref_chg:  frag0.state_indices += [(chg,i) for i in range(len(states[chg].coeffs))]
+
+pickle.dump(frag0, open("/scratch/adutoi/Be631g.pkl", "wb"))

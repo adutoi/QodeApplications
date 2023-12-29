@@ -17,71 +17,75 @@
  */
 
 /*
- * The basic operational principle is that an array of configurations is passed
- * along with the state vectors (having the same length).  These configurations
- * are bit strings, where each bit represents the occupation of an orbital.  The
- * action of an operator is implemented by bit-fiddling copies of the configuration
- * string to correspond to annihilation and creation operators, and then looking
- * up where the (rephased) generated configuration falls in the output vector.
- * This relies on the fact that the configuration strings are store in ascending
- * order if their bit-sequences are interpreted as binary integers.
+ * The basic operational principle is that an array of configurations is given
+ * along with a state vector (having the same length).  These configurations
+ * are bit strings (perhaps consisting of multiple consecutive integers), where
+ * each bit represents the occupation of an orbital.  The action of field
+ * operators are implemented by bit flips on copies of the configuration, while
+ * simultaneously keeping track of the phase (using the prepend convention and
+ * the orbital ordering described below).  After action of a string of field
+ * operators on a ket configuration, the location of the new configuration in
+ * a list of bra configuration is looked up, in order to find the bra onto
+ * which it projects.  This look-up relies on the fact that the configuration
+ * strings are stored in ascending order according to the interpretation of
+ * their bit strings as integers.  This step (implemented via bisection search)
+ * is the most expensive part of this algorithm.
  *
- * On the inside of this code (which differs from the convention on the outside)
- * we imagine the binary integers used to represent the configurations written
- * in the usual way, with the low bit to the right.  Therefore, to make things
- * conceptually consistent, it helps to imagine arrays written right-to-left
- * (opposite the natural direction for a left-to-right reader), so that the axes
- * of the integrals tensors associated with the same orbital sets as the bit
+ * On the inside of this code (which may differ from the outside) we imagine
+ * the binary representation of integers used to represent the configurations
+ * written in the usual way, with the low bit (representing the lowest-index
+ * orbital) to the right.  Therefore, to make things conceptually consistent,
+ * it helps to imagine arrays written right-to-left in storage (opposite the
+ * natural direction for a left-to-right reader), so that the axes of the
+ * integrals/density tensors associated with the same orbital sets as the bit
  * strings run in the same direction.  This is particularly convenient for the
  * *arrays* of configuration integers that need to be used to allow for systems
- * with more orbitals than can fit in a single BigInt; the lowest-order bits (that
- * is, the lowest-index orbitals) are represented in the 0-th element of such
- * an array, and so on, so it helps to think of the 1-st element as being to the
- * left of the 0-th, etc.  These configuration integers come in as one big block
- * (to ensure they are contiguous for efficiency) and get chopped up as they are
- * used.
+ * with more orbitals than can fit in a single BigInt; the lowest-order bits
+ * (that is, the lowest-index orbitals) are represented in the 0-th element of
+ * such an array, and so on, so it helps to think of the 1-st element as being
+ * to the left of the 0-th, etc.  These configuration integers come in as one
+ * contiguous block (to ensure they are contiguous for efficiency) and get
+ * chopped up as they are used.
  *
  * Ideas for making this better:
  * - allow input about what ranges of creation/annihilation have nonzero elements
  * - feed in integrals that account for frozen core while working only with active-space configs
- * - faster "find" function (run through Ham once to make lookup table for each element)
- * - spin symmetry
+ * - faster "find" function? (run through Ham once to make lookup table for each element)
+ * - spin symmetry?
  */
 
-            // The configs array is packed such that components of each config are contiguous, with
-            // each of those then stored together consecutively and contiguously under one pointer.
-            // Internally, the high-order components of each config follow the low-order components
-            // (ie, the 1-st follows the 0-th in storage, as usual), despite what is said above about
-            // conceptualizing the arrays as written backwards.  We needed to choose between this
-            // small inconistency, or one where we interpret the << operator as a *rightward* bitshift
-            // or interpreting low-index components of a config array as high-order bits, and this seemed
-            // like the least of evils.  The inconsistency is not removable . . . yes it is, if all the storage is "backwards"
-
-
+#include <stdlib.h>       // exit()
 #include <string.h>       // memcpy()
 #include <math.h>         // fabs()
-#include "PyC_types.h"    // PyInt, BigInt
+#include "PyC_types.h"    // PyInt, BigInt, Double
 #ifdef _OPENMP
-#include <omp.h>
+#include <omp.h>          // multithreading
 #endif
 
-#include <stdio.h>        // fprintf(stderr, "...")  Can be eliminated when debugged
+// The operation of the recursive kernel for performing the action of an operator on a vector
+// to produce a new vector or to build transition-density tensors between vectors is largely the
+// same, so there iw one piece of code, where one of two modes is activated upon bottoming out.
+//
+#define OP_ACTION 1
+#define COMPUTE_D 2
 
 
 
 // The number of orbitals represented by a single BigInt.
-// Self-standing function because needs to be accessible to python too for packing the configs arrays.
+// Self-standing function to be accessible to python for packing the configs arrays.
+//
 PyInt orbs_per_configint()
     {
-    return 8*sizeof(BigInt) - 1;    // pretty safe to assume a byte is 8 bits.  Subtract 1 bit for sign.
+    return 8*sizeof(BigInt) - 1;    // pretty safe to assume a byte is 8 bits.  Less 1 bit for sign.
     }
 
 
 
-// The index of a config in an array of configs (given that each configuration requires n_configint BigInts).
-// Returns -1 if config not in configs.  The last two arguments are the inclusive initial bounds.
+// The index of a config in an array of configs (given that each configuration requires
+// n_configint BigInts).  Returns -1 if config not in configs.  The last two arguments
+// are the inclusive initial bounds.
 // Also needs to be accessible to python.
-// This is where the time goes!!
+//
 PyInt bisect_search(BigInt* config, BigInt* configs, PyInt n_configint, PyInt lower, PyInt upper)
     {
     PyInt   i, half;        // Get used repeatedly, ...
@@ -137,224 +141,349 @@ PyInt bisect_search(BigInt* config, BigInt* configs, PyInt n_configint, PyInt lo
 
 
 
-void opPsi_1e(Double* op,            // tensor of matrix elements (integrals)
-              Double* Psi,           // block of row vectors: input vectors to act on
-              Double* opPsi,         // block of row vectors: incremented by output
-              BigInt* configs,       // bitwise occupation strings stored as arrays of integers (packed in one contiguous block, per global comments above)
-              PyInt   n_configint,   // the number of BigInts needed to store a configuration
-              PyInt   n_orbs,        // edge dimension of the integrals tensor
-              PyInt   vec_0,         // index of first vector in block to act upon
-              PyInt   n_vecs,        // how many vectors we are acting on simultaneously
-              PyInt   n_configs,     // how many configurations are there (call signature is ok as long as PyInt not longer than BigInt)
-              PyFloat thresh,        // threshold for ignoring integrals and coefficients (avoiding expensive index search)
-              PyInt   n_threads)     // number of OMP threads to spread the work over
+// The recursive kernel for looping over orbital indices of a string of field operators for the
+// purpose of either acting an operator that is a linear combination of such strings or
+// computing the separate matrix elements of all such strings.  See comments with the driver
+// functions below for more context.
+//
+// The general principle of operation is the that driver code loops over the ket configurations.
+// These configurations may be components of multiple ket states, but since resolving action of
+// field-operator strings upon them is the most expensive thing, the loop over these configurations
+// is pulled to the outside (in the driver code); this is followed by the loops over the orbital
+// indices (done by recursion here), after which the action is completely resolved (done in layers
+// to keep most effort out of the more inner loops); finally the loops over the ket (and perhaps
+// bra) coefficents are most deeply nested (performed here when the recursion bottoms out).  The
+// latter, lower orbital indices (for operators closest to the ket) are looped over at the
+// outer-most level of recursion.  To increaes efficiency, this code dynamically keeps track of
+// which orbitals are occupied and empty as the configuration is modified with each level of
+// recursion.  The tricky part, which leads to more lines of code than one might first think to
+// write, is to get the recursion to bottom out at 1 loop instead of 0.  This is because things
+// can be made more efficient if it is known when one is at the inner-most loop, and it is the
+// inner-most loop that actually matters.
+//
+void resolve_recur(int      mode,             // OP_ACTION or COMPUTE_D (determines whether using Psi_L for storing new states or as bras)
+                   PyInt    n_create,         // number of creation operators at present level of recursion
+                   PyInt    n_annihil,        // number of annihilation operators at present level of recursion
+                   Double** Psi_L,            // states being produced (LHS of equation) for OP_ACTION; states in the bra (on left) for COMPUTE_D
+                   PyInt    n_Psi_L,          // number of states in Psi_L (for OP_ACTION, must have n_Psi_L==n_Psi_R, below)
+                   BigInt*  configs_L,        // configuration strings representing the basis for the states in Psi_L
+                   PyInt    n_configs_L,      // number of configurations in the basis configs_L
+                   PyInt    n_configint_L,    // number of BigInts needed to store a single configuration in configs_L
+                   Double** Psi_R,            // states being acted on (RHS of equation) for OP_ACTION; states in the ket (on right) for COMPUTE_D
+                   PyInt    n_Psi_R,          // number of states in Psi_R (for OP_ACTION, must have n_Psi_L==n_Psi_R, above)
+                   BigInt*  config_R,         // ket (right-hand) configuration being acted upon at present layer of recursion
+                   PyInt    config_idx_R,     // index of the configuration (in the right-hand basis) acted upon at the *top* layer of recursion
+                   PyInt    n_configint_R,    // number of BigInts needed to store the ket configuration being acted on, at any level of recursion
+                   Double** tensors,          // tensor of matrix elements (sole entry) for OP_ACTION, or storage for output (array of arrays) for COMPUTE_D
+                   PyInt    n_orbs,           // edge dimension of the tensor(s)
+                   int*     occupied,         // indices of orbitals that are occupied in the configuration at the present level of recursion (not necessarily in order)
+                   int      n_occ,            // number of orbitals that are occupied at the present level of recursion
+                   int*     empty,            // indices of orbitals that are empty in the configuration at the present level of recursion (not necessarily in order)
+                   int      n_emt,            // number of orbitals that are empty at the present level of recursion
+                   int*     cum_occ,          // cumulative number of orbitals at or below a given index that are occupied at present level of recursion
+                   int      permute,          // number of permutations performed so far to satisfy the field-operator prepend convention for ket orbitals in descending order
+                   int      op_idx,           // recursive build of index for the tensors array
+                   int      stride,           // stride to be applied at this level of recursion in order to build op_idx (must start as 1)
+                   int      factor,           // recursive build of factor to avoid looping over redundant matrix elements (must start as 1)
+                   int      p_0,              // initial orbital index at this level, to avoid looping over redundant matrix elements (must start as 0)
+                   Double   thresh)           // perform no further work if result will be smaller than this
     {
-    omp_set_num_threads(n_threads);
-
-    int n_bits  = orbs_per_configint();            // number of bits/orbitals in a BigInt
-    int n_bytes = n_configint * sizeof(BigInt);    // number of bytes in a config array (for memcpy)
-
-    // "scratch" space that needs to be maximally n_orbs long, allocated once (per thread)
-    int occupied[n_orbs];          // the orbitals that are occupied in a given configuration (not necessarily in order)
-    int empty[n_orbs];             // the orbitals that are empty    in a given configuration (not necessarily in order)
-    int cumulative_occ[n_orbs];    // the number of orbitals below a given index that are occupied (for phase calculations)
-    // "scratch" space for storing configurations generated by field-operator strings, allocated once (per thread)
-    BigInt    q_config[n_configint];
-    BigInt   pq_config[n_configint];
-
-    #pragma omp parallel for private(occupied, empty, cumulative_occ, q_config, pq_config)
-    for (PyInt n=0; n<n_configs; n++)
+    // Some admin that needs to be done for either mode at any level of recursion
+    int    n_bits         = orbs_per_configint();                // number of bits/orbitals in a BigInt
+    int    n_bytes_config_R = n_configint_R * sizeof(BigInt);    // number of bytes in the ket config (for memcpy)
+    BigInt p_config_R[n_configint_R];                            // a place to store modified configurations
+    int    p_n;
+    int*   orb_list;
+    if (n_annihil > 0)    // will loop over annihilation (occupied) index
         {
-        int any_significant = 0;    // ie, False.  There are no significant coefficients for this configuration in any vector
-        int v = vec_0;
-        while (v<vec_0+n_vecs && !any_significant)    // loop over the vectors we are acting on
-            {if (fabs(Psi[(v++)*n_configs+n]) > thresh)  {any_significant = 1;}}
+        p_n      = n_occ;       // upper limit of the orbital loop if doing annihlation operator
+        orb_list = occupied;    // resolution of counting index to orbital index draws from occupied orbitals of present configurations
+        }
+    else                  // will loop over creation (empty) index
+        {
+        p_n      = n_emt;       // upper limit of the orbital loop if doing creation operator
+        orb_list = empty;       // resolution of counting index to orbital index draws from empty orbitals of present configurations
+        }
 
-        if (any_significant)    // all of this is skipped if the configuration has no significan coefficiencts
+    if (n_annihil + n_create > 1)    // recursive part (there is still >1 loop to go)
+        {
+        int  n_bytes_cum_occ = n_orbs * sizeof(int);    // number of bytes in cum_occ array (for memcpy)
+        int  p_cum_occ[n_orbs];                         // a place to store modified cum_occ arrays
+        int  reset_p_0 = 0;
+        int  occ_change;
+        int* other_orb_list_entry;
+        if (n_annihil > 0)    // will loop over annihilation (occupied) index
             {
-            BigInt* config = configs + (n * n_configint);    // config[] is now an array of integers collectively holding the present configuration
-
-            int Q;    // integer quotient  (for repeated orbital<->bit mapping manipulations)
-            int R;    // integer remainder (for repeated orbital<->bit mapping manipulations)
-
-            int n_occ = 0;    // count the number of occupied orbitals (also acts as a running index for cataloging their indices)
-            int n_emt = 0;    // count the number of empty    orbitals (also acts as a running index for cataloging their indices)
-            for (int i=0; i<n_orbs; i++)
+            factor *= n_annihil;                          // increase the redundancy factor (only used for OP_ACTION)
+            n_annihil--;                                  // there will be one less annihilation loop
+            other_orb_list_entry = empty + n_emt++;       // we will eventually add the orbital index to the end of the empty array (whose length is incremented)
+            occ_change = -1;                              // occupancies in cum_occ array will go down
+            if (n_annihil == 0) {reset_p_0 = 1;}          // if this is the last annihilation operator we will reset the beginning index of the orbital loops (for creation loops)
+            }
+	else                  // will loop over creation (empty) index
+            {
+            factor *= n_create;                           // increase the redundancy factor (only used for OP_ACTION)
+            n_create--;                                   // there will be one less creation loop
+            other_orb_list_entry = occupied + n_occ++;    // we will eventually add the orbital index to the end of the occupied array (whose length is incremented). Ignored (see below)
+            occ_change = +1;                              // occupancies in cum_occ array will go up
+            }
+        for (int p_=p_0; p_<p_n; p_++)    // loop over the "counting" index for either occupieds or empties (starting from the given value; see below)
+            {
+            int p = orb_list[p_];    // "absolute" index of the orbital
+            int Q = p / n_bits;      // Q=quotient:  in which component of config is orbital p?
+            int r = p % n_bits;      // r=remainder: which bit in ^this component is this orbital?
+            int p_permute = permute + cum_occ[n_orbs-1] - cum_occ[p];     // how many permutations does it take to get to/from position p to the front (prepend convention)
+            memcpy(p_config_R, config_R, n_bytes_config_R);               // a copy of the original configuration ...
+            p_config_R[Q] = p_config_R[Q] ^ ((BigInt)1<<r);               // ... with occupancy of postion p flipped
+            memcpy(p_cum_occ, cum_occ, n_bytes_cum_occ);                  // a copy of the cum_occ array ...
+            for (int i=p; i<n_orbs; i++) {p_cum_occ[i] -= occ_change;}    // ... with occupancies appropriately altered
+            int q_0 = p_ + 1;               // the beginning of the next loop states above the current index ...
+            if (reset_p_0)  {q_0 = 0;}      // ... unless we are switching from annihilation to creatino operators
+            other_orb_list_entry[0] = p;    // if we annihlated orbital p, we will want to loop over its creation as well (vice versa has no effect (or harm))
+            // recur, passing through appropriately modified quantities (see below about inline updates)
+            resolve_recur(mode, n_create, n_annihil, Psi_L, n_Psi_L, configs_L, n_configs_L, n_configint_L, Psi_R, n_Psi_R, p_config_R, config_idx_R, n_configint_R, tensors, n_orbs, occupied, n_occ, empty, n_emt, p_cum_occ, p_permute, op_idx+p*stride, stride*n_orbs, factor, q_0, thresh);
+            }
+        }
+    else if (mode == OP_ACTION)    // bottom out option
+        {
+        for (int p_=p_0; p_<p_n; p_++)    // final orbital loop (see above)
+            {
+            int p = orb_list[p_];                                   // absolute index (see above)
+            Double val = factor * tensors[0][p*stride + op_idx];    // finish building tensor index (done inline with recursion above) and get integral from only tensor
+            if (fabs(val) > thresh)    // do nothing if the integral is too small (thresh considers also ket coefficient)
                 {
-                cumulative_occ[i] = n_occ;    // before incrementing n_occ (so cumulative occupancy "not counting this orb")
-                Q = i / n_bits;                                              // Which component of config does orbital i belong to? ...
-                R = i % n_bits;                                              // ... and which bit does it correspond to in that component?
-                if (config[Q] & ((BigInt)1<<R))  {occupied[n_occ++] = i;}    // If bit R is "on" in component Q, it is occupied, ...
-                else                             {   empty[n_emt++] = i;}    // ... otherwise it is empty
-                }
-
-            for (int q_=0; q_<n_occ; q_++)
-                {
-                int q = occupied[q_];                          // absolute index of the occupied orbital q
-                Q = q / n_bits;
-                R = q % n_bits;
-                memcpy(q_config, config, n_bytes);
-                q_config[Q] = q_config[Q] ^ ((BigInt)1<<R);    // a copy of the original configuration without orbital q
-                empty[n_emt] = q;                              // now q is empty (and loop limit below accounts for this)
-                for (int p_=0; p_<n_emt+1; p_++)
+                int Q = p / n_bits;                                // build ...
+                int r = p % n_bits;                                // ... modified configuration ...
+                memcpy(p_config_R, config_R, n_bytes_config_R);    // ... as discussed ...
+                p_config_R[Q] = p_config_R[Q] ^ ((BigInt)1<<r);    // ... above
+                PyInt config_idx_L = bisect_search(p_config_R, configs_L, n_configint_L, 0, n_configs_L-1);    // EXPENSIVE! -- find left-basis index of full string on right config
+                if (config_idx_L != -1)    // do nothing if action takes outside of space of configurations
                     {
-                    int p = empty[p_];
-                    // Interpret the component being looped over as the operator:
-                    //     op_pq * a+_p a_q
-                    // This therefore loops over all q and p that lead to a nonzero
-                    // action on config.
-                    Double op_pq = op[p*n_orbs + q];
-                    if (fabs(op_pq) > thresh)    // cull all of the inner operations if matrix element not significant
+                    int p_permute = permute + cum_occ[n_orbs-1] - cum_occ[p];    // final permutation and ...
+                    int phase = (p_permute%2) ? -1 : 1;                          // ... multiplication by resulting phase ...
+                    val *= phase;                                                // ... delayed until we know operation was nonzero
+                    for (int v=0; v<n_Psi_R; v++)    // for each vector in the input set ...
                         {
-                        Q = p / n_bits;
-                        R = p % n_bits;
-                        memcpy(pq_config, q_config, n_bytes);
-                        pq_config[Q] = pq_config[Q] ^ ((BigInt)1<<R);
-                        PyInt m = bisect_search(pq_config, configs, n_configint, 0, n_configs-1);    // THIS IS THE EXPENSIVE STEP!
-                        if (m != -1)
+                        Double update = val * Psi_R[v][config_idx_R];    // ... connect the input configuration ...
+                        #pragma omp atomic                               // ... (in a thread-safe way) ...
+                        Psi_L[v][config_idx_L] += update;                // ... to the slot of the output
+                        }
+                    }
+                }
+            }
+        }
+    else if (mode == COMPUTE_D)    // bottom out option
+        {
+        for (int p_=p_0; p_<p_n; p_++)    // final orbital loop (see above)
+            {
+            int p = orb_list[p_];                // absolute index (see above)
+            int Q = p / n_bits;                                // build ...
+            int r = p % n_bits;                                // ... modified configuration ...
+            memcpy(p_config_R, config_R, n_bytes_config_R);    // ... as discussed ...
+            p_config_R[Q] = p_config_R[Q] ^ ((BigInt)1<<r);    // ... above
+            PyInt config_idx_L = bisect_search(p_config_R, configs_L, n_configint_L, 0, n_configs_L-1);    // EXPENSIVE! -- find left-basis index of full string on right config
+            if (config_idx_L != -1)    // do nothing if action takes outside of space of configurations
+                {
+                int p_op_idx = p*stride + op_idx;                            // finish building tensor index (done inline with recursion above)
+                int p_permute = permute + cum_occ[n_orbs-1] - cum_occ[p];    // final permutation and ...
+                int phase = (p_permute%2) ? -1 : 1;                          // ... computation of resulting phase
+                int braket = 0;                                              // initialize a running index for the bra-ket pairs
+                for (int vL=0; vL<n_Psi_L; vL++)    // loop over the bra states ...
+                    {
+                    Double coeff_L = phase * Psi_L[vL][config_idx_L];    // ... and get the phased coefficient of the left configuration for each state
+                    if (fabs(coeff_L) > thresh)    // do nothing if left coefficient is too small (thresh considers also ket coefficient)
+                        {
+                        for (int vR=0; vR<n_Psi_R; vR++)    // loop over the ket states ...
                             {
-                            int permute = cumulative_occ[q] - cumulative_occ[p];
-                            if (p>q)  {permute += 1;}    // correct for asymmetry in counting occs betweeen p and q
-                            int phase = (permute%2) ? -1 : 1;
-                            op_pq *= phase;
-                            for (v=vec_0; v<vec_0+n_vecs; v++)
-                                {
-                                Double update = op_pq * Psi[v*n_configs+n];
-                                #pragma omp atomic
-                                opPsi[v*n_configs+m] += update;
-                                }
+                            Double update = coeff_L * Psi_R[vR][config_idx_R];    // ... and add the (phased) product of the left and right coefficients ...
+                            #pragma omp atomic                                    // ... (in a thread-safe way) ...
+                            tensors[braket++][p_op_idx] += update;                // ... to the precomputed location in the tensor for the corresponding bra-ket pair (which is incremented)
                             }
                         }
                     }
                 }
             }
         }
+    else
+       {
+       exit(EXIT_FAILURE);    // unlikely, but just in case, an exit here will be easier to debug
+       }
+
+    return;
     }
 
 
 
-void opPsi_2e(Double* op,            // tensor of matrix elements (integrals), assumed antisymmetrized
-              Double* Psi,           // block of row vectors: input vectors to act on
-              Double* opPsi,         // block of row vectors: incremented by output
-              BigInt* configs,       // bitwise occupation strings stored as arrays of integers (packed in one contiguous block, per global comments above)
-              PyInt   n_configint,   // the number of BigInts needed to store a configuration
-              PyInt   n_orbs,        // edge dimension of the integrals tensor
-              PyInt   vec_0,         // index of first vector in block to act upon
-              PyInt   n_vecs,        // how many vectors we are acting on simultaneously
-              PyInt   n_configs,     // how many configurations are there (call signature is ok as long as PyInt not longer than BigInt)
-              PyFloat thresh,        // threshold for ignoring integrals and coefficients (avoiding expensive index search)
-              PyInt   n_threads)     // number of OMP threads to spread the work over
+// The set-up/driver for the recursive kernel, which is itself called by more specialized code to
+// perform one of two actions (described shortly).  See comments with the recursive kernel above
+// for more information on the implementation, and see comments with the top-level functions below
+// for more information on use cases.
+//
+// This function (via the recursive kernel) loops over all orbital indices associated with a given
+// vacuum-normal-ordered string of field operators, for the purpose of either acting an operator
+// that is a linear combination of such strings onto a set of states, or computing the separate
+// matrix elements of all such strings (ie, a transition density tensor).  Which action is taken
+// is determined by the first mode argument.  In the former case, the left-hand states are storage
+// for the action of the operator on the right-hand states (they are incremented by the result),
+// and the tensors input contains matrix elements that define the operator.  In the latter case,
+// the left-hand states are interpreted as bra states for the transition density tensors, and the
+// tensors argument provides storage for the result (again, incremented).  For efficiency, this
+// only considers strings with descending-order combinations of orbital indices for the separate
+// substrings of creation and annihilation operators (written left to right, with the ket on the
+// right).  This assumes that the input integrals are antisymmetric or that the output densities
+// will be subsequently antisymmetrized.  This driver function specifically performs the outermost
+// loop over the ket configurations, with loops over orbital indices and ket (and perhaps bra)
+// coefficients delegated to the recursive kernel.
+//
+void resolve(int      mode,             // OP_ACTION or COMPUTE_D (determines whether using Psi_L for storing new states or as bras)
+             PyInt    n_create,         // number of creation operators
+             PyInt    n_annihil,        // number of annihilation operators
+             Double** Psi_L,            // states being produced (LHS of equation) for OP_ACTION; states in the bra (on left) for COMPUTE_D
+             PyInt    n_Psi_L,          // number of states in Psi_L (for OP_ACTION, must have n_Psi_L==n_Psi_R, below)
+             BigInt*  configs_L,        // configuration strings representing the basis for the states in Psi_L
+             PyInt    n_configs_L,      // number of configurations in the basis configs_L
+             PyInt    n_configint_L,    // number of BigInts needed to store a single configuration in configs_L
+             Double** Psi_R,            // states being acted on (RHS of equation) for OP_ACTION; states in the ket (on right) for COMPUTE_D
+             PyInt    n_Psi_R,          // number of states in Psi_R (for OP_ACTION, must have n_Psi_L==n_Psi_R, above)
+             BigInt*  configs_R,        // configuration strings representing the basis for the states in Psi_R
+             PyInt    n_configs_R,      // number of configurations in the basis configs_R
+             PyInt    n_configint_R,    // number of BigInts needed to store a single configuration in configs_R
+             Double** tensors,          // tensor of matrix elements (sole entry) for OP_ACTION, or storage for output (array of arrays) for COMPUTE_D
+             PyInt    n_orbs,           // edge dimension of the tensor(s)
+             int      permute,          // number of permutations performed at global scope to align sign conventions
+             PyFloat  thresh,           // perform no further work if result will be smaller than this
+             PyInt    n_threads)        // number of threads to spread the work over
     {
-    omp_set_num_threads(n_threads);
+    omp_set_num_threads(n_threads);       // declare the number of threads to use
+    int n_bits = orbs_per_configint();    // number of bits/orbitals in a BigInt
 
-    int n_bits  = orbs_per_configint();            // number of bits/orbitals in a BigInt
-    int n_bytes = n_configint * sizeof(BigInt);    // number of bytes in a config array (for memcpy)
-
-    // "scratch" space that needs to be maximally n_orbs long, allocated once (per thread)
-    int occupied[n_orbs];          // the orbitals that are occupied in a given configuration (not necessarily in order)
-    int empty[n_orbs];             // the orbitals that are empty    in a given configuration (not necessarily in order)
-    int cumulative_occ[n_orbs];    // the number of orbitals below a given index that are occupied (for phase calculations)
-    // "scratch" space for storing configurations generated by field-operator strings, allocated once (per thread)
-    BigInt    r_config[n_configint];
-    BigInt   sr_config[n_configint];
-    BigInt  psr_config[n_configint];
-    BigInt pqsr_config[n_configint];
-
-    #pragma omp parallel for private(occupied, empty, cumulative_occ, r_config, sr_config, psr_config, pqsr_config)
-    for (PyInt n=0; n<n_configs; n++)
+    #pragma omp parallel for               // divide the outermost loop over the threads (omp atomic at update to avoid race condition)
+    for (PyInt n=0; n<n_configs_R; n++)    // loop over configurations in ket basis
         {
-        int any_significant = 0;    // ie, False.  There are no significant coefficients for this configuration in any vector
-        int v = vec_0;
-        while (v<vec_0+n_vecs && !any_significant)    // loop over the vectors we are acting on
-            {if (fabs(Psi[(v++)*n_configs+n]) > thresh)  {any_significant = 1;}}
-
-        if (any_significant)    // all of this is skipped if the configuration has no significan coefficiencts
+        Double biggest = 0;    // eventual value of the biggest coefficient for a given ket configuration
+        for (int v=0; v<n_Psi_R; v++)    // loop over ket states
             {
-            BigInt* config = configs + (n * n_configint);    // config[] is now an array of integers collectively holding the present configuration
+            Double size = fabs(Psi_R[v][n]);          // get the configuration coefficient ...
+            if (size > biggest)  {biggest = size;}    // ... for each state and compare to others
+            }
 
-            int Q;    // integer quotient  (for repeated orbital<->bit mapping manipulations)
-            int R;    // integer remainder (for repeated orbital<->bit mapping manipulations)
+        if (biggest > thresh)    // do nothing if the configuration has no significant coefficients
+            {
+            BigInt* config = configs_R + (n * n_configint_R);    // config[] is now an array of integers collectively holding the present configuration
 
-            int n_occ = 0;    // count the number of occupied orbitals (also acts as a running index for cataloging their indices)
-            int n_emt = 0;    // count the number of empty    orbitals (also acts as a running index for cataloging their indices)
-            for (int i=0; i<n_orbs; i++)
+            int occupied[n_orbs];   // for indices of orbitals that are occupied in the present configuration (will be appended out of order in recursion)
+            int empty[n_orbs];      // for indices of orbitals that are empty    in the present configuration (will be appended out of order in recursion
+            int cum_occ[n_orbs];    // for the cumulative number of orbitals at or below a given index that are occupied (for phase calculations)
+            int n_occ = 0;          // eventual number of occupied orbitals (also a running index for cataloging their indices below)
+            int n_emt = 0;          // eventual number of empty    orbitals (also a running index for cataloging their indices below)
+            for (int p=0; p<n_orbs; p++)    // loop over all orbitals
                 {
-                cumulative_occ[i] = n_occ;    // before incrementing n_occ (so cumulative occupancy "not counting this orb")
-                Q = i / n_bits;                                              // Which component of config does orbital i belong to? ...
-                R = i % n_bits;                                              // ... and which bit does it correspond to in that component?
-                if (config[Q] & ((BigInt)1<<R))  {occupied[n_occ++] = i;}    // If bit R is "on" in component Q, it is occupied, ...
-                else                             {   empty[n_emt++] = i;}    // ... otherwise it is empty
+                int Q = p / n_bits;                                          // Q=quotient:  in which component of config is orbital p?
+                int r = p % n_bits;                                          // r=remainder: which bit in ^this component is this orbital?
+                if (config[Q] & ((BigInt)1<<r))  {occupied[n_occ++] = p;}    // if bit r is "on" in component Q, it is occupied, ...
+                else                             {   empty[n_emt++] = p;}    // ... otherwise it is empty
+                cum_occ[p] = n_occ;                                          // set after incrementing n_occ (so cumulative occupancy "counting this orb")
                 }
 
-            for (int r_=0; r_<n_occ; r_++)
-                {
-                int r = occupied[r_];                          // absolute index of the occupied orbital r
-                Q = r / n_bits;
-                R = r % n_bits;
-                memcpy(r_config, config, n_bytes);
-                r_config[Q] = r_config[Q] ^ ((BigInt)1<<R);    // a copy of the original configuration without orbital r
-                empty[n_emt] = r;                              // now r is empty (and loop limits below account for this)
-                for (int s_=r_+1; s_<n_occ; s_++)
-                    {
-                    int s = occupied[s_];
-                    Q = s / n_bits;
-                    R = s % n_bits;
-                    memcpy(sr_config, r_config, n_bytes);
-                    sr_config[Q] = sr_config[Q] ^ ((BigInt)1<<R);
-                    empty[n_emt+1] = s;
-                    for (int p_=0; p_<n_emt+2; p_++)
-                        {
-                        int pp = empty[p_];
-                        Q = pp / n_bits;
-                        R = pp % n_bits;
-                        memcpy(psr_config, sr_config, n_bytes);
-                        psr_config[Q] = psr_config[Q] ^ ((BigInt)1<<R);
-                        for (int q_=p_+1; q_<n_emt+2; q_++)
-                            {
-                            int qq = empty[q_];
-                            int p = pp;
-                            int q = qq;
-                            if (p > q)  {p = qq;  q = pp;}
-                            // Interpret the component being looped over as the operator:
-                            //     op_pqrs * a+_p a+_q a_s a_r
-                            // such that the excitations are best interpreted as p<-r and
-                            // q<-s, where p<q and r<s have been enforced above (and was
-                            // usually the case anyway, unless refilling an originally
-                            // occupied orbital).  This therefore loops over all ordered
-                            // pairs (r,s) and (p,q) that lead to a nonzero action on
-                            // config.  We keep track of pp and qq separately to avoid
-                            // confusing the inner loops, especially the bitwise
-                            // configuration-changing mechanism.
-                            Double op_pqrs = 4 * op[((p*n_orbs + q)*n_orbs + r)*n_orbs + s];    // because integrals antisymmetrized
-                            if (fabs(op_pqrs) > thresh)    // cull all of the inner operations if matrix element not significant
-                                {
-                                Q = qq / n_bits;
-                                R = qq % n_bits;
-                                memcpy(pqsr_config, psr_config, n_bytes);
-                                pqsr_config[Q] = pqsr_config[Q] ^ ((BigInt)1<<R);
-                                PyInt m = bisect_search(pqsr_config, configs, n_configint, 0, n_configs-1);    // THIS IS THE EXPENSIVE STEP!
-                                if (m != -1)
-                                    {
-                                    int permute = (cumulative_occ[r] - cumulative_occ[p]) + (cumulative_occ[s] - cumulative_occ[q]);
-                                    if (p>r)   {permute += 1;}    // correct for asymmetry in counting occs betweeen p and r
-                                    if (q>s)   {permute += 1;}    // correct for asymmetry in counting occs betweeen q and s
-                                    if (q==r)  {permute += 1;}    // corner case where refilled occ gets counted
-                                    if (p>s)   {permute += 1;}    // one way that excitations can "cross"
-                                    if (q<r)   {permute += 1;}    // another way they can "cross"
-                                    int phase = (permute%2) ? -1 : 1;
-                                    op_pqrs *= phase;
-                                    for (v=vec_0; v<vec_0+n_vecs; v++)
-                                        {
-                                        Double update = op_pqrs * Psi[v*n_configs+n];
-                                        #pragma omp atomic
-                                        opPsi[v*n_configs+m] += update;
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
+            // begin the recursive kernel that loops over orbital indices for the operator string, and coefficients for the ket (and perhaps bra) state(s)
+            // dividing thresh/biggest yields a an effective threshold for multiploer of a ket coefficient (like a matrix element or a bra coefficient)
+            resolve_recur(mode, n_create, n_annihil, Psi_L, n_Psi_L, configs_L, n_configs_L, n_configint_L, Psi_R, n_Psi_R, config, n, n_configint_R, tensors, n_orbs, occupied, n_occ, empty, n_emt, cum_occ, permute, 0, 1, 1, 0, thresh/biggest);
             }
         }
+
+    return;
+    }
+
+
+
+// This function takes an n-electron (n_elec) operator, whose matrix elements are given (op) in a basis
+// with a given number of orbitals (n_orb), and acts it on a set of a certain number (n_Psi) of state
+// vectors (Psi) to produce (technically increment) another set of vectors (opPsi).  The vectors are
+// linear combinations of a certain number (n_configs) of configurations (configs), where each
+// configuration is represented by a bit-string composed of a number (n_configint) of BigInt integers
+// whose bits refer to the same orbital basis (as discussed in the global comments). For efficiency, a
+// threshold (thresh) can be given for neglecting a result, and the work can be spread over an number
+// (n_threads) of threads.
+//
+// The number of axes of the tensor of matrix elements (integrals) depends on the electron-order of the
+// operator (2 axes for 1 electron, 4 for 2 electrons, etc).  The format of the integrals tensor should
+// correspond to an operator definition of the form (for two electrons)
+//     operator  =  sum_pqrs V_pqrs c_p c_q a^s a^r  =  sum_pqrs V_pqrs -(c_p c_q a^r a^s)
+// where c_p and a^p are creation and annihilation operators, respectively, on orbital p, and V is the
+// integrals tensor (with any prefactor is rolled into the definition of V).  The integrals tensor is
+// presumed antisymmetrized, but technically, this means that the only elements ever accessed are those
+// where the indices are in descending order from left to right separately for the creation and
+// annihilation substrings.  Due to the fundamental antisymmetry of the operators, any operator with a
+// non-antisymmetrized tensor can be mapped onto this and it will be more efficient.
+//
+// Each state vector is contiguous in memory, but they need not be adjacent to each other.  The length
+// of these vectors should be the same as the number of configurations.  The multi-integers used to store
+// the configurations are packed one-after-another into a contiguous block of storage (thought of
+// as being arranged right-to-left as discussed in the global comments).
+//
+void op_Psi(PyInt    n_elec,        // electron order of the operator
+            Double*  op,            // tensor of matrix elements (integrals), assumed antisymmetrized
+            PyInt    n_orbs,        // edge dimension of the integrals tensor
+            Double** opPsi,         // array of row vectors: incremented by output
+            Double** Psi,           // array of row vectors: input vectors to act on
+            PyInt    n_Psi,         // how many vectors we are acting on and producing simultaneously in Psi and opPsi
+            BigInt*  configs,       // configuration strings representing the basis for the states in Psi and opPsi (see global comments above about format)
+            PyInt    n_configs,     // number of configurations in the configs basis (call signature ok if PyInt not longer than BigInt)
+            PyInt    n_configint,   // number of BigInts needed to store a single configuration in configs
+            PyFloat  thresh,        // perform no further work if result will be smaller than this
+            PyInt    n_threads)     // number of threads to spread the work over
+    {
+    int permute = (n_elec/2) % 2;    // accounts for a permutation of the type seen in the far right of the equation in the comments, to align index orders
+    // call the generic driver in operator-action mode
+    resolve(OP_ACTION, n_elec, n_elec, opPsi, n_Psi, configs, n_configs, n_configint, Psi, n_Psi, configs, n_configs, n_configint, &op, n_orbs, permute, thresh, n_threads);
+    return;
+    }
+
+// This function takes the description of a field operator string in terms of the numbers (n_create
+// and n_annihil) of creation and annihilation operators, normal ordered with respect to the vacuum,
+// a set (bras) of a certain number (n_bras) of bra state vectors, and a set (kets) of a certain
+// number (n_kets) of ket state vectors.  These vectors are linear combinations of numbers (n_configs_bra
+// and n_configs_ket) of configurations (configs_bra and configs_ket), where each configuration is
+// represented by a bit-string composed of a number (n_configint_bra and n_configint_ket) of BigInt
+// integers whose bits refer to a basis of a number (n_orbs) of orbitals.
+// In the array of allocated storage (rho), which should contain n_bras * n_kets pointers to
+// non-adjacent (but internally contiguous) blocks of size n_orbs ** (n_create + n_annihil),
+// elements of the transiton-density tensors of the following form are stored
+//     D_pqr  =  <Psi^I| c_p c_q a^r |Psi_J>
+// (for example, for bra I and ket J) for values of the orbitial indices p, q, and r that correspond
+// to the orbitals of the configuration bit-string representations.  c_p and a^p are creation and
+// annihilation operators, respectively, on orbital p.  These tensors are sorted into the linear array
+// rho first by bra index (outer index) and then ket index (inner index).  Athreshold (thresh) can be
+// given for neglecting a result, and the work can be spread over an number (n_threads) of threads.
+//
+// The transition density tensors only have values filled in where the indices are in descending order
+// from left to right separately for the creation and annihilation substrings.  Due to the fundamental
+// antisymmetry of the operators, the missing elements are redundant with these (to within a phase) and
+// should be populated by a antisymmetrization step. This is more efficient that computing them independently.
+//
+// Each bra and ket state vector is contiguous in memory, but they need not be adjacent to each other.
+// The length of these vectors should be the same as the number of their respective configurations.  The
+// multi-integers used to store the configurations are packed one-after-another into a contiguous block of
+// storage (thought of as being arranged right-to-left as discussed in the global comments).
+//
+void densities(PyInt    n_create,           // number of creation operators
+               PyInt    n_annihil,          // number of annihilation operators
+               Double** rho,                // array of storage for density tensors (for each bra-ket pair)
+               PyInt    n_orbs,             // edge dimension of each density tensor
+               Double** bras,               // array of row vectors: bras for transition-density tensors
+               PyInt    n_bras,             // number of bras
+               BigInt*  configs_bra,        // configuration strings representing the basis for the bras (see global comments above about format)
+               PyInt    n_configs_bra,      // number of configurations in the basis configs_bra (call signature ok if PyInt not longer than BigInt)
+               PyInt    n_configint_bra,    // number of BigInts needed to store a single configuration in configs_bra
+               Double** kets,               // array of row vectors: kets for transition-density tensors
+               PyInt    n_kets,             // number of kets
+               BigInt*  configs_ket,        // configuration strings representing the basis for the kets (see global comments above about format)
+               PyInt    n_configs_ket,      // number of configurations in the basis configs_ket (call signature ok if PyInt not longer than BigInt)
+               PyInt    n_configint_ket,    // number of BigInts needed to store a single configuration in configs_ket
+               PyFloat  thresh,             // perform no further work if result will be smaller than this
+               PyInt    n_threads)          // number of threads to spread the work over
+    {
+    // call the generic driver in compute-densities mode
+    resolve(COMPUTE_D, n_create, n_annihil, bras, n_bras, configs_bra, n_configs_bra, n_configint_bra, kets, n_kets, configs_ket, n_configs_ket, n_configint_ket, rho, n_orbs, 0, thresh, n_threads);
+    return;
     }

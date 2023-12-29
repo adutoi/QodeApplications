@@ -28,6 +28,8 @@ field_op = import_C("field_op", flags="-O3 -lm -fopenmp")
 field_op.orbs_per_configint.return_type(int)
 field_op.bisect_search.return_type(int)
 
+antisymm = import_C("antisymm", flags="-O3")
+
 
 
 orbs_per_configint = field_op.orbs_per_configint()
@@ -56,28 +58,59 @@ def find_index(config, configs):
         reduced //= reduction
     return field_op.bisect_search(packed_config, configs.packed, configs.size, 0, len(configs)-1)
 
-def opPsi_1e(HPsi, Psi, h, vec_0, num_vecs, configs, thresh, n_threads):
-    field_op.opPsi_1e(h,                 # tensor of matrix elements (integrals)
-                      Psi,               # block of row vectors: input vectors to act on
-                      HPsi,              # block of row vectors: incremented by output
-                      configs.packed,    # bitwise occupation strings stored as arrays of integers (see packed_configs above)
-                      configs.size,      # the number of BigInts needed to store a configuration
-                      h.shape[0],        # edge dimension of the integrals tensor
-                      vec_0,             # index of first vector in block to act upon
-                      num_vecs,          # how many vectors we are acting on simultaneously
-                      len(configs),      # how many configurations are there (call signature is ok as long as PyInt not longer than BigInt)
-                      thresh,            # threshold for ignoring integrals and coefficients (avoiding expensive index search)
-                      n_threads)         # number of OMP threads to spread the work over
+def opPsi_1e(HPsi, Psi, h, configs, thresh, n_threads):
+    field_op.op_Psi(1,                 # electron order of the operator
+                    h,                 # tensor of matrix elements (integrals), assumed antisymmetrized
+                    h.shape[0],        # edge dimension of the integrals tensor
+                    [HPsi],            # array of row vectors: incremented by output
+                    [Psi],             # array of row vectors: input vectors to act on
+                    1,                 # how many vectors we are acting on and producing simultaneously in Psi and opPsi
+                    configs.packed,    # configuration strings representing the basis for the states in Psi and opPsi (see packed_configs above)
+                    len(configs),      # number of configurations in the configs basis (call signature ok if PyInt not longer than BigInt)
+                    configs.size,      # number of BigInts needed to store a single configuration in configs
+                    thresh,            # perform no further work if result will be smaller than this
+                    n_threads)         # number of threads to spread the work over
 
-def opPsi_2e(HPsi, Psi, V, vec_0, num_vecs, configs, thresh, n_threads):
-    field_op.opPsi_2e(V,                 # tensor of matrix elements (integrals), assumed antisymmetrized
-                      Psi,               # block of row vectors: input vectors to act on
-                      HPsi,              # block of row vectors: incremented by output
-                      configs.packed,    # bitwise occupation strings stored as arrays of integers (see packed_configs above)
-                      configs.size,      # the number of BigInts needed to store a configuration
-                      V.shape[0],        # edge dimension of the integrals tensor
-                      vec_0,             # index of first vector in block to act upon
-                      num_vecs,          # how many vectors we are acting on simultaneously
-                      len(configs),      # how many configurations are there (call signature is ok as long as PyInt not longer than BigInt)
-                      thresh,            # threshold for ignoring integrals and coefficients (avoiding expensive index search)
-                      n_threads)         # number of OMP threads to spread the work over
+def opPsi_2e(HPsi, Psi, V, configs, thresh, n_threads):
+    field_op.op_Psi(2,                 # electron order of the operator
+                    V,                 # tensor of matrix elements (integrals), assumed antisymmetrized
+                    V.shape[0],        # edge dimension of the integrals tensor
+                    [HPsi],            # array of row vectors: incremented by output
+                    [Psi],             # array of row vectors: input vectors to act on
+                    1,                 # how many vectors we are acting on and producing simultaneously in Psi and opPsi
+                    configs.packed,    # configuration strings representing the basis for the states in Psi and opPsi (see packed_configs above)
+                    len(configs),      # number of configurations in the configs basis (call signature ok if PyInt not longer than BigInt)
+                    configs.size,      # number of BigInts needed to store a single configuration in configs
+                    thresh,            # perform no further work if result will be smaller than this
+                    n_threads)         # number of threads to spread the work over
+
+def build_densities(op_string, n_orbs, bras, kets, bra_configs, ket_configs, thresh, n_threads):
+    n_create  = op_string.count("c")
+    n_annihil = op_string.count("a")
+    if (op_string != "c"*n_create + "a"*n_annihil):  raise ValueError("density operator string is not vacuum normal ordered")
+    shape = [n_orbs] * (n_create + n_annihil)
+    print("####", op_string, "->", shape, "x", len(bras)*len(kets))
+    rho = [numpy.zeros(shape, dtype=Double.numpy) for _ in range(len(bras)*len(kets))]
+    field_op.densities(n_create,              # number of creation operators
+                       n_annihil,             # number of annihilation operators
+                       rho,                   # array of storage for density tensors (for each bra-ket pair in linear list)
+                       n_orbs,                # edge dimension of each density tensor
+                       bras,                  # array of row vectors: bras for transition-density tensors
+                       len(bras),             # number of bras
+                       bra_configs.packed,    # configuration strings representing the basis for the bras (see packed_configs above)
+                       len(bra_configs),      # number of configurations in the bra basis (call signature ok if PyInt not longer than BigInt)
+                       bra_configs.size,      # number of BigInts needed to store a single configuration in the bra basis
+                       kets,                  # array of row vectors: kets for transition-density tensors
+                       len(kets),             # number of kets
+                       ket_configs.packed,    # configuration strings representing the basis for the kets (see packed_configs above)
+                       len(ket_configs),      # number of configurations in the ket basis (call signature ok if PyInt not longer than BigInt)
+                       ket_configs.size,      # number of BigInts needed to store a single configuration in the ket basis
+                       thresh,                # perform no further work if result will be smaller than this
+                       n_threads)             # number of threads to spread the work over
+    antisymm.antisymmetrize(rho,          # linear array of density tensors to antisymmetrize
+                            len(rho),     # number of density tensors to antisymmetrize
+                            n_orbs,       # number of orbitals
+                            n_create,     # number of creation operators
+                            n_annihil,    # number of annihilation operators
+                            list(reversed(range(n_orbs))))
+    return [rho[i*len(kets):(i+1)*len(kets)] for i in range(len(bras))]
