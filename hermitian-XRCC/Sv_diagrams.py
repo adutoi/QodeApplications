@@ -17,10 +17,13 @@
 #
 
 from tendot import tendot
+from qode.math.tensornet import tl_tensor, scalar_value
 
-
+p, q, r, s, t, u, v, w = "pqrstuvw"
 
 class _empty(object):  pass    # Basically just a dictionary
+
+
 
 def _parameters(densities, integrals, subsystem, charges, permutation=(0,)):
     # helper function to do repetitive manipulations of data passed from above
@@ -76,7 +79,7 @@ def v0000(densities, integrals, subsystem, charges):
     if X.Dchg_0==0:
         prefactor = 1
         def diagram(i0,j0):
-            return prefactor * tendot(X.V_0000, X.ccaa_0[i0][j0], axes=([0, 1, 2, 3], [0, 1, 3, 2]))
+            return scalar_value( prefactor * X.V_0000(p,q,r,s) @ X.ccaa_0[i0][j0](p,q,s,r) )
         return [(diagram, (0,))]
     else:
         return [(None, None)]
@@ -91,8 +94,7 @@ def v0101(densities, integrals, subsystem, charges):
     if X.Dchg_0==0 and X.Dchg_1==0:
         prefactor = 4
         def diagram(i0,i1,j0,j1):
-            partial =          tendot(X.V_0101, X.ca_0[i0][j0], axes=([0, 2], [0, 1]))
-            return prefactor * tendot(partial,  X.ca_1[i1][j1], axes=([0, 1], [0, 1]))
+            return scalar_value( prefactor * X.V_0101(p,q,r,s) @ X.ca_0[i0][j0](p,r) @ X.ca_1[i1][j1](q,s) )
         return [(diagram, (0,1))]
     else:
         return [(None, None)]
@@ -107,8 +109,7 @@ def _v0010(densities, integrals, subsystem, charges, permutation):
     if X.Dchg_0==-1 and X.Dchg_1==+1:
         prefactor = 2 * (-1)**(X.n_i1 + X.P)
         def diagram(i0,i1,j0,j1):
-            partial =          tendot(X.V_0010, X.a_1[i1][j1],   axes=([2], [0]))
-            return prefactor * tendot(partial,  X.cca_0[i0][j0], axes=([0, 1, 2], [0, 1, 2]))
+            return scalar_value( prefactor * X.V_0010(p,q,r,s) @ X.a_1[i1][j1](r) @ X.cca_0[i0][j0](p,q,s) )
         return diagram, permutation
     else:
         return None, None
@@ -123,8 +124,7 @@ def _v0100(densities, integrals, subsystem, charges, permutation):
     if X.Dchg_0==+1 and X.Dchg_1==-1:
         prefactor = 2 * (-1)**(X.n_i1 + X.P)
         def diagram(i0,i1,j0,j1):
-            partial =          tendot(X.V_0100, X.c_1[i1][j1],   axes=([1], [0]))
-            return prefactor * tendot(partial,  X.caa_0[i0][j0], axes=([0, 1, 2], [0, 2, 1]))
+            return scalar_value( prefactor * X.V_0100(p,q,r,s) @ X.c_1[i1][j1](q) @ X.caa_0[i0][j0](p,s,r) )
         return diagram, permutation
     else:
         return None, None
@@ -139,8 +139,7 @@ def _v0011(densities, integrals, subsystem, charges, permutation):
     if X.Dchg_0==-2 and X.Dchg_1==+2:
         prefactor = 1
         def diagram(i0,i1,j0,j1):
-            partial =          tendot(X.V_0011, X.cc_0[i0][j0], axes=([0, 1], [0, 1]))
-            return prefactor * tendot(partial,  X.aa_1[i1][j1], axes=([0, 1], [1, 0]))
+            return scalar_value( prefactor * X.V_0011(p,q,r,s) @ X.cc_0[i0][j0](p,q) @ X.aa_1[i1][j1](s,r) )
         return diagram, permutation
     else:
         return None, None
@@ -155,9 +154,7 @@ def _s10v0010(densities, integrals, subsystem, charges, permutation):
     if X.Dchg_0==0 and X.Dchg_1==0:
         prefactor = 2
         def diagram(i0,i1,j0,j1):
-            partial =          tendot(X.S_10,            X.ca_1[i1][j1], axes=([0], [0]))
-            partial =          tendot(X.ccaa_0[i0][j0],  partial,        axes=([2], [0]))
-            return prefactor * tendot(X.V_0010,          partial,        axes=([0, 1, 2, 3], [0, 1, 3, 2]))
+            return scalar_value( prefactor * X.V_0010(s,t,r,u) @ X.ccaa_0[i0][j0](s,t,q,u) @ X.S_10(p,q) @ X.ca_1[i1][j1](p,r) )
         return diagram, permutation
     else:
         return None, None
@@ -172,9 +169,7 @@ def _s01v0100(densities, integrals, subsystem, charges, permutation):
     if X.Dchg_0==0 and X.Dchg_1==0:
         prefactor = 2
         def diagram(i0,i1,j0,j1):
-            partial =          tendot(X.S_01,           X.ca_1[i1][j1], axes=([1], [1]))
-            partial =          tendot(X.ccaa_0[i0][j0], partial,        axes=([1], [0]))
-            return prefactor * tendot(X.V_0100,         partial,        axes=([0, 2, 3, 1], [0, 1, 2, 3]))
+            return scalar_value( prefactor * X.V_0100(s,r,t,u) @ X.ccaa_0[i0][j0](s,p,t,u) @ X.S_01(p,q) @ X.ca_1[i1][j1](r,q) )
         return diagram, permutation
     else:
         return None, None
@@ -189,9 +184,7 @@ def _s01v0101(densities, integrals, subsystem, charges, permutation):
     if X.Dchg_0==-1 and X.Dchg_1==+1:
         prefactor = 4 * (-1)**(X.n_i1 + X.P)
         def diagram(i0,i1,j0,j1):
-            partial =          tendot(X.V_0101,        X.cca_0[i0][j0], axes=([0, 2], [0, 2]))
-            partial =          tendot(X.caa_1[i1][j1], partial,         axes=([0, 2], [0, 1]))
-            return prefactor * tendot(X.S_01,          partial,         axes=([0, 1], [1, 0]))
+            return scalar_value( prefactor * X.S_01(t,u) @ X.caa_1[i1][j1](q,u,s) @ X.V_0101(p,q,r,s) @ X.cca_0[i0][j0](p,t,r) )
         return diagram, permutation
     else:
         return None, None
@@ -206,9 +199,7 @@ def _s10v0011(densities, integrals, subsystem, charges, permutation):
     if X.Dchg_0==-1 and X.Dchg_1==+1:
         prefactor = (-1)**(X.n_i1 + X.P)
         def diagram(i0,i1,j0,j1):
-            partial =          tendot(X.V_0011,        X.cca_0[i0][j0], axes=([0, 1], [1, 0]))
-            partial =          tendot(X.caa_1[i1][j1], partial,         axes=([1, 2], [1, 0]))
-            return prefactor * tendot(X.S_10,          partial,         axes=([0, 1], [0, 1]))
+            return scalar_value( prefactor * X.S_10(u,t) @ X.caa_1[i1][j1](u,s,r) @ X.V_0011(p,q,r,s) @ X.cca_0[i0][j0](q,p,t) )
         return diagram, permutation
     else:
         return None, None
@@ -223,9 +214,7 @@ def _s01v0000(densities, integrals, subsystem, charges, permutation):
     if X.Dchg_0==-1 and X.Dchg_1==+1:
         prefactor = (-1)**(X.n_i1 + X.P)
         def diagram(i0,i1,j0,j1):
-            partial =          tendot(X.S_01,            X.a_1[i1][j1], axes=([1], [0]))
-            partial =          tendot(X.cccaa_0[i0][j0], partial,       axes=([2], [0]))
-            return prefactor * tendot(X.V_0000,          partial,       axes=([0, 1, 2, 3], [0, 1, 3, 2]))
+            return scalar_value( prefactor * X.V_0000(r,s,u,t) @ X.cccaa_0[i0][j0](r,s,p,t,u) @ X.S_01(p,q) @ X.a_1[i1][j1](q) )
         return diagram, permutation
     else:
         return None, None
@@ -240,9 +229,7 @@ def _s10v0000(densities, integrals, subsystem, charges, permutation):
     if X.Dchg_0==+1 and X.Dchg_1==-1:
         prefactor = (-1)**(X.n_i1 + X.P)
         def diagram(i0,i1,j0,j1):
-            partial =          tendot(X.S_10,            X.c_1[i1][j1], axes=([0], [0]))
-            partial =          tendot(X.ccaaa_0[i0][j0], partial,       axes=([2], [0]))
-            return prefactor * tendot(X.V_0000,          partial,       axes=([0, 1, 2, 3], [0, 1, 2, 3]))
+            return scalar_value( prefactor * X.V_0000(r,s,t,u) @ X.ccaaa_0[i0][j0](r,s,q,t,u) @ X.S_10(p,q) @ X.c_1[i1][j1](p) )
         return diagram, permutation
     else:
         return None, None
@@ -257,9 +244,7 @@ def _s01v0010(densities, integrals, subsystem, charges, permutation):
     if X.Dchg_0==-2 and X.Dchg_1==+2:
         prefactor = 2
         def diagram(i0,i1,j0,j1):
-            partial =          tendot(X.S_01,           X.aa_1[i1][j1], axes=([1], [0]))
-            partial =          tendot(X.ccca_0[i0][j0], partial,        axes=([2], [0]))
-            return prefactor * tendot(X.V_0010,         partial,        axes=([0, 1, 2, 3], [0, 1, 2, 3]))
+            return scalar_value( prefactor * X.V_0010(s,t,u,r) @ X.ccca_0[i0][j0](s,t,p,u) @ X.S_01(p,q) @ X.aa_1[i1][j1](q,r) )
         return diagram, permutation
     else:
         return None, None
@@ -274,9 +259,7 @@ def _s10v0100(densities, integrals, subsystem, charges, permutation):
     if X.Dchg_0==+2 and X.Dchg_1==-2:
         prefactor = 2
         def diagram(i0,i1,j0,j1):
-            partial =          tendot(X.S_10,           X.cc_1[i1][j1], axes=([0], [1]))
-            partial =          tendot(X.caaa_0[i0][j0], partial,        axes=([1], [0]))
-            return prefactor * tendot(X.V_0100,         partial,        axes=([0, 1, 2, 3], [0, 1, 3, 2]))
+            return scalar_value( prefactor * X.V_0100(s,t,r,u) @ X.caaa_0[i0][j0](s,q,t,u) @ X.S_10(p,q) @ X.cc_1[i1][j1](r,p) )
         return diagram, permutation
     else:
         return None, None
@@ -291,9 +274,7 @@ def _s01v0011(densities, integrals, subsystem, charges, permutation):
     if X.Dchg_0==-3 and X.Dchg_1==+3:
         prefactor = (-1)**(X.n_i1 + X.P)
         def diagram(i0,i1,j0,j1):
-            partial =          tendot(X.V_0011,        X.ccc_0[i0][j0], axes=([0, 1], [0, 1]))
-            partial =          tendot(X.aaa_1[i1][j1], partial,         axes=([1, 2], [1, 0]))
-            return prefactor * tendot(X.S_01,          partial,         axes=([0, 1], [1, 0]))
+            return scalar_value( prefactor * X.S_01(t,u) @ X.aaa_1[i1][j1](u,s,r) @ X.V_0011(p,q,r,s) @ X.ccc_0[i0][j0](p,q,t) )
         return diagram, permutation
     else:
         return None, None

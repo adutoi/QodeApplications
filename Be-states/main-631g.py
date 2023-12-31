@@ -227,7 +227,7 @@ for chg,states_chg in states.items():
         #for config in states_chg.configs:
         #    print("  {:018b}".format(config))
 
-frag0.rho = densities.build_tensors(states, 2*frag0.basis.n_spatial_orb, frag0.n_elec_ref, thresh=1e-12, n_threads=n_threads)
+frag0.rho = densities.build_tensors(states, 2*frag0.basis.n_spatial_orb, frag0.n_elec_ref, thresh=1e-30, n_threads=n_threads)
 
 ref_chg, ref_idx = 0, 0
 frag0.state_indices = [(ref_chg,ref_idx)]                # List of all charge and state indices, reference state needs to be first, but otherwise irrelevant order
