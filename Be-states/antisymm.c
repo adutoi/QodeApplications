@@ -73,6 +73,20 @@ void antisymmetrize_recur(Double** tensors,              // the input/output ten
             {
             PyInt idx_0 = 0;                                                                    // Build the linear index ...
             for (PyInt i=0; i<len_orderings; i++) {idx_0 += orderings[0][i] * strides[i];}      // ... for ascending-order case.
+
+            for (PyInt m=1; m<num_orderings; m++)    // loop over other arrangements of the indices
+                {
+                PyInt idx = 0;                                                                  // Build the linear index ...
+                for (PyInt i=0; i<len_orderings; i++) {idx += orderings[m][i] * strides[i];}    // ... for the alternate arrangement.
+                for (PyInt t=0; t<num_tensors; t++)
+                    {
+                    for (PyInt k=0; k<strides[len_orderings-1]; k++)
+                        {
+                        tensors[t][idx_0+k] += phases[m] * tensors[t][idx+k];    // Fill in redundant elements (to within a phase).
+                        }
+                    }
+                }
+
             for (PyInt m=1; m<num_orderings; m++)    // loop over other arrangements of the indices
                 {
                 PyInt idx = 0;                                                                  // Build the linear index ...
@@ -85,6 +99,7 @@ void antisymmetrize_recur(Double** tensors,              // the input/output ten
                         }
                     }
                 }
+
             }
         }
 
