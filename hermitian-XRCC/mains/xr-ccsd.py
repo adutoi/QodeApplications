@@ -17,11 +17,10 @@
 #
 
 # Usage:
-#     python [-u] <this-file.py> <displacement> <rhos>
-# where <rhos> can be the filestem of any one of the .pkl files in atomic_states/ prepared by Be631g.py.
+#     python [-u] <this-file.py> <displacement> <states>
+# where <states> can be the name of any one of directories in atomic_states/states/16-115-550
 
 import sys
-import pickle
 import numpy
 #import torch
 import tensorly
@@ -36,9 +35,7 @@ import St_diagrams              # contains definitions of actual diagrams needed
 import Su_diagrams              # contains definitions of actual diagrams needed for SH operator in BO rep
 import Sv_diagrams              # contains definitions of actual diagrams needed for SH operator in BO rep
 from   get_ints import get_ints
-
-# needed for unpickling?!
-class empty(object):  pass     # Basically just a dictionary class
+from   Be631g   import monomer_data as Be
 
 #torch.set_num_threads(4)
 #tensorly.set_backend("pytorch")
@@ -49,23 +46,16 @@ class empty(object):  pass     # Basically just a dictionary class
 
 # Information about the Be2 supersystem
 n_frag       = 2
-displacement = float(sys.argv[1])
-states       = "atomic_states/rho/{}.pkl".format(sys.argv[2])
-project_core = True
-if len(sys.argv)==4:
-    if sys.argv[3]=="no-proj":
-        project_core = False
+displacement = sys.argv[1]
+states       = "{}/4.5".format(sys.argv[2])
+n_states     = ("all","all","all","all","all")
 
-# "Assemble" the supersystem for the displaced fragments and get integrals
-BeN = []
-print("load states ...")
-for m in range(int(n_frag)):
-    Be = pickle.load(open(states,"rb"))
-    for elem,coords in Be.atoms:  coords[2] += m * displacement    # displace along z
-    BeN += [Be]
-print("get_ints ...")
-symm_ints, bior_ints, nuc_rep = get_ints(BeN, project_core)
-print("done")
+# "Assemble" the supersystem from the displaced fragments
+BeN = [Be((0,0,m*float(displacement))) for m in range(int(n_frag))]
+
+# Load states and get integrals
+for m,frag in enumerate(BeN):  frag.load_states(states, n_states)      # load the density tensors
+symm_ints, bior_ints, nuc_rep = get_ints(BeN)
 
 # The engines that build the terms
 BeN_rho = [frag.rho for frag in BeN]   # diagrammatic_expansion.blocks should take BeN directly? (n_states and n_elec one level higher)
@@ -94,8 +84,6 @@ all_dimer_charges = [(0,0), (0,+1), (0,-1), (+1,0), (+1,+1), (+1,-1), (-1,0), (-
 # Build and test
 #########
 
-print("starting H1")
-
 H1 = []
 for m in [0,1]:
     H1_m  = XR_term.monomer_matrix(Sn_blocks, {
@@ -123,7 +111,6 @@ for m in [0,1]:
     H1 += [H1_m]
 
 
-print("starting S2")
 
 S2     = XR_term.dimer_matrix(S_blocks, {
                         0: [
@@ -135,22 +122,17 @@ S2inv = qode.math.precise_numpy_inverse(S2)
 
 
 
-print("starting S2H2")
-print("starting N")
-
 S2H2   = XR_term.dimer_matrix(Sn_blocks, {
                         2: [
                             "n01"
                            ]
                        }, (0,1), all_dimer_charges)
 
-print("starting T")
 S2H2  += XR_term.dimer_matrix(St_blocks_bior, {
                         2: [
                             "t01"
                            ]
                        }, (0,1), all_dimer_charges)
-print("starting U")
 S2H2  += XR_term.dimer_matrix(Su_blocks_bior, {
                         2: [
                             "u100",
@@ -158,7 +140,6 @@ S2H2  += XR_term.dimer_matrix(Su_blocks_bior, {
                            ]
                        }, (0,1), all_dimer_charges)
 
-print("starting V")
 S2H2  += XR_term.dimer_matrix(Sv_blocks_bior, {
                         2: [
                             "v0101", "v0010", "v0100", "v0011"
@@ -166,7 +147,6 @@ S2H2  += XR_term.dimer_matrix(Sv_blocks_bior, {
                        }, (0,1), all_dimer_charges)
 
 
-print("finished H build")
 
 H2blocked = S2inv @ S2H2
 
