@@ -15,13 +15,16 @@
 #    You should have received a copy of the GNU General Public License
 #    along with QodeApplications.  If not, see <http://www.gnu.org/licenses/>.
 #
+import tensorly
+from   qode.math.tensornet import tl_tensor
 import field_op
 
 # states[n].coeffs  = [numpy.array, numpy.array, . . .]   One (effectively 1D) array of coefficients per n-electron state
 # states[n].configs = [int, int, . . . ]                  Each int represents a configuration (has the same length as arrays in list above)
 
-def build_tensors(states, n_orbs, thresh=1e-10, n_threads=1):
+def build_tensors(states, n_orbs, n_elec_0, thresh=1e-10, n_threads=1):
     densities = {}
+    densities["n_elec"]   = {chg:(n_elec_0-chg)          for chg in states}
     densities["n_states"] = {chg:len(states[chg].coeffs) for chg in states}
 
     op_strings = {2:["aa", "caaa"], 1:["a", "caa", "ccaaa"], 0:["ca", "ccaa"], -1:["c", "cca", "cccaa"], -2:["cc", "ccca"]}
@@ -42,6 +45,10 @@ def build_tensors(states, n_orbs, thresh=1e-10, n_threads=1):
                 for op_string in op_strings[chg_diff]:
                     if op_string not in densities:  densities[op_string] = {}
                     print(op_string, bra_chg, ket_chg)
-                    densities[op_string][bra_chg,ket_chg] = field_op.build_densities(op_string, n_orbs, bra_coeffs, ket_coeffs, bra_configs, ket_configs, thresh, n_threads)
+                    rho = field_op.build_densities(op_string, n_orbs, bra_coeffs, ket_coeffs, bra_configs, ket_configs, thresh, n_threads)
+                    for i in range(len(bra_coeffs)):
+                        for j in range(len(ket_coeffs)):
+                            rho[i][j] = tl_tensor(tensorly.tensor(rho[i][j], dtype=tensorly.float64))
+                    densities[op_string][bra_chg,ket_chg] = rho
 
     return densities
