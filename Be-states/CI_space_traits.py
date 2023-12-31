@@ -25,11 +25,9 @@ class _auxilliary(object):
     def __init__(self, parent):
         self.parent = parent
     def basis_vec(self, occupied):
-        config = 0
-        for p in occupied:  config += 2**p
-        index  = field_op.find_index(config, self.parent.configs)
         v = numpy.zeros(len(self.parent.configs), dtype=Double.numpy)
-        v[index] = 1
+        i = field_op.find_index_by_occ(occupied, self.parent.configs)
+        v[i] = 1
         return v
 
 class CI_space_traits(object):

@@ -58,6 +58,14 @@ def find_index(config, configs):
         reduced //= reduction
     return field_op.bisect_search(packed_config, configs.packed, configs.size, 0, len(configs)-1)
 
+def find_index_by_occ(occupied, configs):
+    config = 0
+    for p in occupied:
+        config += 2**p
+    return find_index(config, configs)
+
+
+
 def opPsi_1e(HPsi, Psi, h, configs, thresh, n_threads):
     field_op.op_Psi(1,                 # electron order of the operator
                     h,                 # tensor of matrix elements (integrals), assumed antisymmetrized
@@ -112,5 +120,6 @@ def build_densities(op_string, n_orbs, bras, kets, bra_configs, ket_configs, thr
                             n_orbs,       # number of orbitals
                             n_create,     # number of creation operators
                             n_annihil,    # number of annihilation operators
-                            list(reversed(range(n_orbs))))
+                            list(range(n_orbs)))
+                            #list(reversed(range(n_orbs))))
     return [rho[i*len(kets):(i+1)*len(kets)] for i in range(len(bras))]
