@@ -219,13 +219,11 @@ for n in range(num_elec_dimer+1):
                 tmp = numpy.zeros(n_config_n, dtype=Double.numpy)
                 tmp[:] = evecs[:,i]
                 states[chg].coeffs += [tmp]
-                #states[chg].coeffs += [evecs[:,i].copy()]      # copy or else not contiguous (needed for C processing)
 
 for chg,states_chg in states.items():
     num_states = len(states_chg.coeffs)
     if num_states>0:
-        print("{}: {}".format(chg, num_states))
-        print(states_chg.coeffs[0].shape)
+        print("{}: {} x {}".format(chg, num_states, states_chg.coeffs[0].shape))
         #for config in states_chg.configs:
         #    print("  {:018b}".format(config))
 

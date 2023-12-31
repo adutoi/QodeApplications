@@ -31,8 +31,7 @@ void antisymmetrize_recur(Double** tensors,              // the input/output ten
                           PyInt    old_len_orderings,    // for recursive use.  0 on first input
                           PyInt    old_num_orderings,    // for recursive use.  1 on first input
                           PyInt**  old_orderings,        // for recursive use.  NULL on first input
-                          PyInt*   old_phases,           // for recursive use.  [1] on first input
-                          PyInt*   native)
+                          PyInt*   old_phases)           // for recursive use.  [1] on first input
     {
     PyInt len_orderings = old_len_orderings + 1;                // Dimensions of the array that holds ...
     PyInt num_orderings = old_num_orderings * len_orderings;    // ... different ordering of fixed indices.
@@ -64,42 +63,39 @@ void antisymmetrize_recur(Double** tensors,              // the input/output ten
 
     for (PyInt p=p_0; p<len_axis; p++)    // loop over the next index
         {
-        for (PyInt m=0; m<num_orderings; m++) {insert[m][0] = native[p];}    // fill in its location in the orderings
+        for (PyInt m=0; m<num_orderings; m++) {insert[m][0] = p;}    // fill in its location in the orderings
         if (len_orderings < num_axes)     // If there is another index, keep going ...
             {
-            antisymmetrize_recur(tensors, num_tensors, num_axes, len_axis, new_strides, p+1, len_orderings, num_orderings, orderings, phases, native);
+            antisymmetrize_recur(tensors, num_tensors, num_axes, len_axis, new_strides, p+1, len_orderings, num_orderings, orderings, phases);
             }
         else                              // ... otherwise it is time to do the copying finally.
             {
             PyInt idx_0 = 0;                                                                    // Build the linear index ...
             for (PyInt i=0; i<len_orderings; i++) {idx_0 += orderings[0][i] * strides[i];}      // ... for ascending-order case.
-
             for (PyInt m=1; m<num_orderings; m++)    // loop over other arrangements of the indices
                 {
                 PyInt idx = 0;                                                                  // Build the linear index ...
-                for (PyInt i=0; i<len_orderings; i++) {idx += orderings[m][i] * strides[i];}    // ... for the alternate arrangement.
+                for (PyInt i=0; i<len_orderings; i++) {idx += orderings[m][i] * strides[i];}    // ... for the alternate arrangements.
                 for (PyInt t=0; t<num_tensors; t++)
                     {
                     for (PyInt k=0; k<strides[len_orderings-1]; k++)
                         {
-                        tensors[t][idx_0+k] += phases[m] * tensors[t][idx+k];    // Fill in redundant elements (to within a phase).
+                        tensors[t][idx_0+k] += phases[m] * tensors[t][idx+k];    // Build antisymmetrized value at ascending-indices location
                         }
                     }
                 }
-
             for (PyInt m=1; m<num_orderings; m++)    // loop over other arrangements of the indices
                 {
                 PyInt idx = 0;                                                                  // Build the linear index ...
-                for (PyInt i=0; i<len_orderings; i++) {idx += orderings[m][i] * strides[i];}    // ... for the alternate arrangement.
+                for (PyInt i=0; i<len_orderings; i++) {idx += orderings[m][i] * strides[i];}    // ... for the alternate arrangements.
                 for (PyInt t=0; t<num_tensors; t++)
                     {
                     for (PyInt k=0; k<strides[len_orderings-1]; k++)
                         {
-                        tensors[t][idx+k] = phases[m] * tensors[t][idx_0+k];    // Fill in redundant elements (to within a phase).
+                        tensors[t][idx+k] = phases[m] * tensors[t][idx_0+k];    // Fill in phased redundant elements
                         }
                     }
                 }
-
             }
         }
 
@@ -112,8 +108,7 @@ void antisymmetrize(Double** tensors,      // array of density tensors to antisy
                     PyInt    n_tensors,    // number of density tensors to antisymmetrize
                     PyInt    n_orbs,       // number of orbitals (edge dimension of tensors)
                     PyInt    n_create,     // number of creation operators
-                    PyInt    n_annihil,    // number of annihilation operators
-                    PyInt*   native)
+                    PyInt    n_annihil)    // number of annihilation operators
     {
     PyInt one    = 1;                                      // &one is a PyInt array with one element that is 1: ie, [1]
     PyInt stride = 1;                                      // basically just stride = n_orbs^n_annihil, which is the size of ...
@@ -136,13 +131,13 @@ void antisymmetrize(Double** tensors,      // array of density tensors to antisy
             }
 
         //
-        antisymmetrize_recur(all_tensors, n_tensors*n_subtensors, n_annihil, n_orbs, &one,    0, 0, 1, NULL, &one, native);
+        antisymmetrize_recur(all_tensors, n_tensors*n_subtensors, n_annihil, n_orbs, &one,    0, 0, 1, NULL, &one);
         }
 
     if (n_create > 1)    // then antisymmetrize the among the former indices by treating the entire a-string subtensor as an "element" of the c-string tensor
         {
         //
-        antisymmetrize_recur(    tensors, n_tensors,              n_create,  n_orbs, &stride, 0, 0, 1, NULL, &one, native);
+        antisymmetrize_recur(    tensors, n_tensors,              n_create,  n_orbs, &stride, 0, 0, 1, NULL, &one);
         }
 
     return;
