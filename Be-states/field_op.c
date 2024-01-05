@@ -300,6 +300,10 @@ void resolve_recur(int      mode,             // OP_ACTION or COMPUTE_D (determi
                             tensors[braket++][p_op_idx] += update;                // ... to the precomputed location in the tensor for the corresponding bra-ket pair (which is incremented)
                             }
                         }
+                    else
+                        {
+                        braket += n_Psi_R;                                        // make sure to increment the running index even if ket loop skipped
+                        }
                     }
                 }
             }
@@ -487,3 +491,25 @@ void densities(PyInt    n_create,           // number of creation operators
     resolve(COMPUTE_D, n_create, n_annihil, bras, n_bras, configs_bra, n_configs_bra, n_configint_bra, kets, n_kets, configs_ket, n_configs_ket, n_configint_ket, rho, n_orbs, 0, thresh, n_threads);
     return;
     }
+
+
+
+
+
+/*
+// could come in handy again some day . . .
+#include <stdio.h>        // printf() for debug
+void print_config(BigInt* config, PyInt n_orbs, int n_bits, char* beg, char* end)
+    {
+    printf(beg);
+    for (int p=n_orbs-1; p>=0; p--)    // loop over all orbitals
+        {
+        int Q = p / n_bits;                                // Q=quotient:  in which component of config is orbital p?
+        int r = p % n_bits;                                // r=remainder: which bit in ^this component is this orbital?
+        if (config[Q] & ((BigInt)1<<r))  {printf("1");}    // if bit r is "on" in component Q, it is occupied, ...
+        else                             {printf("0");}    // ... otherwise it is empty
+        }
+    printf(end);
+    return;
+    }
+*/

@@ -119,7 +119,7 @@ void antisymmetrize(Double** tensors,      // array of density tensors to antisy
         PyInt n_subtensors = 1;                                      // basically just n_subtensors = n_orbs^n_create, because there is ...
         for (int i=0; i<n_create;  i++) {n_subtensors *= n_orbs;}    // ... one a-string subtensor for each value of c-string indices
 
-        Double* all_tensors[n_tensors * n_subtensors];               // storage for pointers to every subtensor of every tensor
+        Double* all_tensors[n_tensors * n_subtensors];               // storage for pointers to every subtensor of every tensor (this can segfault if length of all_tensors too long ... use malloc/free to fix)
         int k = 0;    // a running index for all subtensor of every tensor
         for (int i=0; i<n_tensors; i++)    // loop over all top-level tensors
             {
