@@ -17,6 +17,9 @@
 #
 
 from tendot import tendot
+from qode.math.tensornet import scalar_value
+
+p, q, r, s, t, u, v, w = "pqrstuvw"
 
 
 
@@ -101,9 +104,7 @@ def _s01n00(densities, integrals, subsystem, charges, permutation):
     if X.Dchg_0==-1 and X.Dchg_1==+1:
         prefactor = (-1)**(X.n_i1 + X.P)
         def diagram(i0,i1,j0,j1):
-            partial =             tendot(X.c_0[i0][j0], X.S_01,        axes=([0], [0]))
-            partial = prefactor * tendot(partial,       X.a_1[i1][j1], axes=([0], [0]))
-            return X.N_00 * partial
+            return X.N_00 * scalar_value( prefactor * X.c_0[i0][j0](p) @ X.S_01(p,q) @ X.a_1[i1][j1](q) )
         return diagram, permutation
     else:
         return None, None
@@ -118,9 +119,7 @@ def _s01n11(densities, integrals, subsystem, charges, permutation):
     if X.Dchg_0==-1 and X.Dchg_1==+1:
         prefactor = (-1)**(X.n_i1 + X.P)
         def diagram(i0,i1,j0,j1):
-            partial =             tendot(X.c_0[i0][j0], X.S_01,        axes=([0], [0]))
-            partial = prefactor * tendot(partial,       X.a_1[i1][j1], axes=([0], [0]))
-            return X.N_11 * partial
+            return X.N_11 * scalar_value( prefactor * X.c_0[i0][j0](p) @ X.S_01(p,q) @ X.a_1[i1][j1](q) )
         return diagram, permutation
     else:
         return None, None
@@ -135,13 +134,9 @@ def _s01n01(densities, integrals, subsystem, charges, permutation):
     if X.Dchg_0==-1 and X.Dchg_1==+1:
         prefactor = (-1)**(X.n_i1 + X.P)
         def diagram(i0,i1,j0,j1):
-            partial =             tendot(X.c_0[i0][j0], X.S_01,        axes=([0], [0]))
-            partial = prefactor * tendot(partial,       X.a_1[i1][j1], axes=([0], [0]))
-            return X.N_01 * partial
+            return X.N_01 * scalar_value( prefactor * X.c_0[i0][j0](p) @ X.S_01(p,q) @ X.a_1[i1][j1](q) )
         return diagram, permutation
     else:
-        return None, None
-
         return None, None
 
 
