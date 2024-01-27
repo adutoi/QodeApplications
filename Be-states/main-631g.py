@@ -236,4 +236,4 @@ for i in range(len(states[ref_chg].coeffs)):
 for chg in states:
     if chg!=ref_chg:  frag0.state_indices += [(chg,i) for i in range(len(states[chg].coeffs))]
 
-pickle.dump(frag0, open("/scratch/adutoi/Be631g.pkl", "wb"))
+pickle.dump(frag0, open("Be631g.pkl", "wb"))

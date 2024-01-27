@@ -18,14 +18,20 @@
 
 import math
 import numpy
+import tensorly
 from   qode.util.PyC import import_C, Double, BigInt
-from   compress_tensors import compress
+from   qode.math.tensornet import tl_tensor
+from   qode.math import svd_decomposition
 
 build    = import_C("density_tensors", flags="-O2")
 #contract = import_C("H_contractions",  flags="-O2")
 
 #contract.monomer_2e.return_type(float)
 
+
+
+def tens_wrap(tensor):
+    return tl_tensor(tensorly.tensor(tensor, dtype=tensorly.float64))
 
 
 
@@ -50,7 +56,7 @@ def numpy_storage_to_lists(nparray_1d, n_bra, n_ket, n_spin_orbs, free_indices):
 	for i in range(n_bra):
 		for j in range(n_ket):
 			print(i,j)
-			result[i][j] = compress(nparray_1d[idx: idx+tensor_size].reshape(tensor_shape), free_indices, compression="none")
+			result[i][j] = svd_decomposition(nparray_1d[idx: idx+tensor_size].reshape(tensor_shape), free_indices[0]+free_indices[1], wrapper=tens_wrap)
 			idx += tensor_size
 	del nparray_1d
 	return result
@@ -117,7 +123,7 @@ def build_density_tensors(z_lists, n_orbs, n_core, n_threads=1):
 				allocation = n_tensors*(n_spin_orbs**1)
 				result = numpy.zeros(allocation, dtype=Double.numpy)
 				build.a_tensor(result, idx[bra_chg], idx[ket_chg], n_elec, n_states, z_coeffs, n_configs, z_configs, n_orbs, n_core, combo_mat_list, n_threads)
-				densities['a'][bra_chg,ket_chg] = numpy_storage_to_lists(result, n_bra_states, n_ket_states, n_spin_orbs, ((0,),))
+				densities['a'][bra_chg,ket_chg] = numpy_storage_to_lists(result, n_bra_states, n_ket_states, n_spin_orbs, ((0,),tuple()))
 				total_size += allocation
 				# caa
 				print("caa", bra_chg, ket_chg)
@@ -155,7 +161,7 @@ def build_density_tensors(z_lists, n_orbs, n_core, n_threads=1):
 				allocation = n_tensors*(n_spin_orbs**1)
 				result = numpy.zeros(allocation, dtype=Double.numpy)
 				build.c_tensor(result, idx[bra_chg], idx[ket_chg], n_elec, n_states, z_coeffs, n_configs, z_configs, n_orbs, n_core, combo_mat_list, n_threads)
-				densities['c'][bra_chg,ket_chg] = numpy_storage_to_lists(result, n_bra_states, n_ket_states, n_spin_orbs, ((0,),))
+				densities['c'][bra_chg,ket_chg] = numpy_storage_to_lists(result, n_bra_states, n_ket_states, n_spin_orbs, ((0,),tuple()))
 				total_size += allocation
 				# cca
 				print("cca", bra_chg, ket_chg)

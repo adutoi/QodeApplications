@@ -19,16 +19,19 @@ import numpy
 import tensorly
 from qode.math import precise_numpy_inverse, linear_inner_product_space, iterative_biorthog, biorthog_iteration
 from qode.math.tensornet import tl_tensor
+from qode.math           import svd_decomposition
 from qode.util.PyC import Double
 from qode.util.dynamic_array import wrap, cached
 from qode.atoms.integrals.fragments import AO_integrals, fragMO_integrals, bra_transformed, ket_transformed, spin_orb_integrals, Nuc_repulsion, as_raw_mat, as_frag_blocked_mat, zeros2, Id, mat_as_rows, mat_as_columns, space_traits, add, subtract, mat_mul
-from compress_tensors import compress
 
 
+
+def tens_wrap(tensor):
+    return tl_tensor(tensorly.tensor(tensor, dtype=tensorly.float64))
 
 def tensorly_wrapper(rule):
     def wrap_it(*indices):
-        return compress(rule(*indices), free_indices=None, compression="none")
+        return svd_decomposition(rule(*indices), (0,1), wrapper=tens_wrap)
     return wrap_it
 def tensorly_wrapper2(rule):
     def wrap_it(*indices):
@@ -37,9 +40,9 @@ def tensorly_wrapper2(rule):
         for i,m in enumerate(indices):
             free_indices[m] += [i]
         if False and len(free_indices[0])>0 and len(free_indices[1])>0:
-            return compress(rule(*indices), free_indices, compression="SVD")
+            return svd_decomposition(rule(*indices), free_indices[0], free_indices[1], wrapper=tens_wrap)
         else:
-            return compress(rule(*indices), free_indices=None, compression="none")
+            return svd_decomposition(rule(*indices), (0,1,2,3), wrapper=tens_wrap)
     return wrap_it
 
 def direct_Sinv(fragments, S):

@@ -16,8 +16,16 @@
 #    along with QodeApplications.  If not, see <http://www.gnu.org/licenses/>.
 #
 import tensorly
-from   qode.math.tensornet import tl_tensor
+from qode.math.tensornet import tl_tensor
+from qode.math           import svd_decomposition
 import field_op
+
+
+
+def tens_wrap(tensor):
+    return tl_tensor(tensorly.tensor(tensor, dtype=tensorly.float64))
+
+
 
 # states[n].coeffs  = [numpy.array, numpy.array, . . .]   One (effectively 1D) array of coefficients per n-electron state
 # states[n].configs = [int, int, . . . ]                  Each int represents a configuration (has the same length as arrays in list above)
@@ -48,7 +56,11 @@ def build_tensors(states, n_orbs, n_elec_0, thresh=1e-10, n_threads=1):
                     rho = field_op.build_densities(op_string, n_orbs, bra_coeffs, ket_coeffs, bra_configs, ket_configs, thresh, n_threads)
                     for i in range(len(bra_coeffs)):
                         for j in range(len(ket_coeffs)):
-                            rho[i][j] = tl_tensor(tensorly.tensor(rho[i][j], dtype=tensorly.float64))
+                            if op_string in ["ccaaa", "cccaa"]:
+                                print("decomposing {} ({},{}) ({},{}) ...".format(op_string, bra_chg, i, ket_chg, j))
+                                rho[i][j] = svd_decomposition(rho[i][j], (0,1), (2,3,4), wrapper=tens_wrap)
+                            else:
+                                rho[i][j] = svd_decomposition(rho[i][j], tuple(range(len(rho[i][j].shape))), wrapper=tens_wrap)
                     densities[op_string][bra_chg,ket_chg] = rho
 
     return densities
