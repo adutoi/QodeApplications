@@ -35,7 +35,7 @@ def _parameters(densities, integrals, subsystem, charges, permutation=(0,)):
     data = _empty()
     data.P = 0 if permutation==(0,1) else 1    # This line of code is specific to two fragments (needs to be generalized for >=3).
     #
-    Dchg_rhos = {+2:["aa", "caaa"], +1:["a","caa","ccaaa"], 0:["ca","ccaa"], -1:["c","cca","cccaa"], -2:["cc", "ccca"]}
+    Dchg_rhos = {+2:["aa", "caaa"], +1:["a","caa","Va"], 0:["ca","ccaa"], -1:["c","cca","cV"], -2:["cc", "ccca"]}
     n_i = 0
     n_i_label = ""
     for m0,m0_ in reversed(list(enumerate(permutation))):
