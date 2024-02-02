@@ -58,7 +58,9 @@ def build_tensors(states, n_orbs, n_elec_0, thresh=1e-10, n_threads=1):
                         for j in range(len(ket_coeffs)):
                             if op_string in ["ccaaa", "cccaa"]:
                                 print("decomposing {} ({},{}) ({},{}) ...".format(op_string, bra_chg, i, ket_chg, j))
-                                rho[i][j] = svd_decomposition(rho[i][j], (0,1), (2,3,4), wrapper=tens_wrap)
+                                rho[i][j] = svd_decomposition(rho[i][j], (0,1,2,3,4), thresh=5e-1, wrapper=tens_wrap)
+                                #rho[i][j] = svd_decomposition(rho[i][j], (0,1), (2,3,4), wrapper=tens_wrap)
+                                #rho[i][j] = svd_decomposition(rho[i][j], (2,), (0,1,3,4), thresh=5e-1, wrapper=tens_wrap)
                             else:
                                 rho[i][j] = svd_decomposition(rho[i][j], tuple(range(len(rho[i][j].shape))), wrapper=tens_wrap)
                     densities[op_string][bra_chg,ket_chg] = rho
