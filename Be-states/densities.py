@@ -16,7 +16,7 @@
 #    along with QodeApplications.  If not, see <http://www.gnu.org/licenses/>.
 #
 import tensorly
-from qode.math.tensornet import tl_tensor, evaluate
+from qode.math.tensornet import tl_tensor
 from qode.math           import svd_decomposition
 import field_op
 
@@ -30,16 +30,12 @@ def tens_wrap(tensor):
 # states[n].coeffs  = [numpy.array, numpy.array, . . .]   One (effectively 1D) array of coefficients per n-electron state
 # states[n].configs = [int, int, . . . ]                  Each int represents a configuration (has the same length as arrays in list above)
 
-def build_tensors(states, n_orbs, n_elec_0, h, V,thresh=1e-10, n_threads=1):
-    h = tens_wrap(h)
-    V = tens_wrap(V)
-
+def build_tensors(states, n_orbs, n_elec_0, thresh=1e-10, n_threads=1):
     densities = {}
     densities["n_elec"]   = {chg:(n_elec_0-chg)          for chg in states}
     densities["n_states"] = {chg:len(states[chg].coeffs) for chg in states}
 
-    #op_strings = {2:["aa", "caaa"], 1:["a", "caa", "ccaaa"], 0:["ca", "ccaa"], -1:["c", "cca", "cccaa"], -2:["cc", "ccca"]}
-    op_strings = {2:["aa", "caaa"], 1:["a", "caa", "Va"], 0:["ca", "ccaa"], -1:["c", "cca", "cV"], -2:["cc", "ccca"]}
+    op_strings = {2:["aa", "caaa"], 1:["a", "caa", "ccaaa"], 0:["ca", "ccaa"], -1:["c", "cca", "cccaa"], -2:["cc", "ccca"]}
     for bra_chg in states:
         print(bra_chg)
         #print(states[bra_chg].coeffs)
@@ -57,24 +53,13 @@ def build_tensors(states, n_orbs, n_elec_0, h, V,thresh=1e-10, n_threads=1):
                 for op_string in op_strings[chg_diff]:
                     if op_string not in densities:  densities[op_string] = {}
                     print(op_string, bra_chg, ket_chg)
-                    op_string_raw = op_string
-                    if op_string=="Va":  op_string_raw = "ccaaa"
-                    if op_string=="cV":  op_string_raw = "cccaa"
-                    rho = field_op.build_densities(op_string_raw, n_orbs, bra_coeffs, ket_coeffs, bra_configs, ket_configs, thresh, n_threads)
-                    p,q,r,s = "pqrs"
+                    rho = field_op.build_densities(op_string, n_orbs, bra_coeffs, ket_coeffs, bra_configs, ket_configs, thresh, n_threads)
                     for i in range(len(bra_coeffs)):
                         for j in range(len(ket_coeffs)):
-                            if   op_string=="Va":
-                                rho[i][j] = tens_wrap(rho[i][j])
-                                rho[i][j] = evaluate(V(p,q,r,s) @ rho[i][j](p,q,0,r,s))
-                            elif op_string=="cV":
-                                rho[i][j] = tens_wrap(rho[i][j])
-                                rho[i][j] = evaluate(V(p,q,r,s) @ rho[i][j](p,q,0,s,r))
+                            if op_string in ["ccaaa", "cccaa"]:
+                                rho[i][j] = svd_decomposition(rho[i][j], (0,1), (2,3,4), wrapper=tens_wrap)
                             else:
                                 rho[i][j] = tens_wrap(rho[i][j])
                     densities[op_string][bra_chg,ket_chg] = rho
 
     return densities
-
-
-
