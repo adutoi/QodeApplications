@@ -27,7 +27,6 @@ import numpy
 import tensorly
 import qode.util
 import qode.math
-import qode.math.tensornet
 import excitonic
 import diagrammatic_expansion   # defines information structure for housing results of diagram evaluations
 import XR_term                  # knows how to use ^this information to pack a matrix for use in XR model
@@ -37,6 +36,7 @@ import St_diagrams              # contains definitions of actual diagrams needed
 import Su_diagrams              # contains definitions of actual diagrams needed for SH operator in BO rep
 import Sv_diagrams              # contains definitions of actual diagrams needed for SH operator in BO rep
 from   get_ints import get_ints
+from   precontract import precontract
 
 # needed for unpickling?!
 class empty(object):  pass     # Basically just a dictionary class
@@ -67,28 +67,7 @@ symm_ints, bior_ints, nuc_rep = get_ints(BeN, project_core)
 
 # The engines that build the terms
 BeN_rho = [frag.rho for frag in BeN]   # diagrammatic_expansion.blocks should take BeN directly? (n_states and n_elec one level higher)
-
-p,q,r,s = "pqrs"
-for m,rho in enumerate(BeN_rho):
-    N, S, T, U, V = nuc_rep[m,m], bior_ints.S[m,m], bior_ints.T[m,m], bior_ints.U[m,m,m], bior_ints.V[m,m,m,m]
-    h = T + U
-    rho["Va"] = {}
-    for bra_chg,ket_chg in [(+1,0), (0,-1)]:
-        rho["Va"][bra_chg,ket_chg] = []
-        for row_in in rho["ccaaa"][bra_chg,ket_chg]:
-            row_out = []
-            for rho_ccaaa in row_in:
-                row_out += [qode.math.tensornet.evaluate(V(p,q,r,s) @ rho_ccaaa(p,q,0,r,s))]
-            rho["Va"][bra_chg,ket_chg] += [row_out]
-    rho["cV"] = {}
-    for bra_chg,ket_chg in [(-1,0), (0,+1)]:
-        rho["cV"][bra_chg,ket_chg] = []
-        for row_in in rho["cccaa"][bra_chg,ket_chg]:
-            row_out = []
-            for rho_cccaa in row_in:
-                row_out += [qode.math.tensornet.evaluate(V(p,q,r,s) @ rho_cccaa(p,q,0,s,r))]
-            rho["cV"][bra_chg,ket_chg] += [row_out]
-
+precontract(BeN_rho, bior_ints)
 S_blocks       = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=symm_ints.S,                     diagrams=S_diagrams)
 Sn_blocks      = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=(symm_ints.S, nuc_rep),          diagrams=Sn_diagrams)
 St_blocks_symm = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=(symm_ints.S, symm_ints.T),      diagrams=St_diagrams)
