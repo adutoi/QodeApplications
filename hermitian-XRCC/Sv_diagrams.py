@@ -36,6 +36,7 @@ def _parameters(densities, integrals, subsystem, charges, permutation=(0,)):
     data = _empty()
     data.P = 0 if permutation==(0,1) else 1    # This line of code is specific to two fragments (needs to be generalized for >=3).
     #
+    #Dchg_rhos = {+2:["aa", "caaa"], +1:["a","caa","Va"], 0:["V", "ca","ccaa"], -1:["c","cca","cV"], -2:["cc", "ccca"]}
     Dchg_rhos = {+2:["aa", "caaa"], +1:["a","caa","Va"], 0:["ca","ccaa"], -1:["c","cca","cV"], -2:["cc", "ccca"]}
     n_i = 0
     n_i_label = ""
@@ -80,6 +81,7 @@ def v0000(densities, integrals, subsystem, charges):
         prefactor = 1
         def diagram(i0,j0):
             return scalar_value( prefactor * X.V_0000(p,q,r,s) @ X.ccaa_0[i0][j0](p,q,s,r) )
+            #return scalar_value( prefactor * X.V_0[i0][j0] )
         return [(diagram, (0,))]
     else:
         return [(None, None)]

@@ -69,7 +69,6 @@ symm_ints, bior_ints, nuc_rep = get_ints(BeN, project_core)
 BeN_rho = [frag.rho for frag in BeN]   # diagrammatic_expansion.blocks should take BeN directly? (n_states and n_elec one level higher)
 precontract(BeN_rho, bior_ints)
 S_blocks       = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=symm_ints.S,                     diagrams=S_diagrams)
-Sn_blocks      = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=(symm_ints.S, nuc_rep),          diagrams=Sn_diagrams)
 St_blocks_symm = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=(symm_ints.S, symm_ints.T),      diagrams=St_diagrams)
 Su_blocks_symm = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=(symm_ints.S, symm_ints.U),      diagrams=Su_diagrams)
 Sv_blocks_symm = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=(symm_ints.S, symm_ints.V),      diagrams=Sv_diagrams)
@@ -95,13 +94,7 @@ all_dimer_charges = [(0,0), (0,+1), (0,-1), (+1,0), (+1,+1), (+1,-1), (-1,0), (-
 
 H1 = []
 for m in [0,1]:
-    H1_m  = XR_term.monomer_matrix(Sn_blocks, {
-                          1: [
-                              "n00"
-                             ]
-                         }, m, monomer_charges)
-
-    H1_m += XR_term.monomer_matrix(St_blocks_bior, {
+    H1_m  = XR_term.monomer_matrix(St_blocks_bior, {
                           1: [
                               "t00"
                              ]
@@ -138,17 +131,7 @@ S2inv = qode.math.precise_numpy_inverse(S2)
 
 
 
-S2H2  = XR_term.dimer_matrix(Sn_blocks, {
-                       1: [
-                           "n00"
-                          ],
-                       2: [
-                           "n01",
-                           "s01n00", "s01n11", "s01n01"
-                          ]
-                      }, (0,1), all_dimer_charges)
-
-S2H2 += XR_term.dimer_matrix(St_blocks_symm, {
+S2H2  = XR_term.dimer_matrix(St_blocks_symm, {
                        1: [
                            "t00"
                           ],
@@ -234,12 +217,6 @@ H2blocked = S2inv @ S2H2
 
 
 
-H2blocked -= XR_term.dimer_matrix(Sn_blocks, {
-                       1: [
-                           "n00"
-                          ]
-                      }, (0,1), all_dimer_charges)
-
 H2blocked -= XR_term.dimer_matrix(St_blocks_bior, {
                        1: [
                            "t00"
@@ -285,4 +262,5 @@ for i,i_ in enumerate(mapping):
 
 out, resources = qode.util.output(log=qode.util.textlog(echo=True)), qode.util.parallel.resources(1)
 E, T = excitonic.ccsd((H1,[[None,H2],[None,None]]), out, resources)
+E += sum(nuc_rep[m1,m2] for m1 in range(n_frag) for m2 in range(m1+1))
 out.log("\nTotal Excitonic CCSD Energy (test) = ", E)
