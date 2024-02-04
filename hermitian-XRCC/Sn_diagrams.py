@@ -71,10 +71,10 @@ def _parameters(densities, integrals, subsystem, charges, permutation=(0,)):
 # N_00
 def n00(densities, integrals, subsystem, charges):
     X = _parameters(densities, integrals, subsystem, charges)
+    def diagram(i0,j0):
+        if i0==j0:  return X.N_00
+        else:       return 0
     if X.Dchg_0==0:
-        def diagram(i0,j0):
-            if i0==j0:  return X.N_00
-            else:       return 0
         return [(diagram, (0,))]
     else:
         return [(None, None)]
@@ -86,10 +86,10 @@ def n00(densities, integrals, subsystem, charges):
 # N_01
 def n01(densities, integrals, subsystem, charges):
     X = _parameters(densities, integrals, subsystem, charges, permutation=(0,1))
+    def diagram(i0,i1,j0,j1):
+        if i0==j0 and i1==j1:  return X.N_01
+        else:                  return 0
     if X.Dchg_0==0 and X.Dchg_1==0:
-        def diagram(i0,i1,j0,j1):
-            if i0==j0 and i1==j1:  return X.N_01
-            else:                  return 0
         return [(diagram, (0,1))]
     else:
         return [(None, None)]
@@ -101,10 +101,10 @@ def s01n00(densities, integrals, subsystem, charges):
     return [result01, result10]
 def _s01n00(densities, integrals, subsystem, charges, permutation):
     X = _parameters(densities, integrals, subsystem, charges, permutation)
+    prefactor = (-1)**(X.n_i1 + X.P)
+    def diagram(i0,i1,j0,j1):
+        return X.N_00 * scalar_value( prefactor * X.c_0[i0][j0](p) @ X.S_01(p,q) @ X.a_1[i1][j1](q) )
     if X.Dchg_0==-1 and X.Dchg_1==+1:
-        prefactor = (-1)**(X.n_i1 + X.P)
-        def diagram(i0,i1,j0,j1):
-            return X.N_00 * scalar_value( prefactor * X.c_0[i0][j0](p) @ X.S_01(p,q) @ X.a_1[i1][j1](q) )
         return diagram, permutation
     else:
         return None, None
@@ -116,10 +116,10 @@ def s01n11(densities, integrals, subsystem, charges):
     return [result01, result10]
 def _s01n11(densities, integrals, subsystem, charges, permutation):
     X = _parameters(densities, integrals, subsystem, charges, permutation)
+    prefactor = (-1)**(X.n_i1 + X.P)
+    def diagram(i0,i1,j0,j1):
+        return X.N_11 * scalar_value( prefactor * X.c_0[i0][j0](p) @ X.S_01(p,q) @ X.a_1[i1][j1](q) )
     if X.Dchg_0==-1 and X.Dchg_1==+1:
-        prefactor = (-1)**(X.n_i1 + X.P)
-        def diagram(i0,i1,j0,j1):
-            return X.N_11 * scalar_value( prefactor * X.c_0[i0][j0](p) @ X.S_01(p,q) @ X.a_1[i1][j1](q) )
         return diagram, permutation
     else:
         return None, None
@@ -131,10 +131,10 @@ def s01n01(densities, integrals, subsystem, charges):
     return [result01, result10]
 def _s01n01(densities, integrals, subsystem, charges, permutation):
     X = _parameters(densities, integrals, subsystem, charges, permutation)
+    prefactor = (-1)**(X.n_i1 + X.P)
+    def diagram(i0,i1,j0,j1):
+        return X.N_01 * scalar_value( prefactor * X.c_0[i0][j0](p) @ X.S_01(p,q) @ X.a_1[i1][j1](q) )
     if X.Dchg_0==-1 and X.Dchg_1==+1:
-        prefactor = (-1)**(X.n_i1 + X.P)
-        def diagram(i0,i1,j0,j1):
-            return X.N_01 * scalar_value( prefactor * X.c_0[i0][j0](p) @ X.S_01(p,q) @ X.a_1[i1][j1](q) )
         return diagram, permutation
     else:
         return None, None
