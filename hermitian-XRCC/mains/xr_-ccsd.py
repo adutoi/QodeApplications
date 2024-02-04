@@ -94,18 +94,18 @@ all_dimer_charges = [(0,0), (0,+1), (0,-1), (+1,0), (+1,+1), (+1,-1), (-1,0), (-
 
 H1 = []
 for m in [0,1]:
-    H1_m  = XR_term.monomer_matrix(St_blocks_bior, {
+    H1_m  = XR_term.monomer_matrix(St_blocks_symm, {
                           1: [
                               "t00"
                              ]
                          }, m, monomer_charges)
-    H1_m += XR_term.monomer_matrix(Su_blocks_bior, {
+    H1_m += XR_term.monomer_matrix(Su_blocks_symm, {
                           1: [
                               "u000"
                              ]
                          }, m, monomer_charges)
 
-    H1_m += XR_term.monomer_matrix(Sv_blocks_bior, {
+    H1_m += XR_term.monomer_matrix(Sv_blocks_symm, {
                           1: [
                               "v0000"
                              ]
@@ -121,9 +121,6 @@ S2     = XR_term.dimer_matrix(S_blocks, {
                            ],
                         2: [
                             "s01"
-                            #"s01s10", "s01s01",
-                            #"s01s01s10",
-                            #"s01s01s10s10", "s01s01s01s10"
                            ]
                        },  (0,1), all_dimer_charges)
 
@@ -136,9 +133,7 @@ S2H2  = XR_term.dimer_matrix(St_blocks_symm, {
                            "t00"
                           ],
                        2: [
-                           "t01",
-                           #"s01t00", "s10t00",
-                           #"s10t01", "s01t01"
+                           "t01"
                           ]
                       }, (0,1), all_dimer_charges)
 S2H2 += XR_term.dimer_matrix(Su_blocks_symm, {
@@ -147,30 +142,18 @@ S2H2 += XR_term.dimer_matrix(Su_blocks_symm, {
                           ],
                        2: [
                            "u100",
-                           "u001", "u101",
-                           #"s01u000", "s10u000",
-                           #"s01u100", "s10u100",
-                           #"s10u001", "s10u101", "s01u001", "s01u101"
+                           "u001", "u101"
                           ]
                      }, (0,1), all_dimer_charges)
 
 S2H2 += XR_term.dimer_matrix(St_blocks_bior, {
-                       1: [
-                           #"t00"
-                          ],
                        2: [
-                           #"t01",
                            "s01t00", "s10t00",
                            "s10t01", "s01t01"
                           ]
                       }, (0,1), all_dimer_charges)
 S2H2 += XR_term.dimer_matrix(Su_blocks_bior, {
-                       1: [
-                           #"u000"
-                          ],
                        2: [
-                           #"u100",
-                           #"u001", "u101",
                            "s01u000", "s10u000",
                            "s01u100", "s10u100",
                            "s10u001", "s10u101", "s01u001", "s01u101"
@@ -182,9 +165,7 @@ S2H2 -= XR_term.dimer_matrix(Sv_blocks_bior, {
                            "v0000"
                           ],
                        2: [
-                           "v0101", "v0010", "v0100", "v0011",
-                           #"s01v0000", "s10v0000",
-                           #"s01v0101", "s10v0010", "s01v0100", "s10v0011", "s01v0010", "s10v0100"#, "s01v0011"
+                           "v0101", "v0010", "v0100", "v0011"
                           ]
                       }, (0,1), all_dimer_charges)
 
@@ -193,18 +174,12 @@ S2H2 += XR_term.dimer_matrix(Sv_blocks_half, {
                            "v0000"
                           ],
                        2: [
-                           "v0101", "v0010", "v0100", "v0011",
-                           #"s01v0000", "s10v0000",
-                           #"s01v0101", "s10v0010", "s01v0100", "s10v0011", "s01v0010", "s10v0100"#, "s01v0011"
+                           "v0101", "v0010", "v0100", "v0011"
                           ]
                       }, (0,1), all_dimer_charges)
 
 S2H2 += XR_term.dimer_matrix(Sv_blocks_bior, {
-                       1: [
-                           #"v0000"
-                          ],
                        2: [
-                           #"v0101", "v0010", "v0100", "v0011",
                            "s01v0000", "s10v0000",
                            "s01v0101", "s10v0010", "s01v0100", "s10v0011", "s01v0010", "s10v0100"#, "s01v0011"
                           ]
@@ -216,24 +191,22 @@ H2blocked = S2inv @ S2H2
 
 
 
-
-H2blocked -= XR_term.dimer_matrix(St_blocks_bior, {
+H2blocked -= XR_term.dimer_matrix(St_blocks_symm, {
                        1: [
                            "t00"
                           ]
                       }, (0,1), all_dimer_charges)
-H2blocked -= XR_term.dimer_matrix(Su_blocks_bior, {
+H2blocked -= XR_term.dimer_matrix(Su_blocks_symm, {
                        1: [
                            "u000"
                           ]
                      }, (0,1), all_dimer_charges)
 
-H2blocked -= XR_term.dimer_matrix(Sv_blocks_bior, {
+H2blocked -= XR_term.dimer_matrix(Sv_blocks_symm, {
                        1: [
                            "v0000"
                           ]
                       }, (0,1), all_dimer_charges)
-
 
 
 # well, this sucks.  reorder the states
