@@ -120,4 +120,5 @@ def build_densities(op_string, n_orbs, bras, kets, bra_configs, ket_configs, thr
                             n_orbs,       # number of orbitals
                             n_create,     # number of creation operators
                             n_annihil)    # number of annihilation operators
-    return [rho[i*len(kets):(i+1)*len(kets)] for i in range(len(bras))]
+    #return [rho[i*len(kets):(i+1)*len(kets)] for i in range(len(bras))]
+    return {(i,j):rho[i*len(kets)+j] for i in range(len(bras)) for j in range(len(kets))}
