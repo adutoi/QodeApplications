@@ -18,6 +18,7 @@
 
 from tendot import tendot
 from qode.math.tensornet import tl_tensor, scalar_value
+#from precontract import precontract
 
 p, q, r, s, t, u, v, w = "pqrstuvw"
 
@@ -36,7 +37,8 @@ def _parameters(densities, integrals, subsystem, charges, permutation=(0,)):
     data = _empty()
     data.P = 0 if permutation==(0,1) else 1    # This line of code is specific to two fragments (needs to be generalized for >=3).
     #
-    Dchg_rhos = {+2:["aa", "caaa"], +1:["a","caa","ccaaa","Va"], 0:["ca","ccaa"], -1:["c","cca","cccaa","cV"], -2:["cc", "ccca"]}
+    #Dchg_rhos = {+2:["aa", "caaa"], +1:["a","caa","ccaaa","Va"], 0:["ca","ccaa"], -1:["c","cca","cccaa","cV"], -2:["cc", "ccca"]}
+    Dchg_rhos = {+2:["aa", "caaa"], +1:["a","caa","ccaaa"], 0:["ca","ccaa"], -1:["c","cca","cccaa"], -2:["cc", "ccca"]}
     n_i = 0
     n_i_label = ""
     for m0,m0_ in reversed(list(enumerate(permutation))):
@@ -214,8 +216,8 @@ def _s01v0000(densities, integrals, subsystem, charges, permutation):
     X = _parameters(densities, integrals, subsystem, charges, permutation)
     prefactor = (-1)**(X.n_i1 + X.P)
     def diagram(i0,i1,j0,j1):
-        return scalar_value( prefactor * X.cV_0[i0][j0](p) @ X.S_01(p,q) @ X.a_1[i1][j1](q) )
-        #return scalar_value( prefactor * X.V_0000(r,s,u,t) @ X.cccaa_0[i0][j0](r,s,p,t,u) @ X.S_01(p,q) @ X.a_1[i1][j1](q) )
+        #return scalar_value( prefactor * X.cV_0[i0][j0](p) @ X.S_01(p,q) @ X.a_1[i1][j1](q) )
+        return scalar_value( prefactor * X.V_0000(r,s,u,t) @ X.cccaa_0[i0][j0](r,s,p,t,u) @ X.S_01(p,q) @ X.a_1[i1][j1](q) )
     if X.Dchg_0==-1 and X.Dchg_1==+1:
         return diagram, permutation
     else:
@@ -230,8 +232,8 @@ def _s10v0000(densities, integrals, subsystem, charges, permutation):
     X = _parameters(densities, integrals, subsystem, charges, permutation)
     prefactor = (-1)**(X.n_i1 + X.P)
     def diagram(i0,i1,j0,j1):
-        return scalar_value( prefactor * X.Va_0[i0][j0](q) @ X.S_10(p,q) @ X.c_1[i1][j1](p) )
-        #return scalar_value( prefactor * X.V_0000(r,s,t,u) @ X.ccaaa_0[i0][j0](r,s,q,t,u) @ X.S_10(p,q) @ X.c_1[i1][j1](p) )
+        #return scalar_value( prefactor * X.Va_0[i0][j0](q) @ X.S_10(p,q) @ X.c_1[i1][j1](p) )
+        return scalar_value( prefactor * X.V_0000(r,s,t,u) @ X.ccaaa_0[i0][j0](r,s,q,t,u) @ X.S_10(p,q) @ X.c_1[i1][j1](p) )
     if X.Dchg_0==+1 and X.Dchg_1==-1:
         return diagram, permutation
     else:
