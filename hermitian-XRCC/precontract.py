@@ -17,20 +17,18 @@
 #
 from qode.math.tensornet import evaluate
 
-p,q,r,s = "pqrs"
-
-def _contract(rho, V, new_label, old_label, V_indices, rho_indices):
-        rho[new_label] = {}
-        for charges in rho[old_label]:
-            rho[new_label][charges] = []
-            for row_in in rho[old_label][charges]:
-                row_out = []
-                for old_rho in row_in:
-                    row_out += [evaluate(V(*V_indices) @ old_rho(*rho_indices))]
-                rho[new_label][charges] += [row_out]
-
-def precontract(fragments, integrals):
-    for m,rho in enumerate(fragments):
-        V = integrals.V[m,m,m,m]
-        _contract(rho, V, "Va", "ccaaa", (p,q,r,s), (p,q,0,r,s))
-        _contract(rho, V, "cV", "cccaa", (p,q,r,s), (p,q,0,s,r))
+def precontract(contract_cache, contract_label, densities, integrals, int_indices, rho_label, rho_indices):
+    rhos = [densities_m[rho_label] for densities_m in densities]
+    for m,rhos_m in rhos:
+        ints_m = integrals[(m,)*len(int_indices)]
+        if m not in contract_cache:  contract_cache[m] = {}
+        contract_cache_m = contract_cache[m]
+        if contract_label not in contract_cache_m:
+            contract_cache_m[contract_label] = {}
+            for charge in rhos_m:
+                contract_cache_m[contract_label][charge] = []
+                for rho_row in rhos_m[charge]:
+                    row = []
+                    for rho in rho_row:
+                        row += [evaluate(ints_m(*ints_indices) @ rho(*rho_indices))]
+                    contract_cache_m[contract_label][charge] += [row]

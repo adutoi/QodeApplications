@@ -27,6 +27,7 @@ class _empty(object):  pass    # Basically just a dictionary
 
 def _parameters(densities, overlaps, subsystem, charges, permutation=(0,)):
     # helper functions to do repetitive manipulations of data passed from above
+    # Version in Sv_diagrams.py has comments (and an updated internal structure that should eventually be replicated here)
     # needs to be generalized (should not be hard) and have "2" removed from its name ... or maybe it is better this way
     densities = [densities[m] for m in subsystem]
     overlaps = {(m0_,m1_):overlaps[m0,m1]    for m1_,m1 in enumerate(subsystem) for m0_,m0 in enumerate(subsystem)}
