@@ -16,7 +16,58 @@
 #    along with QodeApplications.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-from qode.math.tensornet import tl_tensor, scalar_value
+from qode.util               import recursive_looper
+from qode.util.dynamic_array import dynamic_array
+from qode.math.tensornet     import tl_tensor, scalar_value
+
+
+
+class _empty(object):  pass    # Basically just a dictionary
+
+def loops(n_indices, index_vals):
+    enum_idxvals = list(enumerate(index_vals))
+    return [(m,enum_idxvals) for m in range(n_indices)]
+
+def trivial(indices):
+    if len(indices)==1:
+        return indices[0]
+    else:
+        return indices
+
+def str_label(prefix):
+    def _str_label(indices):
+        return prefix + "_" + "".join(str(i) for i in indices)
+    return _str_label
+
+
+def assign(A, prefix, B):
+    _str_label = str_label(prefix)
+    def _assign(*indices):
+        subsys_indices, absolute_indices = zip(*indices)
+        A[_str_label(subsys_indices)] = B[trivial(absolute_indices)]
+    return _assign
+
+def V_rule(V, subsystem):
+    def _V_rule(*indices):
+        absolute_indices = tuple(subsystem[index] for index in indices)
+        return V[trivial(absolute_indices)]
+    return _V_rule
+
+def charge_rule(charges):
+    def _charge_rule(*indices):
+        chg_i, chg_j = charges[trivial(indices)]
+        return chg_i - chg_j
+    return _charge_rule
+
+def density_rule(densities, label, charges):
+    def _density_rule(*indices):
+        chg_i, chg_j = charges[trivial(indices)]
+        try:
+            rho = densities[trivial(indices)][label][chg_i,chg_j]
+        except KeyError:
+            rho = None    # eventually return an object whose __getitem__ member reports exactly what is missing (in case access is attempted)
+        return rho
+    return _density_rule
 
 
 
@@ -26,56 +77,29 @@ from qode.math.tensornet import tl_tensor, scalar_value
 #    charges gives the bra and ket charges (as a 2-tuple) for each such respective fragment in the subsystem
 #    permutation gives a potential reordering of the fragments in the subsystem
 def _parameters(densities, integrals, subsystem, charges, permutation=(0,)):
-
-    class _empty(object):  pass    # Basically just a dictionary
-
-    def _Dchg_rho(rho):
-        for chg_index in rho:    # only need to test one of the dict keys, so return just breaks the loop
-            try:
-                chg_i,chg_j = chg_index    # this will work if and only if the entry is actually a density (as opposed to number of electrons)
-            except:
-                return None                # if it is not a density ...
-            else:
-                return chg_i-chg_j         # ... but if it is, this is what we want to know.
-
     # First cull full arrays of densities and integrals to those of the fragments in the subsystem
     # Their indexing here is now that 0 is the first fragment in the subsystem, and so forth
-    densities = [densities[m] for m in subsystem]
     S, V = integrals
-    S = {(m0_,m1_):S[m0,m1] for m0_,m0 in enumerate(subsystem) for m1_,m1 in enumerate(subsystem)}
-    V = {(m0_,m1_,m2_,m3_):V[m0,m1,m2,m3] for m0_,m0 in enumerate(subsystem)
-         for m1_,m1 in enumerate(subsystem) for m2_,m2 in enumerate(subsystem) for m3_,m3 in enumerate(subsystem)}
+    densities = dynamic_array(V_rule(densities, subsystem), [range(len(subsystem))])
+    S         = dynamic_array(V_rule(S,         subsystem), [range(len(subsystem))]*2)
+    V         = dynamic_array(V_rule(V,         subsystem), [range(len(subsystem))]*4)
     # Initialize the "X" structure and set the permutation flag
     data = _empty()
     data.P = 0 if permutation==(0,1) else 1    # needs to be generalized for n>=3.
+    recursive_looper(loops(2,permutation), assign(data.__dict__, "S", S))
+    recursive_looper(loops(4,permutation), assign(data.__dict__, "V", V))
+    recursive_looper(loops(1,permutation), assign(data.__dict__, "Dchg", dynamic_array(charge_rule(charges),[range(len(subsystem))])))
+    for rho in ["aa", "caaa", "a", "caa", "ca", "ccaa", "c", "cca", "cc", "ccca", "cccaa", "ccaaa"]:
+        recursive_looper(loops(1,permutation), assign(data.__dict__, rho, dynamic_array(density_rule(densities,rho,charges), [range(len(subsystem))])))
     # Some diagrams need to know the number of e- in the ket for the combined "latter" frags of the un(!)permuted subsystem
     n_i_label = ""    # explicitly label which are included in the "latter" frags (to store all possibilities)
     n_i = 0           # start at 0 before looping backwards over frags in outer loop below (order of that loop otherwise irrelevant)
-    # Loop over all combinations of up to 4 fragments, reversal of first loop explained above
-    for m0,m0_ in reversed(list(enumerate(permutation))):    # m0 is fragment index in permuted subsystem, m0_ is its index in unpermuted subsystem
-        m0_str = str(m0)                            # first digit of the "_0010"-like subscript string for X.V_#### (etc)
-        #
-        chg_i_m0_, chg_j_m0_ = charges[m0_]         # bra and ket charge that has been requested for this fragment
-        Dchg_m0_ = chg_i_m0_ - chg_j_m0_            # charge change of this fragment (bra relative to the ket)
-        data.__dict__["Dchg_"+m0_str] = Dchg_m0_    # include the charge change for this fragment under its permuted label
-        #
-        chg_i_m0 , chg_j_m0  = charges[m0]          # bra and ket charge of m0-th frag (double duty for m0, looping backwards over all frags in physical order)
-        n_i_label = m0_str + n_i_label              # incrementally build the label for electron count of (variable) "latter" frags
-        n_i += densities[m0]['n_elec'][chg_i_m0]    # number of electrons in "latter" frags (so far) in physical (unpermuted) order
-        data.__dict__["n_i"+n_i_label] = n_i%2      # include only the parity of the number of electrons in the "latter" frags of the un(!)permuted subsystem
-        #
-        for rho in densities[m0_]:                  # include all fragment density tensors that match the charge change for this fragment
-            if _Dchg_rho(densities[m0_][rho])==Dchg_m0_:
-                data.__dict__[rho+"_"+m0_str] = densities[m0_][rho][chg_i_m0_,chg_j_m0_]
-        # Continue loops over combinations of up to 4 fragments, building labels and storing quantities under permuted lables
-        for m1,m1_ in enumerate(permutation):                # m1 is fragment index in permuted subsystem, m1_ is its index in unpermuted subsystem
-            m01_str = m0_str + str(m1)
-            data.__dict__["S_"+m01_str] = S[m0_,m1_]
-            for m2,m2_ in enumerate(permutation):            # m2 is fragment index in permuted subsystem, m2_ is its index in unpermuted subsystem
-                m012_str  = m01_str + str(m2)
-                for m3,m3_ in enumerate(permutation):        # m3 is fragment index in permuted subsystem, m3_ is its index in unpermuted subsystem
-                    m0123_str = m012_str + str(m3)
-                    data.__dict__["V_"+m0123_str] = V[m0_,m1_,m2_,m3_]
+    for m in reversed(range(len(subsystem))):     # m0 is fragment index in permuted subsystem, m0_ is its index in unpermuted subsystem
+        n_i_label = str(m) + n_i_label            # incrementally build the label for electron count of (variable) "latter" frags
+        chg_i, _  = charges[m]                    # bra and ket charge of m0-th frag (double duty for m0, looping backwards over all frags in physical order)
+        n_i += densities[m]['n_elec'][chg_i]      # number of electrons in "latter" frags (so far) in physical (unpermuted) order
+        data.__dict__["n_i"+n_i_label] = n_i%2    # include only the parity of the number of electrons in the latter frags of the un(!)permuted subsystem
+    #
     return data
 
 
