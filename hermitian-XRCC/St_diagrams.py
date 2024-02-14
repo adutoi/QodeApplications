@@ -25,9 +25,12 @@ class _empty(object):  pass    # Basically just a dictionary
 
 
 
-def _parameters(densities, integrals, subsystem, charges, permutation=(0,)):
+def _parameters(supersys_info, subsystem, charges, permutation=(0,)):
     # helper function to do repetitive manipulations of data passed from above
     # Version in Sv_diagrams.py has comments (and an updated internal structure that should eventually be replicated here)
+    densities, integrals = supersys_info.densities, supersys_info.integrals
+    integrals = integrals.S, integrals.T
+    #
     densities = [densities[m] for m in subsystem]
     S, T = integrals
     S = {(m0_,m1_):S[m0,m1] for m1_,m1 in enumerate(subsystem) for m0_,m0 in enumerate(subsystem)}
@@ -62,7 +65,7 @@ def _parameters(densities, integrals, subsystem, charges, permutation=(0,)):
 
 ##########
 # Here are the implementations of the actual diagrams.
-# They must take the arguments (densities, integrals, subsystem, charges), but after that, it is up to you.
+# They must take the arguments (supersys_info, subsystem, charges), but after that, it is up to you.
 # It should return a list of kernels that takes state indices (for specified fragment charges) their relevant permutations.
 # Don't forget to update the "catalog" dictionary at the end.
 ##########
@@ -70,8 +73,8 @@ def _parameters(densities, integrals, subsystem, charges, permutation=(0,)):
 # monomer diagram
 
 # pq,pq-> :  T_00  ca_0
-def t00(densities, integrals, subsystem, charges):
-    X = _parameters(densities, integrals, subsystem, charges)
+def t00(supersys_info, subsystem, charges):
+    X = _parameters(supersys_info, subsystem, charges)
     prefactor = 1
     def diagram(i0,j0):
         return scalar_value( prefactor * X.T_00(p,q) @ X.ca_0[i0,j0](p,q) )
@@ -85,12 +88,12 @@ def t00(densities, integrals, subsystem, charges):
 # dimer diagrams
 
 # pq,p,q-> :  T_01  c_0  a_1
-def t01(densities, integrals, subsystem, charges):
-    result01 = _t01(densities, integrals, subsystem, charges, permutation=(0,1))
-    result10 = _t01(densities, integrals, subsystem, charges, permutation=(1,0))
+def t01(supersys_info, subsystem, charges):
+    result01 = _t01(supersys_info, subsystem, charges, permutation=(0,1))
+    result10 = _t01(supersys_info, subsystem, charges, permutation=(1,0))
     return [result01, result10]
-def _t01(densities, integrals, subsystem, charges, permutation):
-    X = _parameters(densities, integrals, subsystem, charges, permutation)
+def _t01(supersys_info, subsystem, charges, permutation):
+    X = _parameters(supersys_info, subsystem, charges, permutation)
     prefactor = (-1)**(X.n_i1 + X.P)
     def diagram(i0,i1,j0,j1):
         return scalar_value( prefactor * X.T_01(p,q) @ X.c_0[i0,j0](p) @ X.a_1[i1,j1](q) )
@@ -100,12 +103,12 @@ def _t01(densities, integrals, subsystem, charges, permutation):
         return None, None
 
 # pq,rs,rq,ps-> :  S_10  T_01  ca_0  ca_1
-def s10t01(densities, integrals, subsystem, charges):
-    result01 = _s10t01(densities, integrals, subsystem, charges, permutation=(0,1))
-    result10 = _s10t01(densities, integrals, subsystem, charges, permutation=(1,0))
+def s10t01(supersys_info, subsystem, charges):
+    result01 = _s10t01(supersys_info, subsystem, charges, permutation=(0,1))
+    result10 = _s10t01(supersys_info, subsystem, charges, permutation=(1,0))
     return [result01, result10]
-def _s10t01(densities, integrals, subsystem, charges, permutation):
-    X = _parameters(densities, integrals, subsystem, charges, permutation)
+def _s10t01(supersys_info, subsystem, charges, permutation):
+    X = _parameters(supersys_info, subsystem, charges, permutation)
     prefactor = -1
     def diagram(i0,i1,j0,j1):
         return scalar_value( prefactor * X.S_10(p,q) @ X.ca_0[i0,j0](r,q) @ X.T_01(r,s) @ X.ca_1[i1,j1](p,s) )
@@ -115,12 +118,12 @@ def _s10t01(densities, integrals, subsystem, charges, permutation):
         return None, None
 
 # pq,rs,prs,q-> :  S_01  T_00  cca_0  a_1
-def s01t00(densities, integrals, subsystem, charges):
-    result01 = _s01t00(densities, integrals, subsystem, charges, permutation=(0,1))
-    result10 = _s01t00(densities, integrals, subsystem, charges, permutation=(1,0))
+def s01t00(supersys_info, subsystem, charges):
+    result01 = _s01t00(supersys_info, subsystem, charges, permutation=(0,1))
+    result10 = _s01t00(supersys_info, subsystem, charges, permutation=(1,0))
     return [result01, result10]
-def _s01t00(densities, integrals, subsystem, charges, permutation):
-    X = _parameters(densities, integrals, subsystem, charges, permutation)
+def _s01t00(supersys_info, subsystem, charges, permutation):
+    X = _parameters(supersys_info, subsystem, charges, permutation)
     prefactor = (-1)**(X.n_i1 + X.P)
     def diagram(i0,i1,j0,j1):
         return scalar_value( prefactor * X.S_01(r,s) @ X.T_00(p,q) @ X.cca_0[i0,j0](r,p,q) @ X.a_1[i1,j1](s) )
@@ -130,12 +133,12 @@ def _s01t00(densities, integrals, subsystem, charges, permutation):
         return None, None
 
 # pq,rs,rqs,p-> :  S_10  T_00  caa_0  c_1
-def s10t00(densities, integrals, subsystem, charges):
-    result01 = _s10t00(densities, integrals, subsystem, charges, permutation=(0,1))
-    result10 = _s10t00(densities, integrals, subsystem, charges, permutation=(1,0))
+def s10t00(supersys_info, subsystem, charges):
+    result01 = _s10t00(supersys_info, subsystem, charges, permutation=(0,1))
+    result10 = _s10t00(supersys_info, subsystem, charges, permutation=(1,0))
     return [result01, result10]
-def _s10t00(densities, integrals, subsystem, charges, permutation):
-    X = _parameters(densities, integrals, subsystem, charges, permutation)
+def _s10t00(supersys_info, subsystem, charges, permutation):
+    X = _parameters(supersys_info, subsystem, charges, permutation)
     prefactor = (-1)**(X.n_i1 + X.P)
     def diagram(i0,i1,j0,j1):
         return scalar_value( prefactor * X.S_10(s,r) @ X.T_00(p,q) @ X.caa_0[i0,j0](p,r,q) @ X.c_1[i1,j1](s) )
@@ -145,12 +148,12 @@ def _s10t00(densities, integrals, subsystem, charges, permutation):
         return None, None
 
 # pq,rs,rp,qs-> :  S_01  T_01  cc_0  aa_1
-def s01t01(densities, integrals, subsystem, charges):
-    result01 = _s01t01(densities, integrals, subsystem, charges, permutation=(0,1))
-    result10 = _s01t01(densities, integrals, subsystem, charges, permutation=(1,0))
+def s01t01(supersys_info, subsystem, charges):
+    result01 = _s01t01(supersys_info, subsystem, charges, permutation=(0,1))
+    result10 = _s01t01(supersys_info, subsystem, charges, permutation=(1,0))
     return [result01, result10]
-def _s01t01(densities, integrals, subsystem, charges, permutation):
-    X = _parameters(densities, integrals, subsystem, charges, permutation)
+def _s01t01(supersys_info, subsystem, charges, permutation):
+    X = _parameters(supersys_info, subsystem, charges, permutation)
     prefactor = 1
     def diagram(i0,i1,j0,j1):
         return scalar_value( prefactor * X.S_01(p,q) @ X.cc_0[i0,j0](r,p) @ X.T_01(r,s) @ X.aa_1[i1,j1](q,s) )

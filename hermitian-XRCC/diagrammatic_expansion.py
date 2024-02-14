@@ -17,7 +17,7 @@
 #
 
 import numpy
-from qode.util import recursive_looper
+from qode.util import struct, recursive_looper
 
 ##########
 # This function does the heavy lifting.  Called by instances of innermost class below.
@@ -48,26 +48,25 @@ def _build_block(diagram_term, n_states, permutation):
 ##########
 
 class _charges(object):
-    def __init__(self, densities, integrals, subsystem, charges, diagrams):
-        self._densities = densities
-        self._integrals = integrals
+    def __init__(self, supersys_info, subsystem, charges, diagrams):
+        self._supersys_info = supersys_info
         self._subsystem = subsystem
-        self._charges   = charges
-        self._diagrams  = diagrams
-        self._results   = {}
+        self._charges = charges
+        self._diagrams = diagrams
+        self._results = {}
     def _n_states(self, permutation):
         n_states_i = []
         n_states_j = []
         for m in permutation:
             chg_i, chg_j = self._charges[m]
-            n_states_i += [self._densities[self._subsystem[m]]['n_states'][chg_i]]
-            n_states_j += [self._densities[self._subsystem[m]]['n_states'][chg_j]]
+            n_states_i += [self._supersys_info.densities[self._subsystem[m]]['n_states'][chg_i]]
+            n_states_j += [self._supersys_info.densities[self._subsystem[m]]['n_states'][chg_j]]
         return n_states_i, n_states_j
     def __getitem__(self, label):
         if label not in self._results:
             frag_order = len(self._subsystem)
             try:
-                terms = self._diagrams.catalog[frag_order][label](self._densities, self._integrals, self._subsystem, self._charges)
+                terms = self._diagrams.catalog[frag_order][label](self._supersys_info, self._subsystem, self._charges)
             except:
                 raise NotImplementedError("diagram \'{}\' not implemented for {} bodies".format(label, frag_order))
             else:
@@ -80,28 +79,27 @@ class _charges(object):
         return self._results[label]
 
 class _subsystem(object):
-    def __init__(self, densities, integrals, subsystem, diagrams):
-        self._densities = densities
-        self._integrals = integrals
+    def __init__(self, supersys_info, subsystem, diagrams):
+        self._supersys_info = supersys_info
         self._subsystem = subsystem
-        self._diagrams  = diagrams
+        self._diagrams = diagrams
         self._items = {}
     def __getitem__(self, charges):
         if charges is None:  charges = tuple()    # just to make top-level syntax prettier
         charges = tuple(charges)                  # dict index must be hashable
         if charges not in self._items:
-            self._items[charges] = _charges(self._densities, self._integrals, self._subsystem, charges, self._diagrams)
+            self._items[charges] = _charges(self._supersys_info, self._subsystem, charges, self._diagrams)
         return self._items[charges]
 
 class blocks(object):
     def __init__(self, densities, integrals, diagrams):
-        self.densities  = densities    # Let this one be "public" providing access to system definition
-        self._integrals = integrals
-        self._diagrams  = diagrams
+        self._supersys_info = struct(densities=densities, integrals=integrals)
+        self._diagrams = diagrams
         self._items = {}
+        self.densities = self._supersys_info.densities    # "public" member providing access to system definition
     def __getitem__(self, subsystem):
         if subsystem is None:  subsystem = tuple()        # just to make top-level syntax prettier
         subsystem = tuple(subsystem)                      # dict index must be hashable
         if subsystem not in self._items:
-            self._items[subsystem] = _subsystem(self.densities, self._integrals, subsystem, self._diagrams)
+            self._items[subsystem] = _subsystem(self._supersys_info, subsystem, self._diagrams)
         return self._items[subsystem]
