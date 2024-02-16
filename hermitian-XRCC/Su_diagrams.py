@@ -18,6 +18,7 @@
 
 from tendot import tendot
 from qode.math.tensornet import tl_tensor, scalar_value
+from Sx_precontract import precontract
 
 p, q, r, s, t, u, v, w = "pqrstuvw"
 

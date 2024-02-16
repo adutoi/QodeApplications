@@ -19,6 +19,7 @@
 from qode.util               import recursive_looper
 from qode.util.dynamic_array import dynamic_array
 from qode.math.tensornet     import tl_tensor, scalar_value
+from Sv_precontract import precontract
 
 
 # helper function to do repetitive manipulations of data passed from above
@@ -48,13 +49,28 @@ def Dchg_rule(charges):
 def density_rule(densities, label, charges):
     def _density_rule(*indices):
         index = indices[0]
-        chg_i, chg_j = charges[index]
         try:
-            rho = densities[index][label][chg_i,chg_j]
+            rho = densities[index][label][charges[index]]    # charges[index] is the bra and ket charge
         except KeyError:
             rho = None    # eventually return an object whose __getitem__ member reports exactly what is missing (in case access is attempted)
         return rho
     return _density_rule
+
+def precon_rule(precon, subsystem, charges):
+    def _precon_rule(*indices):
+        m_charges = tuple(  charges[m] for m in indices)
+        indices = tuple(subsystem[m] for m in indices)
+        if len(indices)==1:  indices = indices[0]
+        contraction = precon[indices]
+        try:
+            for braket_charge in m_charges:    # this is not right.  may be fewer charges than fragments.  need to parse string
+                contraction = contraction[braket_charge]
+        except KeyError:
+            contraction = None    # eventually return an object whose __getitem__ member reports exactly what is missing (in case access is attempted)
+        else:
+            print(indices, m_charges)
+        return contraction
+    return _precon_rule
 
 class _parameters(object):
     def __init__(self, supersys_info, subsystem, charges, permutation=(0,)):
@@ -75,6 +91,10 @@ class _parameters(object):
         S         = dynamic_array(map_subsystem(supersys_info.integrals.S, subsystem), [range(n_frag)]*2)
         V         = dynamic_array(map_subsystem(supersys_info.integrals.V, subsystem), [range(n_frag)]*4)
         Dchg      = dynamic_array(Dchg_rule(charges),                                  [range(n_frag)])
+
+        ccaaa0pq0rs_Vpqrs = dynamic_array(precon_rule(supersys_info.contract_cache["ccaaa0pq0rs_Vpqrs"], subsystem, charges), [range(n_frag)])
+        recursive_looper(loops(1,n_frag), self.assign("ccaaa0pq0rs_Vpqrs", ccaaa0pq0rs_Vpqrs))
+
         recursive_looper(loops(2,n_frag), self.assign( "S",       S))
         recursive_looper(loops(4,n_frag), self.assign( "V",       V))
         recursive_looper(loops(1,n_frag), self.assign( "Dchg", Dchg))
@@ -239,7 +259,7 @@ def _s01v0000(supersys_info, subsystem, charges, permutation):
     X = _parameters(supersys_info, subsystem, charges, permutation)
     prefactor = (-1)**(X.n_i1 + X.P)
     def diagram(i0,i1,j0,j1):
-        #return scalar_value( prefactor * X.cV_0[i0,j0](p) @ X.S_01(p,q) @ X.a_1[i1,j1](q) )
+        #return scalar_value( prefactor * X.cccaa0pq0sr_Vpqrs_0[i0,j0](p) @ X.S_01(p,q) @ X.a_1[i1,j1](q) )
         return scalar_value( prefactor * X.V_0000(r,s,u,t) @ X.cccaa_0[i0,j0](r,s,p,t,u) @ X.S_01(p,q) @ X.a_1[i1,j1](q) )
     if X.Dchg_0==-1 and X.Dchg_1==+1:
         return diagram, permutation
@@ -255,8 +275,8 @@ def _s10v0000(supersys_info, subsystem, charges, permutation):
     X = _parameters(supersys_info, subsystem, charges, permutation)
     prefactor = (-1)**(X.n_i1 + X.P)
     def diagram(i0,i1,j0,j1):
-        #return scalar_value( prefactor * X.Va_0[i0,j0](q) @ X.S_10(p,q) @ X.c_1[i1,j1](p) )
-        return scalar_value( prefactor * X.V_0000(r,s,t,u) @ X.ccaaa_0[i0,j0](r,s,q,t,u) @ X.S_10(p,q) @ X.c_1[i1,j1](p) )
+        return scalar_value( prefactor * X.ccaaa0pq0rs_Vpqrs_0[i0,j0](q) @ X.S_10(p,q) @ X.c_1[i1,j1](p) )
+        #return scalar_value( prefactor * X.V_0000(r,s,t,u) @ X.ccaaa_0[i0,j0](r,s,q,t,u) @ X.S_10(p,q) @ X.c_1[i1,j1](p) )
     if X.Dchg_0==+1 and X.Dchg_1==-1:
         return diagram, permutation
     else:

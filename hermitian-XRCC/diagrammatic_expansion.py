@@ -93,7 +93,8 @@ class _subsystem(object):
 
 class blocks(object):
     def __init__(self, densities, integrals, diagrams):
-        self._supersys_info = struct(densities=densities, integrals=integrals)
+        contract_cache = diagrams.precontract(densities, integrals)
+        self._supersys_info = struct(densities=densities, integrals=integrals, contract_cache=contract_cache)
         self._diagrams = diagrams
         self._items = {}
         self.densities = self._supersys_info.densities    # "public" member providing access to system definition
