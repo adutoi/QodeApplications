@@ -56,19 +56,19 @@ def density_rule(densities, label, charges):
         return rho
     return _density_rule
 
-def precon_rule(precon, subsystem, charges):
+def precon_rule(contract_cache, label, subsystem, charges):
+    precon = contract_cache[label]
+    n_densities = len(label.split("_")) - 1
     def _precon_rule(*indices):
-        m_charges = tuple(  charges[m] for m in indices)
+        rho_charges = tuple(charges[m] for m in indices[:n_densities])
         indices = tuple(subsystem[m] for m in indices)
         if len(indices)==1:  indices = indices[0]
         contraction = precon[indices]
         try:
-            for braket_charge in m_charges:    # this is not right.  may be fewer charges than fragments.  need to parse string
+            for braket_charge in rho_charges:
                 contraction = contraction[braket_charge]
         except KeyError:
             contraction = None    # eventually return an object whose __getitem__ member reports exactly what is missing (in case access is attempted)
-        else:
-            print(indices, m_charges)
         return contraction
     return _precon_rule
 
@@ -93,19 +93,20 @@ class _parameters(object):
         Dchg      = dynamic_array(Dchg_rule(charges),                                  [range(n_frag)])
 
         for label in request.precontract:
-            precontract = dynamic_array(precon_rule(supersys_info.contract_cache[label], subsystem, charges), [range(n_frag)])
-            recursive_looper(loops(1,n_frag), self.assign(label, precontract))
+            frag_count = label.count("#")
+            precontract = dynamic_array(precon_rule(supersys_info.contract_cache, label, subsystem, charges), [range(n_frag)]*frag_count)
+            recursive_looper(loops(frag_count,n_frag), self.assign(label, precontract))
 
-        recursive_looper(loops(2,n_frag), self.assign( "s{}{}",       S))
-        recursive_looper(loops(4,n_frag), self.assign( "v{}{}{}{}",       V))
-        recursive_looper(loops(1,n_frag), self.assign( "Dchg{}", Dchg))
+        recursive_looper(loops(2,n_frag), self.assign("s##",      S))
+        recursive_looper(loops(4,n_frag), self.assign("v####",    V))
+        recursive_looper(loops(1,n_frag), self.assign("Dchg#", Dchg))
         for label in request.rho:
-            labe = label[:-1]
-            rho = dynamic_array(density_rule(densities,labe,charges), [range(n_frag)])
-            recursive_looper(loops(1,n_frag), self.assign(labe+"{}", rho))
-    def assign(self, prefix, array):
+            rho = dynamic_array(density_rule(densities,label[:-1],charges), [range(n_frag)])
+            recursive_looper(loops(1,n_frag), self.assign(label, rho))
+    def assign(self, label, array):
+        label = label.replace("#","{}")
         def _assign(*indices):
-            self.__dict__[prefix.format(*indices)] = array[indices]
+            self.__dict__[label.format(*indices)] = array[indices]
         return _assign
 
 
@@ -284,7 +285,7 @@ def s10v0000(supersys_info, subsystem, charges):
     result10 = _s10v0000(supersys_info, subsystem, charges, permutation=(1,0))
     return [result01, result10]
 def _s10v0000(supersys_info, subsystem, charges, permutation):
-    request = struct(rho=["c#", "ccaaa#"], precontract=["ccaaa{}pqXrs_Vpqrs"])
+    request = struct(rho=["c#", "ccaaa#"], precontract=["ccaaa#pqXrs_Vpqrs"])
     X = _parameters(supersys_info, subsystem, charges, request, permutation)
     prefactor = (-1)**(X.n_i1 + X.P)
     def diagram(i0,i1,j0,j1):
