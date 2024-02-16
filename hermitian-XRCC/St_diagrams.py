@@ -73,12 +73,12 @@ def _parameters(supersys_info, subsystem, charges, permutation=(0,)):
 
 # monomer diagram
 
-# pq,pq-> :  T_00  ca_0
+# pq,pq-> :  ca0  t00
 def t00(supersys_info, subsystem, charges):
     X = _parameters(supersys_info, subsystem, charges)
     prefactor = 1
     def diagram(i0,j0):
-        return scalar_value( prefactor * X.T_00(p,q) @ X.ca_0[i0,j0](p,q) )
+        return scalar_value( prefactor * X.ca_0[i0,j0](p,q) @ X.T_00(p,q) )
     if X.Dchg_0==0:
         return [(diagram, (0,))]
     else:
@@ -88,7 +88,7 @@ def t00(supersys_info, subsystem, charges):
 
 # dimer diagrams
 
-# pq,p,q-> :  T_01  c_0  a_1
+# p,q,pq-> :  c0  a1  t01
 def t01(supersys_info, subsystem, charges):
     result01 = _t01(supersys_info, subsystem, charges, permutation=(0,1))
     result10 = _t01(supersys_info, subsystem, charges, permutation=(1,0))
@@ -97,58 +97,58 @@ def _t01(supersys_info, subsystem, charges, permutation):
     X = _parameters(supersys_info, subsystem, charges, permutation)
     prefactor = (-1)**(X.n_i1 + X.P)
     def diagram(i0,i1,j0,j1):
-        return scalar_value( prefactor * X.T_01(p,q) @ X.c_0[i0,j0](p) @ X.a_1[i1,j1](q) )
+        return scalar_value( prefactor * X.c_0[i0,j0](p) @ X.a_1[i1,j1](q) @ X.T_01(p,q) )
     if X.Dchg_0==-1 and X.Dchg_1==+1:
         return diagram, permutation
     else:
         return None, None
 
-# pq,rs,rq,ps-> :  S_10  T_01  ca_0  ca_1
-def s10t01(supersys_info, subsystem, charges):
-    result01 = _s10t01(supersys_info, subsystem, charges, permutation=(0,1))
-    result10 = _s10t01(supersys_info, subsystem, charges, permutation=(1,0))
+# tq,pu,tu,pq-> :  ca0  ca1  s01  t10
+def s01t10(supersys_info, subsystem, charges):
+    result01 = _s01t10(supersys_info, subsystem, charges, permutation=(0,1))
+    result10 = _s01t10(supersys_info, subsystem, charges, permutation=(1,0))
     return [result01, result10]
-def _s10t01(supersys_info, subsystem, charges, permutation):
+def _s01t10(supersys_info, subsystem, charges, permutation):
     X = _parameters(supersys_info, subsystem, charges, permutation)
     prefactor = -1
     def diagram(i0,i1,j0,j1):
-        return scalar_value( prefactor * X.S_10(p,q) @ X.ca_0[i0,j0](r,q) @ X.T_01(r,s) @ X.ca_1[i1,j1](p,s) )
+        return scalar_value( prefactor * X.ca_0[i0,j0](t,q) @ X.ca_1[i1,j1](p,u) @ X.S_01(t,u) @ X.T_10(p,q) )
     if X.Dchg_0==0 and X.Dchg_1==0:
         return diagram, permutation
     else:
         return None, None
 
-# pq,rs,prs,q-> :  S_01  T_00  cca_0  a_1
+# ptq,u,tu,pq-> :  cca0  a1  s01  t00
 def s01t00(supersys_info, subsystem, charges):
     result01 = _s01t00(supersys_info, subsystem, charges, permutation=(0,1))
     result10 = _s01t00(supersys_info, subsystem, charges, permutation=(1,0))
     return [result01, result10]
 def _s01t00(supersys_info, subsystem, charges, permutation):
     X = _parameters(supersys_info, subsystem, charges, permutation)
-    prefactor = (-1)**(X.n_i1 + X.P)
+    prefactor = (-1)**(X.n_i1 + X.P + 1)
     def diagram(i0,i1,j0,j1):
-        return scalar_value( prefactor * X.S_01(r,s) @ X.T_00(p,q) @ X.cca_0[i0,j0](r,p,q) @ X.a_1[i1,j1](s) )
+        return scalar_value( prefactor * X.cca_0[i0,j0](p,t,q) @ X.a_1[i1,j1](u) @ X.S_01(t,u) @ X.T_00(p,q) )
     if X.Dchg_0==-1 and X.Dchg_1==+1:
         return diagram, permutation
     else:
         return None, None
 
-# pq,rs,rqs,p-> :  S_10  T_00  caa_0  c_1
-def s10t00(supersys_info, subsystem, charges):
-    result01 = _s10t00(supersys_info, subsystem, charges, permutation=(0,1))
-    result10 = _s10t00(supersys_info, subsystem, charges, permutation=(1,0))
+# t,puq,tu,pq-> :  c0  caa1  s01  t11
+def s01t11(supersys_info, subsystem, charges):
+    result01 = _s01t11(supersys_info, subsystem, charges, permutation=(0,1))
+    result10 = _s01t11(supersys_info, subsystem, charges, permutation=(1,0))
     return [result01, result10]
-def _s10t00(supersys_info, subsystem, charges, permutation):
+def _s01t11(supersys_info, subsystem, charges, permutation):
     X = _parameters(supersys_info, subsystem, charges, permutation)
-    prefactor = (-1)**(X.n_i1 + X.P)
+    prefactor = (-1)**(X.n_i1 + X.P + 1)
     def diagram(i0,i1,j0,j1):
-        return scalar_value( prefactor * X.S_10(s,r) @ X.T_00(p,q) @ X.caa_0[i0,j0](p,r,q) @ X.c_1[i1,j1](s) )
-    if X.Dchg_0==+1 and X.Dchg_1==-1:
+        return scalar_value( prefactor * X.c_0[i0,j0](t) @ X.caa_1[i1,j1](p,u,q) @ X.S_01(t,u) @ X.T_11(p,q) )
+    if X.Dchg_0==-1 and X.Dchg_1==+1:
         return diagram, permutation
     else:
         return None, None
 
-# pq,rs,rp,qs-> :  S_01  T_01  cc_0  aa_1
+# pt,uq,tu,pq-> :  cc0  aa1  s01  t01
 def s01t01(supersys_info, subsystem, charges):
     result01 = _s01t01(supersys_info, subsystem, charges, permutation=(0,1))
     result10 = _s01t01(supersys_info, subsystem, charges, permutation=(1,0))
@@ -157,7 +157,7 @@ def _s01t01(supersys_info, subsystem, charges, permutation):
     X = _parameters(supersys_info, subsystem, charges, permutation)
     prefactor = 1
     def diagram(i0,i1,j0,j1):
-        return scalar_value( prefactor * X.S_01(p,q) @ X.cc_0[i0,j0](r,p) @ X.T_01(r,s) @ X.aa_1[i1,j1](q,s) )
+        return scalar_value( prefactor * X.cc_0[i0,j0](p,t) @ X.aa_1[i1,j1](u,q) @ X.S_01(t,u) @ X.T_01(p,q) )
     if X.Dchg_0==-2 and X.Dchg_1==+2:
         return diagram, permutation
     else:
@@ -182,8 +182,8 @@ catalog[1] = {
 
 catalog[2] = {
     "t01":      t01,
-    "s10t01":   s10t01,
+    "s01t10":   s01t10,
     "s01t00":   s01t00,
-    "s10t00":   s10t00,
+    "s01t11":   s01t11,
     "s01t01":   s01t01
 }
