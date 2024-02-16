@@ -22,20 +22,17 @@ p,q,r,s = "pqrs"
 
 
 
-def ccaaa0pq0rs_Vpqrs(densities, integrals):
+def ccaaaMpqXrs_Vpqrs(densities, integrals):
     result = {}
     for m,densities_m in enumerate(densities):
-        print("    [m={}]".format(m))
         V = integrals.V[m,m,m,m]
         result[m] = {}
         for chg_bra,n_states_bra in densities_m["n_states"].items():
             for chg_ket,n_states_ket in densities_m["n_states"].items():
-                print("        [charges={:+d},{:+d}]".format(chg_bra,chg_ket))
                 if chg_bra-chg_ket==+1:
                     result[m][chg_bra,chg_ket] = {}
                     for i in range(n_states_bra):
                         for j in range(n_states_ket):
-                            print("            [states={},{}]".format(i,j))
                             ccaaa = densities_m["ccaaa"][chg_bra,chg_ket][i,j]
                             result[m][chg_bra,chg_ket][i,j] = evaluate(ccaaa(p,q,0,r,s) @ V(p,q,r,s))
     return result
@@ -44,6 +41,5 @@ def ccaaa0pq0rs_Vpqrs(densities, integrals):
 
 def precontract(densities, integrals):
     precontractions = {}
-    print("ccaaa0pq0rs_Vpqrs CALLED")
-    precontractions["ccaaa0pq0rs_Vpqrs"] = ccaaa0pq0rs_Vpqrs(densities, integrals)
+    precontractions["ccaaa{}pqXrs_Vpqrs"] = ccaaaMpqXrs_Vpqrs(densities, integrals)
     return precontractions
