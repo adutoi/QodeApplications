@@ -24,6 +24,126 @@ def precontract(densities, integrals):
     p,q,r,s = "pqrs"
     precontractions = {}
 
+    def ccaaMpqsr_Vpqrs(m):
+        V = integrals.V[m,m,m,m]
+        densities_m = densities[m]
+        n_states = densities_m["n_states"]
+        def ccaaMpqsr_Vpqrs_m(chg_i,chg_j):
+            def ccaaMpqsr_Vpqrs_m_charges(i,j):
+                ccaa = densities_m["ccaa"][chg_i,chg_j][i,j]
+                return evaluate(ccaa(p,q,s,r) @ V(p,q,r,s))
+            if chg_i-chg_j==0:
+                return dynamic_array(cached(ccaaMpqsr_Vpqrs_m_charges), [range(n_states[chg_i]), range(n_states[chg_j])])
+            else:
+                return None
+        return dynamic_array(cached(ccaaMpqsr_Vpqrs_m), [n_states.keys()]*2)
+    precontractions["ccaa#pqsr_Vpqrs"] = dynamic_array(cached(ccaaMpqsr_Vpqrs), [range(len(densities))])
+
+    def caMpr_VpMrM(m0,m1,m2):
+        V = integrals.V[m0,m1,m0,m2]
+        densities_m = densities[m0]
+        n_states = densities_m["n_states"]
+        def caMpr_VpMrM_m(chg_i,chg_j):
+            def caMpr_VpMrM_m_charges(i,j):
+                ca = densities_m["ca"][chg_i,chg_j][i,j]
+                return evaluate(ca(p,r) @ V(p,0,r,1))
+            if chg_i-chg_j==0:
+                return dynamic_array(cached(caMpr_VpMrM_m_charges), [range(n_states[chg_i]), range(n_states[chg_j])])
+            else:
+                return None
+        return dynamic_array(cached(caMpr_VpMrM_m), [n_states.keys()]*2)
+    precontractions["ca#pr_Vp#r#"] = dynamic_array(cached(caMpr_VpMrM), [range(len(densities))])
+
+    def ccaMpqs_VpqMs(m0,m1):
+        V = integrals.V[m0,m0,m1,m0]
+        densities_m = densities[m0]
+        n_states = densities_m["n_states"]
+        def ccaMpqs_VpqMs_m(chg_i,chg_j):
+            def ccaMpqs_VpqMs_m_charges(i,j):
+                cca = densities_m["cca"][chg_i,chg_j][i,j]
+                return evaluate(cca(p,q,s) @ V(p,q,0,s))
+            if chg_i-chg_j==-1:
+                return dynamic_array(cached(ccaMpqs_VpqMs_m_charges), [range(n_states[chg_i]), range(n_states[chg_j])])
+            else:
+                return None
+        return dynamic_array(cached(ccaMpqs_VpqMs_m), [n_states.keys()]*2)
+    precontractions["cca#pqs_Vpq#s"] = dynamic_array(cached(ccaMpqs_VpqMs), [range(len(densities))])
+
+    def caaMpsr_VpMrs(m0,m1):
+        V = integrals.V[m0,m1,m0,m0]
+        densities_m = densities[m0]
+        n_states = densities_m["n_states"]
+        def caaMpsr_VpMrs_m(chg_i,chg_j):
+            def caaMpsr_VpMrs_m_charges(i,j):
+                caa = densities_m["caa"][chg_i,chg_j][i,j]
+                return evaluate(caa(p,s,r) @ V(p,0,r,s))
+            if chg_i-chg_j==+1:
+                return dynamic_array(cached(caaMpsr_VpMrs_m_charges), [range(n_states[chg_i]), range(n_states[chg_j])])
+            else:
+                return None
+        return dynamic_array(cached(caaMpsr_VpMrs_m), [n_states.keys()]*2)
+    precontractions["caa#psr_Vp#rs"] = dynamic_array(cached(caaMpsr_VpMrs), [range(len(densities))])
+
+    def ccMpq_VpqMM(m0,m1,m2):
+        V = integrals.V[m0,m0,m1,m2]
+        densities_m = densities[m0]
+        n_states = densities_m["n_states"]
+        def ccMpq_VpqMM_m(chg_i,chg_j):
+            def ccMpq_VpqMM_m_charges(i,j):
+                cc = densities_m["cc"][chg_i,chg_j][i,j]
+                return evaluate(cc(p,q) @ V(p,q,0,1))
+            if chg_i-chg_j==-2:
+                return dynamic_array(cached(ccMpq_VpqMM_m_charges), [range(n_states[chg_i]), range(n_states[chg_j])])
+            else:
+                return None
+        return dynamic_array(cached(ccMpq_VpqMM_m), [n_states.keys()]*2)
+    precontractions["cc#pq_Vpq##"] = dynamic_array(cached(ccMpq_VpqMM), [range(len(densities))])
+
+    def ccaaMpqXs_VpqMs(m0,m1):
+        V = integrals.V[m0,m0,m1,m0]
+        densities_m = densities[m0]
+        n_states = densities_m["n_states"]
+        def ccaaMpqXs_VpqMs_m(chg_i,chg_j):
+            def ccaaMpqXs_VpqMs_m_charges(i,j):
+                ccaa = densities_m["ccaa"][chg_i,chg_j][i,j]
+                return evaluate(ccaa(p,q,0,s) @ V(p,q,1,s))
+            if chg_i-chg_j==0:
+                return dynamic_array(cached(ccaaMpqXs_VpqMs_m_charges), [range(n_states[chg_i]), range(n_states[chg_j])])
+            else:
+                return None
+        return dynamic_array(cached(ccaaMpqXs_VpqMs_m), [n_states.keys()]*2)
+    precontractions["ccaa#pqXs_Vpq#s"] = dynamic_array(cached(ccaaMpqXs_VpqMs), [range(len(densities))])
+
+    def ccaaMpXrs_VpMrs(m0,m1):
+        V = integrals.V[m0,m1,m0,m0]
+        densities_m = densities[m0]
+        n_states = densities_m["n_states"]
+        def ccaaMpXrs_VpMrs_m(chg_i,chg_j):
+            def ccaaMpXrs_VpMrs_m_charges(i,j):
+                ccaa = densities_m["ccaa"][chg_i,chg_j][i,j]
+                return evaluate(ccaa(p,0,r,s) @ V(p,1,r,s))
+            if chg_i-chg_j==0:
+                return dynamic_array(cached(ccaaMpXrs_VpMrs_m_charges), [range(n_states[chg_i]), range(n_states[chg_j])])
+            else:
+                return None
+        return dynamic_array(cached(ccaaMpXrs_VpMrs_m), [n_states.keys()]*2)
+    precontractions["ccaa#pXrs_Vp#rs"] = dynamic_array(cached(ccaaMpXrs_VpMrs), [range(len(densities))])
+
+    def cccaaMpqXsr_Vpqrs(m):
+        V = integrals.V[m,m,m,m]
+        densities_m = densities[m]
+        n_states = densities_m["n_states"]
+        def cccaaMpqXsr_Vpqrs_m(chg_i,chg_j):
+            def cccaaMpqXsr_Vpqrs_m_charges(i,j):
+                cccaa = densities_m["cccaa"][chg_i,chg_j][i,j]
+                return evaluate(cccaa(p,q,0,s,r) @ V(p,q,r,s))
+            if chg_i-chg_j==-1:
+                return dynamic_array(cached(cccaaMpqXsr_Vpqrs_m_charges), [range(n_states[chg_i]), range(n_states[chg_j])])
+            else:
+                return None
+        return dynamic_array(cached(cccaaMpqXsr_Vpqrs_m), [n_states.keys()]*2)
+    precontractions["cccaa#pqXsr_Vpqrs"] = dynamic_array(cached(cccaaMpqXsr_Vpqrs), [range(len(densities))])
+
     def ccaaaMpqXrs_Vpqrs(m):
         V = integrals.V[m,m,m,m]
         densities_m = densities[m]
