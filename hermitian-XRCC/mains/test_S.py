@@ -99,7 +99,7 @@ for chg in dimer_charges:
                                              "s01s01s10s10", "s01s01s01s10"
                                             ]
                                         },  (0,1), dimer_charges[chg])
-    S2ref = numpy.load("atomic_states/states/16-115-550/load=states:16-115-550:thresh=1e-6:4.5:u.pickle/{}/S-{}.npy".format(displacement,chg))
+    S2ref = numpy.load("atomic_states/states/16-115-550/thresh=1e-6/{}/S-{}.npy".format(displacement,chg))
 
     S2    -= numpy.identity(S2.shape[0])
     S2ref -= numpy.identity(S2.shape[0])

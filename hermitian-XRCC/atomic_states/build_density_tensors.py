@@ -51,12 +51,12 @@ def numpy_storage_to_lists(nparray_1d, n_bra, n_ket, n_spin_orbs, free_indices):
 	tensor_size = n_spin_orbs**n_ops
 	tensor_shape = [n_spin_orbs]*n_ops
 	if tensor_size * n_bra * n_ket != nparray_1d.shape[0]:  raise ValueError
-	result = [[None for i in range(n_ket)] for j in range(n_bra)]
+	result = {}
 	idx = 0
 	for i in range(n_bra):
 		for j in range(n_ket):
 			print(i,j)
-			result[i][j] = svd_decomposition(nparray_1d[idx: idx+tensor_size].reshape(tensor_shape), free_indices[0]+free_indices[1], wrapper=tens_wrap)
+			result[i,j] = svd_decomposition(nparray_1d[idx: idx+tensor_size].reshape(tensor_shape), free_indices[0]+free_indices[1], wrapper=tens_wrap)
 			idx += tensor_size
 	del nparray_1d
 	return result
