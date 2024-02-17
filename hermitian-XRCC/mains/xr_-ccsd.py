@@ -153,9 +153,9 @@ S2H2 += XR_term.dimer_matrix(St_blocks_bior, {
                       }, (0,1), all_dimer_charges)
 S2H2 += XR_term.dimer_matrix(Su_blocks_bior, {
                        2: [
-                           "s01u000", "s10u000",
-                           "s01u100", "s10u100",
-                           "s10u001", "s10u101", "s01u001", "s01u101"
+                           "s01u000", "s01u011",
+                           "s01u100", "s01u111",
+                           "s01u010", "s01u110", "s01u001", "s01u101"
                           ]
                       }, (0,1), all_dimer_charges)
 
