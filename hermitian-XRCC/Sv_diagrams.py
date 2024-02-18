@@ -16,7 +16,7 @@
 #    along with QodeApplications.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-from qode.util               import recursive_looper, struct
+import re    # regular expressions
 from qode.util.dynamic_array import dynamic_array
 from qode.math.tensornet     import tl_tensor, scalar_value
 from Sv_precontract import precontract
@@ -72,43 +72,48 @@ def precon_rule(contract_cache, label, subsystem, charges):
         return contraction
     return _precon_rule
 
+
+def assign(storage, label, array):
+    label = label.replace("#","{}")
+    def _assign(*indices):
+        storage[label.format(*indices)] = array[indices]
+    return _assign
+
 class _parameters(object):
-    def __init__(self, supersys_info, subsystem, charges, request, permutation=(0,)):
-        n_frag = len(subsystem)
+    def __init__(self, supersys_info, subsystem, charges, permutation=(0,)):
+        self._storage = {}
+        self._n_frag = len(subsystem)
+        self._supersys_info = supersys_info
         self.P = 0 if permutation==(0,1) else 1        # needs to be generalized for n>=3.
         # Some diagrams need to know the number of e- in the ket for the combined "latter" frags of the un(!)permuted subsystem
         n_i_label = ""    # explicitly label which are included in the "latter" frags (to store all possibilities)
         n_i = 0           # start at 0 before looping backwards over frags in outer loop below (order of that loop otherwise irrelevant)
-        for m in reversed(range(n_frag)):     # m0 is fragment index in permuted subsystem, m0_ is its index in unpermuted subsystem
+        for m in reversed(range(self._n_frag)):     # m0 is fragment index in permuted subsystem, m0_ is its index in unpermuted subsystem
             n_i_label = str(m) + n_i_label            # incrementally build the label for electron count of (variable) "latter" frags
             chg_i, _  = charges[m]                    # bra and ket charge of m0-th frag (double duty for m0, looping backwards over all frags in physical order)
-            n_i += supersys_info.densities[subsystem[m]]['n_elec'][chg_i]      # number of electrons in "latter" frags (so far) in physical (unpermuted) order
-            self.__dict__["n_i"+n_i_label] = n_i%2    # include only the parity of the number of electrons in the latter frags of the un(!)permuted subsystem
-        subsystem = [subsystem[m] for m in permutation]
-        charges   = [  charges[m] for m in permutation]
-        #
-        densities = dynamic_array(map_subsystem(supersys_info.densities,   subsystem), [range(n_frag)])
-        S         = dynamic_array(map_subsystem(supersys_info.integrals.S, subsystem), [range(n_frag)]*2)
-        V         = dynamic_array(map_subsystem(supersys_info.integrals.V, subsystem), [range(n_frag)]*4)
-        Dchg      = dynamic_array(Dchg_rule(charges),                                  [range(n_frag)])
+            n_i += self._supersys_info.densities[subsystem[m]]['n_elec'][chg_i]      # number of electrons in "latter" frags (so far) in physical (unpermuted) order
+            self._storage["n_i"+n_i_label] = n_i%2    # include only the parity of the number of electrons in the latter frags of the un(!)permuted subsystem
 
-        for label in request.precontract:
-            frag_count = label.count("#")
-            precontract = dynamic_array(precon_rule(supersys_info.contract_cache, label, subsystem, charges), [range(n_frag)]*frag_count)
-            recursive_looper(loops(frag_count,n_frag), self.assign(label, precontract))
+        self._subsystem = [subsystem[m] for m in permutation]
+        self._charges   = [  charges[m] for m in permutation]
+        self._densities = dynamic_array(map_subsystem(self._supersys_info.densities,   self._subsystem), [range(self._n_frag)])
+        self._storage["s##"]   = dynamic_array(map_subsystem(self._supersys_info.integrals.S, self._subsystem), [range(self._n_frag)]*2)
+        self._storage["v###"]  = dynamic_array(map_subsystem(self._supersys_info.integrals.V, self._subsystem), [range(self._n_frag)]*4)
+        self._storage["Dchg#"] = dynamic_array(Dchg_rule(self._charges),                                  [range(self._n_frag)])
 
-        recursive_looper(loops(2,n_frag), self.assign("s##",      S))
-        recursive_looper(loops(4,n_frag), self.assign("v####",    V))
-        recursive_looper(loops(1,n_frag), self.assign("Dchg#", Dchg))
-        for label in request.rho:
-            rho = dynamic_array(density_rule(densities,label[:-1],charges), [range(n_frag)])
-            recursive_looper(loops(1,n_frag), self.assign(label, rho))
-    def assign(self, label, array):
-        label = label.replace("#","{}")
-        def _assign(*indices):
-            self.__dict__[label.format(*indices)] = array[indices]
-        return _assign
-
+    def __getattr__(self, attr):
+        if attr[:3]=="n_i":
+            return self._storage[attr]
+        else:
+            frag_indices = tuple(int(i) for i in filter(lambda c: c.isdigit(), attr))
+            label_template = re.sub("\d", "#", attr)
+            if label_template not in self._storage:
+                if "_" not in label_template:
+                    self._storage[label_template] = dynamic_array(density_rule(self._densities,label_template[:-1],self._charges), [range(self._n_frag)])
+                else:
+                    frag_count = label_template.count("#")
+                    self._storage[label_template] = dynamic_array(precon_rule(self._supersys_info.contract_cache, label_template, self._subsystem, self._charges), [range(self._n_frag)]*frag_count)
+            return self._storage[label_template][frag_indices]
 
 ##########
 # Here are the implementations of the actual diagrams.
@@ -123,8 +128,7 @@ p, q, r, s, t, u, v, w = "pqrstuvw"    # some contraction indices for easier rea
 
 # pqsr,pqrs-> :  ccaa0  v0000
 def v0000(supersys_info, subsystem, charges):
-    request = struct(rho=["ccaa#"], precontract=["ccaa#pqsr_Vpqrs"])
-    X = _parameters(supersys_info, subsystem, charges, request)
+    X = _parameters(supersys_info, subsystem, charges)
     prefactor = 1
     def diagram(i0,j0):
         return scalar_value( prefactor * X.ccaa0pqsr_Vpqrs[i0,j0] )
@@ -140,8 +144,7 @@ def v0000(supersys_info, subsystem, charges):
 
 # pr,qs,pqrs-> :  ca0  ca1  v0101
 def v0101(supersys_info, subsystem, charges):
-    request = struct(rho=["ca#"], precontract=["ca#pr_Vp#r#"])
-    X = _parameters(supersys_info, subsystem, charges, request, permutation=(0,1))
+    X = _parameters(supersys_info, subsystem, charges, permutation=(0,1))
     prefactor = 4
     def diagram(i0,i1,j0,j1):
         return scalar_value( prefactor * X.ca1[i1,j1](q,s) @ X.ca0pr_Vp1r1[i0,j0](q,s) )
@@ -157,8 +160,7 @@ def v0010(supersys_info, subsystem, charges):
     result10 = _v0010(supersys_info, subsystem, charges, permutation=(1,0))
     return [result01, result10]
 def _v0010(supersys_info, subsystem, charges, permutation):
-    request = struct(rho=["cca#", "a#"], precontract=["cca#pqs_Vpq#s"])
-    X = _parameters(supersys_info, subsystem, charges, request, permutation)
+    X = _parameters(supersys_info, subsystem, charges, permutation)
     prefactor = 2 * (-1)**(X.n_i1 + X.P)
     def diagram(i0,i1,j0,j1):
         return scalar_value( prefactor * X.a1[i1,j1](r) @ X.cca0pqs_Vpq1s[i0,j0](r) )
@@ -174,8 +176,7 @@ def v0111(supersys_info, subsystem, charges):
     result10 = _v0111(supersys_info, subsystem, charges, permutation=(1,0))
     return [result01, result10]
 def _v0111(supersys_info, subsystem, charges, permutation):
-    request = struct(rho=["c#", "caa#"], precontract=["caa#qsr_V#qrs"])
-    X = _parameters(supersys_info, subsystem, charges, request, permutation)
+    X = _parameters(supersys_info, subsystem, charges, permutation)
     prefactor = 2 * (-1)**(X.n_i1 + X.P)
     def diagram(i0,i1,j0,j1):
         return scalar_value( prefactor * X.c0[i0,j0](p) @ X.caa1qsr_V0qrs[i1,j1](p) )
@@ -191,8 +192,7 @@ def v0011(supersys_info, subsystem, charges):
     result10 = _v0011(supersys_info, subsystem, charges, permutation=(1,0))
     return [result01, result10]
 def _v0011(supersys_info, subsystem, charges, permutation):
-    request = struct(rho=["cc#", "aa#"], precontract=["cc#pq_Vpq##"])
-    X = _parameters(supersys_info, subsystem, charges, request, permutation)
+    X = _parameters(supersys_info, subsystem, charges, permutation)
     prefactor = 1
     def diagram(i0,i1,j0,j1):
         return scalar_value( prefactor * X.aa1[i1,j1](s,r) @ X.cc0pq_Vpq11[i0,j0](r,s) )
@@ -208,8 +208,7 @@ def s01v1000(supersys_info, subsystem, charges):
     result10 = _s01v1000(supersys_info, subsystem, charges, permutation=(1,0))
     return [result01, result10]
 def _s01v1000(supersys_info, subsystem, charges, permutation):
-    request = struct(rho=["ca#", "ccaa#"], precontract=["ccaa#qXsr_V#qrs"])
-    X = _parameters(supersys_info, subsystem, charges, request, permutation)
+    X = _parameters(supersys_info, subsystem, charges, permutation)
     prefactor = 2
     def diagram(i0,i1,j0,j1):
         return scalar_value( prefactor * X.ca1[i1,j1](p,u) @ X.s01(t,u) @ X.ccaa0qXsr_V1qrs[i0,j0](t,p) )
@@ -225,8 +224,7 @@ def s01v1101(supersys_info, subsystem, charges):
     result10 = _s01v1101(supersys_info, subsystem, charges, permutation=(1,0))
     return [result01, result10]
 def _s01v1101(supersys_info, subsystem, charges, permutation):
-    request = struct(rho=["ca#", "ccaa#"], precontract=["ccaa#pqXs_Vpq#s"])
-    X = _parameters(supersys_info, subsystem, charges, request, permutation)
+    X = _parameters(supersys_info, subsystem, charges, permutation)
     prefactor = 2
     def diagram(i0,i1,j0,j1):
         return scalar_value( prefactor * X.ca0[i0,j0](t,r) @ X.s01(t,u) @ X.ccaa1pqXs_Vpq0s[i1,j1](u,r) )
@@ -242,8 +240,7 @@ def s01v0000(supersys_info, subsystem, charges):
     result10 = _s01v0000(supersys_info, subsystem, charges, permutation=(1,0))
     return [result01, result10]
 def _s01v0000(supersys_info, subsystem, charges, permutation):
-    request = struct(rho=["cccaa#", "a#"], precontract=["cccaa#pqXsr_Vpqrs"])
-    X = _parameters(supersys_info, subsystem, charges, request, permutation)
+    X = _parameters(supersys_info, subsystem, charges, permutation)
     prefactor = (-1)**(X.n_i1 + X.P)
     def diagram(i0,i1,j0,j1):
         return scalar_value( prefactor * X.a1[i1,j1](u) @ X.s01(t,u) @ X.cccaa0pqXsr_Vpqrs[i0,j0](t) )
@@ -259,8 +256,7 @@ def s01v1111(supersys_info, subsystem, charges):
     result10 = _s01v1111(supersys_info, subsystem, charges, permutation=(1,0))
     return [result01, result10]
 def _s01v1111(supersys_info, subsystem, charges, permutation):
-    request = struct(rho=["c#", "ccaaa#"], precontract=["ccaaa#pqXsr_Vpqrs"])
-    X = _parameters(supersys_info, subsystem, charges, request, permutation)
+    X = _parameters(supersys_info, subsystem, charges, permutation)
     prefactor = (-1)**(X.n_i1 + X.P)
     def diagram(i0,i1,j0,j1):
         return scalar_value( prefactor * X.c0[i0,j0](t) @ X.s01(t,u) @ X.ccaaa1pqXsr_Vpqrs[i1,j1](u) )
@@ -276,8 +272,7 @@ def s01v0101(supersys_info, subsystem, charges):
     result10 = _s01v0101(supersys_info, subsystem, charges, permutation=(1,0))
     return [result01, result10]
 def _s01v0101(supersys_info, subsystem, charges, permutation):
-    request = struct(rho=["cca#", "caa#"], precontract=["cca#pXr_Vp#r#"])
-    X = _parameters(supersys_info, subsystem, charges, request, permutation)
+    X = _parameters(supersys_info, subsystem, charges, permutation)
     prefactor = 4 * (-1)**(X.n_i1 + X.P)
     def diagram(i0,i1,j0,j1):
         return scalar_value( prefactor * X.caa1[i1,j1](q,u,s) @ X.s01(t,u) @ X.cca0pXr_Vp1r1[i0,j0](t,q,s) )
@@ -293,8 +288,7 @@ def s01v1100(supersys_info, subsystem, charges):
     result10 = _s01v1100(supersys_info, subsystem, charges, permutation=(1,0))
     return [result01, result10]
 def _s01v1100(supersys_info, subsystem, charges, permutation):
-    request = struct(rho=["cca#", "caa#"], precontract=["cca#pqX_Vpq##"])
-    X = _parameters(supersys_info, subsystem, charges, request, permutation)
+    X = _parameters(supersys_info, subsystem, charges, permutation)
     prefactor = (-1)**(X.n_i1 + X.P)
     def diagram(i0,i1,j0,j1):
         return scalar_value( prefactor * X.caa0[i0,j0](t,s,r) @ X.s01(t,u) @ X.cca1pqX_Vpq00[i1,j1](u,r,s) )
@@ -310,8 +304,7 @@ def s01v0010(supersys_info, subsystem, charges):
     result10 = _s01v0010(supersys_info, subsystem, charges, permutation=(1,0))
     return [result01, result10]
 def _s01v0010(supersys_info, subsystem, charges, permutation):
-    request = struct(rho=["ccca#", "aa#"], precontract=["ccca#pqXs_Vpq#s"])
-    X = _parameters(supersys_info, subsystem, charges, request, permutation)
+    X = _parameters(supersys_info, subsystem, charges, permutation)
     prefactor = -2
     def diagram(i0,i1,j0,j1):
         return scalar_value( prefactor * X.aa1[i1,j1](u,r) @ X.s01(t,u) @ X.ccca0pqXs_Vpq1s[i0,j0](t,r) )
@@ -327,8 +320,7 @@ def s01v0111(supersys_info, subsystem, charges):
     result10 = _s01v0111(supersys_info, subsystem, charges, permutation=(1,0))
     return [result01, result10]
 def _s01v0111(supersys_info, subsystem, charges, permutation):
-    request = struct(rho=["cc#", "caaa#"], precontract=["caaa#qXsr_V#qrs"])
-    X = _parameters(supersys_info, subsystem, charges, request, permutation)
+    X = _parameters(supersys_info, subsystem, charges, permutation)
     prefactor = -2
     def diagram(i0,i1,j0,j1):
         return scalar_value( prefactor * X.cc0[i0,j0](p,t) @ X.s01(t,u) @ X.caaa1qXsr_V0qrs[i1,j1](u,p) )
@@ -344,8 +336,7 @@ def s01v0011(supersys_info, subsystem, charges):
     result10 = _s01v0011(supersys_info, subsystem, charges, permutation=(1,0))
     return [result01, result10]
 def _s01v0011(supersys_info, subsystem, charges, permutation):
-    request = struct(rho=["ccc#", "aaa#"], precontract=[])
-    X = _parameters(supersys_info, subsystem, charges, request, permutation)
+    X = _parameters(supersys_info, subsystem, charges, permutation)
     prefactor = (-1)**(X.n_i1 + X.P)
     def diagram(i0,i1,j0,j1):
         return scalar_value( prefactor * X.ccc0[i0,j0](p,q,t) @ X.aaa1[i1,j1](u,s,r) @ X.s01(t,u) @ X.v0011(p,q,r,s) )
