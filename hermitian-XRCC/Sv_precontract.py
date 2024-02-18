@@ -144,19 +144,79 @@ def precontract(densities, integrals):
         return dynamic_array(cached(cccaaMpqXsr_Vpqrs_m), [n_states.keys()]*2)
     precontractions["cccaa#pqXsr_Vpqrs"] = dynamic_array(cached(cccaaMpqXsr_Vpqrs), [range(len(densities))])
 
-    def ccaaaMpqXrs_Vpqrs(m):
+    def ccaaaMpqXsr_Vpqrs(m):
         V = integrals.V[m,m,m,m]
         densities_m = densities[m]
         n_states = densities_m["n_states"]
-        def ccaaaMpqXrs_Vpqrs_m(chg_i,chg_j):
-            def ccaaaMpqXrs_Vpqrs_m_charges(i,j):
+        def ccaaaMpqXsr_Vpqrs_m(chg_i,chg_j):
+            def ccaaaMpqXsr_Vpqrs_m_charges(i,j):
                 ccaaa = densities_m["ccaaa"][chg_i,chg_j][i,j]
-                return evaluate(ccaaa(p,q,0,r,s) @ V(p,q,r,s))
+                return evaluate(ccaaa(p,q,0,s,r) @ V(p,q,r,s))
             if chg_i-chg_j==+1:
-                return dynamic_array(cached(ccaaaMpqXrs_Vpqrs_m_charges), [range(n_states[chg_i]), range(n_states[chg_j])])
+                return dynamic_array(cached(ccaaaMpqXsr_Vpqrs_m_charges), [range(n_states[chg_i]), range(n_states[chg_j])])
             else:
                 return None
-        return dynamic_array(cached(ccaaaMpqXrs_Vpqrs_m), [n_states.keys()]*2)
-    precontractions["ccaaa#pqXrs_Vpqrs"] = dynamic_array(cached(ccaaaMpqXrs_Vpqrs), [range(len(densities))])
+        return dynamic_array(cached(ccaaaMpqXsr_Vpqrs_m), [n_states.keys()]*2)
+    precontractions["ccaaa#pqXsr_Vpqrs"] = dynamic_array(cached(ccaaaMpqXsr_Vpqrs), [range(len(densities))])
+
+    def ccaMpXr_VpMrM(m0,m1,m2):
+        V = integrals.V[m0,m1,m0,m2]
+        densities_m = densities[m0]
+        n_states = densities_m["n_states"]
+        def ccaMpXr_VpMrM_m(chg_i,chg_j):
+            def ccaMpXr_VpMrM_m_charges(i,j):
+                cca = densities_m["cca"][chg_i,chg_j][i,j]
+                return evaluate(cca(p,0,r) @ V(p,1,r,2))
+            if chg_i-chg_j==-1:
+                return dynamic_array(cached(ccaMpXr_VpMrM_m_charges), [range(n_states[chg_i]), range(n_states[chg_j])])
+            else:
+                return None
+        return dynamic_array(cached(ccaMpXr_VpMrM_m), [n_states.keys()]*2)
+    precontractions["cca#pXr_Vp#r#"] = dynamic_array(cached(ccaMpXr_VpMrM), [range(len(densities))])
+
+    def ccaMpqX_VpqMM(m0,m1,m2):
+        V = integrals.V[m0,m0,m1,m2]
+        densities_m = densities[m0]
+        n_states = densities_m["n_states"]
+        def ccaMpqX_VpqMM_m(chg_i,chg_j):
+            def ccaMpqX_VpqMM_m_charges(i,j):
+                cca = densities_m["cca"][chg_i,chg_j][i,j]
+                return evaluate(cca(p,q,0) @ V(p,q,1,2))
+            if chg_i-chg_j==-1:
+                return dynamic_array(cached(ccaMpqX_VpqMM_m_charges), [range(n_states[chg_i]), range(n_states[chg_j])])
+            else:
+                return None
+        return dynamic_array(cached(ccaMpqX_VpqMM_m), [n_states.keys()]*2)
+    precontractions["cca#pqX_Vpq##"] = dynamic_array(cached(ccaMpqX_VpqMM), [range(len(densities))])
+
+    def cccaMpqXs_VpqMs(m0,m1):
+        V = integrals.V[m0,m0,m1,m0]
+        densities_m = densities[m0]
+        n_states = densities_m["n_states"]
+        def cccaMpqXs_VpqMs_m(chg_i,chg_j):
+            def cccaMpqXs_VpqMs_m_charges(i,j):
+                ccca = densities_m["ccca"][chg_i,chg_j][i,j]
+                return evaluate(ccca(p,q,0,s) @ V(p,q,1,s))
+            if chg_i-chg_j==-2:
+                return dynamic_array(cached(cccaMpqXs_VpqMs_m_charges), [range(n_states[chg_i]), range(n_states[chg_j])])
+            else:
+                return None
+        return dynamic_array(cached(cccaMpqXs_VpqMs_m), [n_states.keys()]*2)
+    precontractions["ccca#pqXs_Vpq#s"] = dynamic_array(cached(cccaMpqXs_VpqMs), [range(len(densities))])
+
+    def caaaMqXsr_VMqrs(m0,m1):
+        V = integrals.V[m1,m0,m0,m0]
+        densities_m = densities[m0]
+        n_states = densities_m["n_states"]
+        def caaaMqXsr_VMqrs_m(chg_i,chg_j):
+            def caaaMqXsr_VMqrs_m_charges(i,j):
+                caaa = densities_m["caaa"][chg_i,chg_j][i,j]
+                return evaluate(caaa(q,0,s,r) @ V(1,q,r,s))
+            if chg_i-chg_j==+2:
+                return dynamic_array(cached(caaaMqXsr_VMqrs_m_charges), [range(n_states[chg_i]), range(n_states[chg_j])])
+            else:
+                return None
+        return dynamic_array(cached(caaaMqXsr_VMqrs_m), [n_states.keys()]*2)
+    precontractions["caaa#qXsr_V#qrs"] = dynamic_array(cached(caaaMqXsr_VMqrs), [range(len(densities))])
 
     return precontractions
