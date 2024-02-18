@@ -91,6 +91,8 @@ all_dimer_charges = [(0,0), (0,+1), (0,-1), (+1,0), (+1,+1), (+1,-1), (-1,0), (-
 # Build and test
 #########
 
+print("build H1")
+
 H1 = []
 for m in [0,1]:
     H1_m  = XR_term.monomer_matrix(St_blocks_symm, {
@@ -114,6 +116,8 @@ for m in [0,1]:
 
 
 
+print("build S2inv")
+
 S2     = XR_term.dimer_matrix(S_blocks, {
                         0: [
                             "identity"
@@ -126,6 +130,8 @@ S2     = XR_term.dimer_matrix(S_blocks, {
 S2inv = qode.math.precise_numpy_inverse(S2)
 
 
+
+print("build S2H2 (1e)")
 
 S2H2  = XR_term.dimer_matrix(St_blocks_symm, {
                        1: [
@@ -159,6 +165,8 @@ S2H2 += XR_term.dimer_matrix(Su_blocks_bior, {
                           ]
                       }, (0,1), all_dimer_charges)
 
+print("build S2H2 (2e)")
+
 S2H2 -= XR_term.dimer_matrix(Sv_blocks_bior, {
                        1: [
                            "v0000"
@@ -183,6 +191,8 @@ S2H2 += XR_term.dimer_matrix(Sv_blocks_bior, {
                            "s01v0101", "s01v1101", "s01v1000", "s01v1100", "s01v0010", "s01v0111"#, "s01v0011"
                           ]
                       }, (0,1), all_dimer_charges)
+
+print("Apply H")
 
 
 
