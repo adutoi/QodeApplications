@@ -15,52 +15,10 @@
 #    You should have received a copy of the GNU General Public License
 #    along with QodeApplications.  If not, see <http://www.gnu.org/licenses/>.
 #
-
-from tendot import tendot
-from qode.math.tensornet import tl_tensor, scalar_value
-from Sx_precontract import precontract
+from qode.math.tensornet import scalar_value
+from frag_resolve import frag_resolve
 
 p, q, r, s, t, u, v, w = "pqrstuvw"
-
-class _empty(object):  pass    # Basically just a dictionary
-
-
-
-def _parameters(supersys_info, subsystem, charges, permutation=(0,)):
-    # helper function to do repetitive manipulations of data passed from above
-    # Version in Sv_diagrams.py has comments (and an updated internal structure that should eventually be replicated here)
-    densities, integrals = supersys_info.densities, supersys_info.integrals
-    integrals = integrals.S, integrals.T
-    #
-    densities = [densities[m] for m in subsystem]
-    S, T = integrals
-    S = {(m0_,m1_):S[m0,m1] for m1_,m1 in enumerate(subsystem) for m0_,m0 in enumerate(subsystem)}
-    T = {(m0_,m1_):T[m0,m1] for m1_,m1 in enumerate(subsystem) for m0_,m0 in enumerate(subsystem)}
-    #
-    data = _empty()
-    data.P = 0 if permutation==(0,1) else 1    # This line of code is specific to two fragments (needs to be generalized for >=3).
-    #
-    Dchg_rhos = {+2:["aa", "caaa"], +1:["a","caa"], 0:["ca","ccaa"], -1:["c","cca"], -2:["cc", "ccca"]}
-    n_i = 0
-    n_i_label = ""
-    for m0,m0_ in reversed(list(enumerate(permutation))):
-        m0_str = str(m0)
-        n_i_label = m0_str + n_i_label
-        chg_i_m0 , chg_j_m0  = charges[m0]
-        chg_i_m0_, chg_j_m0_ = charges[m0_]
-        Dchg_m0_ = chg_i_m0_ - chg_j_m0_
-        n_i += densities[m0]['n_elec'][chg_i_m0]    # this is not an error!
-        data.__dict__["Dchg_"+m0_str] = Dchg_m0_
-        data.__dict__["n_i"+n_i_label] = n_i%2
-        for Dchg,rhos in Dchg_rhos.items():
-            if Dchg==Dchg_m0_:
-                for rho in rhos:
-                    data.__dict__[rho+"_"+m0_str] = densities[m0_][rho][chg_i_m0_,chg_j_m0_]
-        for m1,m1_ in enumerate(permutation):
-            m01_str = m0_str + str(m1)
-            data.__dict__["S_"+m01_str] = S[m0_,m1_]
-            data.__dict__["T_"+m01_str] = T[m0_,m1_]
-    return data
 
 
 
@@ -75,11 +33,11 @@ def _parameters(supersys_info, subsystem, charges, permutation=(0,)):
 
 # pq,pq-> :  ca0  t00
 def t00(supersys_info, subsystem, charges):
-    X = _parameters(supersys_info, subsystem, charges)
+    X = frag_resolve(supersys_info, zip(subsystem, charges))
     prefactor = 1
     def diagram(i0,j0):
-        return scalar_value( prefactor * X.ca_0[i0,j0](p,q) @ X.T_00(p,q) )
-    if X.Dchg_0==0:
+        return scalar_value( prefactor * X.ca0[i0,j0](p,q) @ X.t00(p,q) )
+    if X.Dchg0==0:
         return [(diagram, (0,))]
     else:
         return [(None, None)]
@@ -94,11 +52,11 @@ def t01(supersys_info, subsystem, charges):
     result10 = _t01(supersys_info, subsystem, charges, permutation=(1,0))
     return [result01, result10]
 def _t01(supersys_info, subsystem, charges, permutation):
-    X = _parameters(supersys_info, subsystem, charges, permutation)
+    X = frag_resolve(supersys_info, zip(subsystem, charges), permutation)
     prefactor = (-1)**(X.n_i1 + X.P)
     def diagram(i0,i1,j0,j1):
-        return scalar_value( prefactor * X.c_0[i0,j0](p) @ X.a_1[i1,j1](q) @ X.T_01(p,q) )
-    if X.Dchg_0==-1 and X.Dchg_1==+1:
+        return scalar_value( prefactor * X.c0[i0,j0](p) @ X.a1[i1,j1](q) @ X.t01(p,q) )
+    if X.Dchg0==-1 and X.Dchg1==+1:
         return diagram, permutation
     else:
         return None, None
@@ -109,11 +67,11 @@ def s01t10(supersys_info, subsystem, charges):
     result10 = _s01t10(supersys_info, subsystem, charges, permutation=(1,0))
     return [result01, result10]
 def _s01t10(supersys_info, subsystem, charges, permutation):
-    X = _parameters(supersys_info, subsystem, charges, permutation)
+    X = frag_resolve(supersys_info, zip(subsystem, charges), permutation)
     prefactor = -1
     def diagram(i0,i1,j0,j1):
-        return scalar_value( prefactor * X.ca_0[i0,j0](t,q) @ X.ca_1[i1,j1](p,u) @ X.S_01(t,u) @ X.T_10(p,q) )
-    if X.Dchg_0==0 and X.Dchg_1==0:
+        return scalar_value( prefactor * X.ca0[i0,j0](t,q) @ X.ca1[i1,j1](p,u) @ X.s01(t,u) @ X.t10(p,q) )
+    if X.Dchg0==0 and X.Dchg1==0:
         return diagram, permutation
     else:
         return None, None
@@ -124,11 +82,11 @@ def s01t00(supersys_info, subsystem, charges):
     result10 = _s01t00(supersys_info, subsystem, charges, permutation=(1,0))
     return [result01, result10]
 def _s01t00(supersys_info, subsystem, charges, permutation):
-    X = _parameters(supersys_info, subsystem, charges, permutation)
+    X = frag_resolve(supersys_info, zip(subsystem, charges), permutation)
     prefactor = (-1)**(X.n_i1 + X.P + 1)
     def diagram(i0,i1,j0,j1):
-        return scalar_value( prefactor * X.cca_0[i0,j0](p,t,q) @ X.a_1[i1,j1](u) @ X.S_01(t,u) @ X.T_00(p,q) )
-    if X.Dchg_0==-1 and X.Dchg_1==+1:
+        return scalar_value( prefactor * X.cca0[i0,j0](p,t,q) @ X.a1[i1,j1](u) @ X.s01(t,u) @ X.t00(p,q) )
+    if X.Dchg0==-1 and X.Dchg1==+1:
         return diagram, permutation
     else:
         return None, None
@@ -139,11 +97,11 @@ def s01t11(supersys_info, subsystem, charges):
     result10 = _s01t11(supersys_info, subsystem, charges, permutation=(1,0))
     return [result01, result10]
 def _s01t11(supersys_info, subsystem, charges, permutation):
-    X = _parameters(supersys_info, subsystem, charges, permutation)
+    X = frag_resolve(supersys_info, zip(subsystem, charges), permutation)
     prefactor = (-1)**(X.n_i1 + X.P + 1)
     def diagram(i0,i1,j0,j1):
-        return scalar_value( prefactor * X.c_0[i0,j0](t) @ X.caa_1[i1,j1](p,u,q) @ X.S_01(t,u) @ X.T_11(p,q) )
-    if X.Dchg_0==-1 and X.Dchg_1==+1:
+        return scalar_value( prefactor * X.c0[i0,j0](t) @ X.caa1[i1,j1](p,u,q) @ X.s01(t,u) @ X.t11(p,q) )
+    if X.Dchg0==-1 and X.Dchg1==+1:
         return diagram, permutation
     else:
         return None, None
@@ -154,11 +112,11 @@ def s01t01(supersys_info, subsystem, charges):
     result10 = _s01t01(supersys_info, subsystem, charges, permutation=(1,0))
     return [result01, result10]
 def _s01t01(supersys_info, subsystem, charges, permutation):
-    X = _parameters(supersys_info, subsystem, charges, permutation)
+    X = frag_resolve(supersys_info, zip(subsystem, charges), permutation)
     prefactor = 1
     def diagram(i0,i1,j0,j1):
-        return scalar_value( prefactor * X.cc_0[i0,j0](p,t) @ X.aa_1[i1,j1](u,q) @ X.S_01(t,u) @ X.T_01(p,q) )
-    if X.Dchg_0==-2 and X.Dchg_1==+2:
+        return scalar_value( prefactor * X.cc0[i0,j0](p,t) @ X.aa1[i1,j1](u,q) @ X.s01(t,u) @ X.t01(p,q) )
+    if X.Dchg0==-2 and X.Dchg1==+2:
         return diagram, permutation
     else:
         return None, None

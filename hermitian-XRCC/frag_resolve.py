@@ -43,7 +43,18 @@ class frag_resolve(object):
         # dynamically allocated, cached "virtual" arrays for the target information
         self._storage["Dchg#"] =   _Dchg_array(self._subsys_chgs, self._n_frag)
         self._storage["s##"]   = _subsys_array(self._supersys_info.integrals.S, self._subsys_chgs, 2, self._n_frag)
-        self._storage["v####"] = _subsys_array(self._supersys_info.integrals.V, self._subsys_chgs, 4, self._n_frag)
+        try:
+            self._storage["t##"]   = _subsys_array(self._supersys_info.integrals.T, self._subsys_chgs, 2, self._n_frag)
+        except:
+            pass
+        try:
+            self._storage["u#_##"] = _subsys_array(self._supersys_info.integrals.U, self._subsys_chgs, 3, self._n_frag)
+        except:
+            pass
+        try:
+            self._storage["v####"] = _subsys_array(self._supersys_info.integrals.V, self._subsys_chgs, 4, self._n_frag)
+        except:
+            pass
         self._densities        = _subsys_array(self._supersys_info.densities,   self._subsys_chgs, 1, self._n_frag)
     def __getattr__(self, attr):
         if attr[:3]=="n_i":
