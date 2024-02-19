@@ -63,7 +63,7 @@ def precontract(densities, integrals):
             if int_type=="V":  ints = integrals.V[int_blocks]
             densities_m = densities[indices[0]]
             n_states = densities_m["n_states"]
-            Dchg = rho_type.count("a") - rho_type.count("c")
+            Dchg = rho_type.count("a") - rho_type.count("c")    # get rid of this and allow the exception
 
             def contract_rho_int_m(chg_i,chg_j):
                 def contract_rho_int_m_chgs(i,j):
