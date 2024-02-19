@@ -36,7 +36,8 @@ def t00(supersys_info, subsystem, charges):
     X = frag_resolve(supersys_info, zip(subsystem, charges))
     prefactor = 1
     def diagram(i0,j0):
-        return scalar_value( prefactor * X.ca0[i0,j0](p,q) @ X.t00(p,q) )
+        return scalar_value( prefactor * X.ca0pq_Tpq[i0,j0] )
+        #return scalar_value( prefactor * X.ca0[i0,j0](p,q) @ X.t00(p,q) )
     if X.Dchg0==0:
         return [(diagram, (0,))]
     else:
@@ -55,7 +56,8 @@ def _t01(supersys_info, subsystem, charges, permutation):
     X = frag_resolve(supersys_info, zip(subsystem, charges), permutation)
     prefactor = (-1)**(X.n_i1 + X.P)
     def diagram(i0,i1,j0,j1):
-        return scalar_value( prefactor * X.c0[i0,j0](p) @ X.a1[i1,j1](q) @ X.t01(p,q) )
+        return scalar_value( prefactor * X.c0[i0,j0](p) @ X.a1q_T0q[i1,j1](p) )
+        #return scalar_value( prefactor * X.c0[i0,j0](p) @ X.a1[i1,j1](q) @ X.t01(p,q) )
     if X.Dchg0==-1 and X.Dchg1==+1:
         return diagram, permutation
     else:
@@ -70,7 +72,8 @@ def _s01t10(supersys_info, subsystem, charges, permutation):
     X = frag_resolve(supersys_info, zip(subsystem, charges), permutation)
     prefactor = -1
     def diagram(i0,i1,j0,j1):
-        return scalar_value( prefactor * X.ca0[i0,j0](t,q) @ X.ca1[i1,j1](p,u) @ X.s01(t,u) @ X.t10(p,q) )
+        return scalar_value( prefactor * X.ca0tX_St1[i0,j0](q,u) @ X.ca1pX_Tp0[i1,j1](u,q) )
+        #return scalar_value( prefactor * X.ca0[i0,j0](t,q) @ X.ca1[i1,j1](p,u) @ X.s01(t,u) @ X.t10(p,q) )
     if X.Dchg0==0 and X.Dchg1==0:
         return diagram, permutation
     else:
@@ -85,7 +88,8 @@ def _s01t00(supersys_info, subsystem, charges, permutation):
     X = frag_resolve(supersys_info, zip(subsystem, charges), permutation)
     prefactor = (-1)**(X.n_i1 + X.P + 1)
     def diagram(i0,i1,j0,j1):
-        return scalar_value( prefactor * X.cca0[i0,j0](p,t,q) @ X.a1[i1,j1](u) @ X.s01(t,u) @ X.t00(p,q) )
+        return scalar_value( prefactor * X.a1u_S0u[i1,j1](t) @ X.cca0pXq_Tpq[i0,j0](t) )
+        #return scalar_value( prefactor * X.cca0[i0,j0](p,t,q) @ X.a1[i1,j1](u) @ X.s01(t,u) @ X.t00(p,q) )
     if X.Dchg0==-1 and X.Dchg1==+1:
         return diagram, permutation
     else:
@@ -100,7 +104,8 @@ def _s01t11(supersys_info, subsystem, charges, permutation):
     X = frag_resolve(supersys_info, zip(subsystem, charges), permutation)
     prefactor = (-1)**(X.n_i1 + X.P + 1)
     def diagram(i0,i1,j0,j1):
-        return scalar_value( prefactor * X.c0[i0,j0](t) @ X.caa1[i1,j1](p,u,q) @ X.s01(t,u) @ X.t11(p,q) )
+        return scalar_value( prefactor * X.c0t_St1[i0,j0](u) @ X.caa1pXq_Tpq[i1,j1](u) )
+        #return scalar_value( prefactor * X.c0[i0,j0](t) @ X.caa1[i1,j1](p,u,q) @ X.s01(t,u) @ X.t11(p,q) )
     if X.Dchg0==-1 and X.Dchg1==+1:
         return diagram, permutation
     else:
@@ -115,7 +120,8 @@ def _s01t01(supersys_info, subsystem, charges, permutation):
     X = frag_resolve(supersys_info, zip(subsystem, charges), permutation)
     prefactor = 1
     def diagram(i0,i1,j0,j1):
-        return scalar_value( prefactor * X.cc0[i0,j0](p,t) @ X.aa1[i1,j1](u,q) @ X.s01(t,u) @ X.t01(p,q) )
+        return scalar_value( prefactor * X.cc0Xt_St1[i0,j0](p,u) @ X.aa1Xq_T0q[i1,j1](u,p) )
+        #return scalar_value( prefactor * X.cc0[i0,j0](p,t) @ X.aa1[i1,j1](u,q) @ X.s01(t,u) @ X.t01(p,q) )
     if X.Dchg0==-2 and X.Dchg1==+2:
         return diagram, permutation
     else:
