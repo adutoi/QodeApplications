@@ -51,10 +51,13 @@ class frag_resolve(object):
         else:
             frag_indices = tuple(int(i) for i in filter(lambda c: c.isdigit(), attr))    # extract the digits from the string (heaven forbid >=9-fragment subsystem)
             label_template = re.sub("\d", "#", attr)                                     # replace digits with hashes to anonymize the label
-            if label_template not in self._storage:    # then it is a density or a precontraction, and ...
-                if "_" in label_template:              # ... it is a precontraction, or ...
+            if label_template not in self._storage:    # Then it is a density or a precontraction, and ...
+                if "_S" in label_template:             # ... it is a precontraction with S specifically, or ...
                     frag_count = label_template.count("#")
-                    self._storage[label_template] = _precontract_array(self._supersys_info.contract_cache, label_template, self._subsys_chgs, frag_count, self._n_frag)
+                    self._storage[label_template] = _precontract_array(self._supersys_info.contract_cache.rho_S,    label_template, self._subsys_chgs, frag_count, self._n_frag)
+                elif "_" in label_template:            # ... it is a general precontraction, or ...
+                    frag_count = label_template.count("#")
+                    self._storage[label_template] = _precontract_array(self._supersys_info.contract_cache.general, label_template, self._subsys_chgs, frag_count, self._n_frag)
                 else:                                  # ... otherwise must be a single-fragment density
                     self._storage[label_template] = _density_array(self._densities, label_template[:-1], self._subsys_chgs, self._n_frag)
             return self._storage[label_template][frag_indices]

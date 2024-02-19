@@ -18,6 +18,7 @@
 
 import numpy
 from qode.util import struct, recursive_looper
+from precontract import precontract
 
 ##########
 # This function does the heavy lifting.  Called by instances of innermost class below.
@@ -92,8 +93,8 @@ class _subsystem(object):
         return self._items[charges]
 
 class blocks(object):
-    def __init__(self, densities, integrals, diagrams):
-        contract_cache = diagrams.precontract(densities, integrals)
+    def __init__(self, densities, integrals, diagrams, contract_cache):
+        contract_cache = struct(rho_S=contract_cache, general=precontract(densities, integrals))
         self._supersys_info = struct(densities=densities, integrals=integrals, contract_cache=contract_cache)
         self._diagrams = diagrams
         self._items = {}

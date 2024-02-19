@@ -57,7 +57,7 @@ def precontract(densities, integrals):
                 else:
                     int_indices += [idx]
                     int_blocks += [indices[0]]
-            if int_type=="S":  ints = integrals.S[int_blocks]
+            if int_type=="S":  ints = integrals[int_blocks]    # makes the calling signature inhomogeneous to force error otherwise
             if int_type=="T":  ints = integrals.T[int_blocks]
             if int_type=="U":  ints = integrals.U[int_blocks]
             if int_type=="V":  ints = integrals.V[int_blocks]
@@ -78,10 +78,10 @@ def precontract(densities, integrals):
         def contract_rho_rho_int(*indices):
             raise NotImplementedError
 
-        if label.count("_")==1:
+        if label.count("_")==1:    # good enough for now
             return dynamic_array(cached(contract_rho_int), [range(n_frag)]*n_indices)
 
-    class _hack(object):
+    class _hack(object):    # wraps single string index as 1-tuple to not confuse dynamic_array
         def __init__(self, dyn_array):
             self.dyn_array = dyn_array
         def __getitem__(self, key):

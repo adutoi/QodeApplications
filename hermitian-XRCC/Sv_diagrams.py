@@ -1,4 +1,4 @@
-#    (C) Copyright 2023 Anthony D. Dutoi and Marco Bauer
+#    (C) Copyright 2023, 2024 Anthony D. Dutoi and Marco Bauer
 # 
 #    This file is part of QodeApplications.
 # 
@@ -16,7 +16,6 @@
 #    along with QodeApplications.  If not, see <http://www.gnu.org/licenses/>.
 #
 from qode.math.tensornet import scalar_value
-from Sv_precontract import precontract    # just passes on though to importing code
 from frag_resolve import frag_resolve
 
 p, q, r, s, t, u, v, w = "pqrstuvw"    # some contraction indices for easier reading
@@ -118,7 +117,8 @@ def _s01v1000(supersys_info, subsystem, charges, permutation):
     X = frag_resolve(supersys_info, zip(subsystem, charges), permutation)
     prefactor = 2
     def diagram(i0,i1,j0,j1):
-        return scalar_value( prefactor * X.ca1[i1,j1](p,u) @ X.s01(t,u) @ X.ccaa0qXsr_V1qrs[i0,j0](t,p) )
+        return scalar_value( prefactor * X.ca1Xq_S0q[i1,j1](p,t) @ X.ccaa0qXsr_V1qrs[i0,j0](t,p) )
+        #return scalar_value( prefactor * X.ca1[i1,j1](p,u) @ X.s01(t,u) @ X.ccaa0qXsr_V1qrs[i0,j0](t,p) )
         #return scalar_value( prefactor * X.ccaa0[i0,j0](q,t,s,r) @ X.ca1[i1,j1](p,u) @ X.s01(t,u) @ X.v1000(p,q,r,s) )
     if X.Dchg0==0 and X.Dchg1==0:
         return diagram, permutation
