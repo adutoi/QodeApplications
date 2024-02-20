@@ -42,7 +42,10 @@ class frag_resolve(object):
         self._subsys_chgs = [subsys_chgs[m] for m in permutation]
         # dynamically allocated, cached "virtual" arrays for the target information
         self._storage["Dchg#"] =   _Dchg_array(self._subsys_chgs, self._n_frag)
-        self._storage["s##"]   = _subsys_array(self._supersys_info.integrals.S, self._subsys_chgs, 2, self._n_frag)
+        try:
+            self._storage["s##"]   = _subsys_array(self._supersys_info.integrals.S, self._subsys_chgs, 2, self._n_frag)
+        except:
+            self._storage["s##"]   = _subsys_array(self._supersys_info.integrals,   self._subsys_chgs, 2, self._n_frag)
         try:
             self._storage["t##"]   = _subsys_array(self._supersys_info.integrals.T, self._subsys_chgs, 2, self._n_frag)
         except:

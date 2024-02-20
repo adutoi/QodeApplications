@@ -20,6 +20,7 @@
 #     python [-u] <this-file.py> <displacement> <rhos>
 # where <rhos> can be the filestem of any one of the .pkl files in atomic_states/ prepared by Be631g.py.
 
+import time
 import sys
 import pickle
 import numpy
@@ -32,7 +33,6 @@ import excitonic
 import diagrammatic_expansion   # defines information structure for housing results of diagram evaluations
 import XR_term                  # knows how to use ^this information to pack a matrix for use in XR model
 import S_diagrams               # contains definitions of actual diagrams needed for S operator in BO rep
-import Sn_diagrams              # contains definitions of actual diagrams needed for SH operator in BO rep
 import St_diagrams              # contains definitions of actual diagrams needed for SH operator in BO rep
 import Su_diagrams              # contains definitions of actual diagrams needed for SH operator in BO rep
 import Sv_diagrams              # contains definitions of actual diagrams needed for SH operator in BO rep
@@ -48,6 +48,8 @@ class empty(object):  pass     # Basically just a dictionary class
 #########
 # Load data
 #########
+
+t0 = time.time()
 
 # Information about the Be2 supersystem
 n_frag       = 2
@@ -68,15 +70,16 @@ symm_ints, bior_ints, nuc_rep = get_ints(BeN, project_core)
 
 # The engines that build the terms
 BeN_rho = [frag.rho for frag in BeN]   # diagrammatic_expansion.blocks should take BeN directly? (n_states and n_elec one level higher)
-contract_cache = precontract(BeN_rho, symm_ints.S)
-S_blocks       = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=symm_ints.S,                               diagrams=S_diagrams,  contract_cache=contract_cache)
-St_blocks_symm = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, T=symm_ints.T),      diagrams=St_diagrams, contract_cache=contract_cache)
-Su_blocks_symm = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, U=symm_ints.U),      diagrams=Su_diagrams, contract_cache=contract_cache)
-Sv_blocks_symm = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, V=symm_ints.V),      diagrams=Sv_diagrams, contract_cache=contract_cache)
-St_blocks_bior = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, T=bior_ints.T),      diagrams=St_diagrams, contract_cache=contract_cache)
-Su_blocks_bior = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, U=bior_ints.U),      diagrams=Su_diagrams, contract_cache=contract_cache)
-Sv_blocks_bior = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, V=bior_ints.V),      diagrams=Sv_diagrams, contract_cache=contract_cache)
-Sv_blocks_half = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, V=bior_ints.V_half), diagrams=Sv_diagrams, contract_cache=contract_cache)
+timings = {}
+contract_cache = precontract(BeN_rho, symm_ints.S, timings)
+S_blocks       = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=symm_ints.S,                               diagrams=S_diagrams,  contract_cache=contract_cache, timings=timings)
+St_blocks_symm = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, T=symm_ints.T),      diagrams=St_diagrams, contract_cache=contract_cache, timings=timings)
+Su_blocks_symm = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, U=symm_ints.U),      diagrams=Su_diagrams, contract_cache=contract_cache, timings=timings)
+Sv_blocks_symm = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, V=symm_ints.V),      diagrams=Sv_diagrams, contract_cache=contract_cache, timings=timings)
+St_blocks_bior = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, T=bior_ints.T),      diagrams=St_diagrams, contract_cache=contract_cache, timings=timings)
+Su_blocks_bior = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, U=bior_ints.U),      diagrams=Su_diagrams, contract_cache=contract_cache, timings=timings)
+Sv_blocks_bior = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, V=bior_ints.V),      diagrams=Sv_diagrams, contract_cache=contract_cache, timings=timings)
+Sv_blocks_half = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, V=bior_ints.V_half), diagrams=Sv_diagrams, contract_cache=contract_cache, timings=timings)
 
 # charges under consideration
 monomer_charges = [0, +1, -1]
@@ -248,3 +251,8 @@ out, resources = qode.util.output(log=qode.util.textlog(echo=True)), qode.util.p
 E, T = excitonic.ccsd((H1,[[None,H2],[None,None]]), out, resources)
 E += sum(nuc_rep[m1,m2] for m1 in range(n_frag) for m2 in range(m1+1))
 out.log("\nTotal Excitonic CCSD Energy (test) = ", E)
+
+t_tot = time.time() - t0
+print("Total time:", t_tot)
+for k,v in sorted(timings.items()):
+    print("{:8s} {:5.2f}%".format(k,100*v/t_tot))
