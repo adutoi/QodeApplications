@@ -16,6 +16,7 @@
 #    along with QodeApplications.  If not, see <http://www.gnu.org/licenses/>.
 #
 import time
+from timer import timer
 from qode.util.dynamic_array import dynamic_array, cached
 from qode.math.tensornet     import evaluate
 
@@ -25,7 +26,7 @@ from qode.math.tensornet     import evaluate
 #cca(p,q,0) @ V(p,q,1,2)
 
 def precontract(densities, integrals, timings):
-    if "  precontract" not in timings:  timings["  precontract"] = 0.
+    if "  precontract" not in timings:  timings["  precontract"] = timer()
 
     n_frag = len(densities)
 

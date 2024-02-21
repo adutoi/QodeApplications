@@ -254,5 +254,5 @@ out.log("\nTotal Excitonic CCSD Energy (test) = ", E)
 
 t_tot = time.time() - t0
 print("Total time:", t_tot)
-for k,v in sorted(timings.items()):
-    print("{:8s} {:5.2f}%".format(k,100*v/t_tot))
+for k,v in sorted(timings.items(), key=lambda item: item[1].cum_time):
+    print("{:8s}  {:5.2f}%  {:5d}".format(k, 100*v.cum_time/t_tot, v.n_calls))

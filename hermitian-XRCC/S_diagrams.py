@@ -16,6 +16,7 @@
 #    along with QodeApplications.  If not, see <http://www.gnu.org/licenses/>.
 #
 import time
+from timer import timer
 from qode.math.tensornet import scalar_value
 from frag_resolve import frag_resolve
 
@@ -34,7 +35,7 @@ p, q, r, s, t, u, v, w = "pqrstuvw"
 
 # -> :
 def identity(supersys_info, subsystem, charges):
-    if "identity" not in supersys_info.timings:  supersys_info.timings["identity"] = 0.
+    if "identity" not in supersys_info.timings:  supersys_info.timings["identity"] = timer()
     # Identity
     def diagram():
         t0 = time.time()
@@ -49,7 +50,7 @@ def identity(supersys_info, subsystem, charges):
 
 # p,q,pq-> :  c0  a1  s01
 def s01(supersys_info, subsystem, charges):
-    if "s01" not in supersys_info.timings:  supersys_info.timings["s01"] = 0.
+    if "s01" not in supersys_info.timings:  supersys_info.timings["s01"] = timer()
     result01 = _s01(supersys_info, subsystem, charges, permutation=(0,1))
     result10 = _s01(supersys_info, subsystem, charges, permutation=(1,0))
     return [result01, result10]
@@ -58,7 +59,8 @@ def _s01(supersys_info, subsystem, charges, permutation):
     prefactor = (-1)**(X.n_i1 + X.P)
     def diagram(i0,i1,j0,j1):
         t0 = time.time()
-        result = scalar_value( prefactor * X.c0[i0,j0](p) @ X.a1[i1,j1](q) @ X.s01(p,q))
+        result = scalar_value( prefactor * X.c0[i0,j0](p) @ X.a1q_S0q[i1,j1](p) )
+        #result = scalar_value( prefactor * X.c0[i0,j0](p) @ X.a1[i1,j1](q) @ X.s01(p,q))
         supersys_info.timings["s01"] += (time.time() - t0)
         return result
     if X.Dchg0==-1 and X.Dchg1==+1:
@@ -68,7 +70,7 @@ def _s01(supersys_info, subsystem, charges, permutation):
 
 # ps,rq,pq,rs-> :  ca0  ca1  s01  s10
 def s01s10(supersys_info, subsystem, charges):
-    if "s01s10" not in supersys_info.timings:  supersys_info.timings["s01s10"] = 0.
+    if "s01s10" not in supersys_info.timings:  supersys_info.timings["s01s10"] = timer()
     X = frag_resolve(supersys_info, zip(subsystem, charges), permutation=(0,1))
     prefactor = -1
     def diagram(i0,i1,j0,j1):
@@ -83,7 +85,7 @@ def s01s10(supersys_info, subsystem, charges):
 
 # pr,sq,pq,rs-> :  cc0  aa1  s01  s01
 def s01s01(supersys_info, subsystem, charges):
-    if "s01s01" not in supersys_info.timings:  supersys_info.timings["s01s01"] = 0.
+    if "s01s01" not in supersys_info.timings:  supersys_info.timings["s01s01"] = timer()
     result01 = _s01s01(supersys_info, subsystem, charges, permutation=(0,1))
     result10 = _s01s01(supersys_info, subsystem, charges, permutation=(1,0))
     return [result01, result10]
@@ -102,7 +104,7 @@ def _s01s01(supersys_info, subsystem, charges, permutation):
 
 # pru,tsq,pq,rs,tu-> :  cca0  caa1  s01  s01  s10
 def s01s01s10(supersys_info, subsystem, charges):
-    if "s01s01s10" not in supersys_info.timings:  supersys_info.timings["s01s01s10"] = 0.
+    if "s01s01s10" not in supersys_info.timings:  supersys_info.timings["s01s01s10"] = timer()
     result01 = _s01s01s10(supersys_info, subsystem, charges, permutation=(0,1))
     result10 = _s01s01s10(supersys_info, subsystem, charges, permutation=(1,0))
     return [result01, result10]
@@ -121,7 +123,7 @@ def _s01s01s10(supersys_info, subsystem, charges, permutation):
 
 # prwu,tvsq,pq,rs,tu,vw-> :  ccaa0  ccaa1  s01  s01  s10  s10
 def s01s01s10s10(supersys_info, subsystem, charges):
-    if "s01s01s10s10" not in supersys_info.timings:  supersys_info.timings["s01s01s10s10"] = 0.
+    if "s01s01s10s10" not in supersys_info.timings:  supersys_info.timings["s01s01s10s10"] = timer()
     X = frag_resolve(supersys_info, zip(subsystem, charges), permutation=(0,1))
     prefactor = 1/4.
     def diagram(i0,i1,j0,j1):
@@ -136,7 +138,7 @@ def s01s01s10s10(supersys_info, subsystem, charges):
 
 # prtw,vusq,pq,rs,tu,vw-> :  ccca0  caaa1  s01  s01  s01  s10
 def s01s01s01s10(supersys_info, subsystem, charges):
-    if "s01s01s01s10" not in supersys_info.timings:  supersys_info.timings["s01s01s01s10"] = 0.
+    if "s01s01s01s10" not in supersys_info.timings:  supersys_info.timings["s01s01s01s10"] = timer()
     result01 = _s01s01s01s10(supersys_info, subsystem, charges, permutation=(0,1))
     result10 = _s01s01s01s10(supersys_info, subsystem, charges, permutation=(1,0))
     return [result01, result10]

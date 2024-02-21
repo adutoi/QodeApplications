@@ -16,6 +16,7 @@
 #    along with QodeApplications.  If not, see <http://www.gnu.org/licenses/>.
 #
 import time
+from timer import timer
 from qode.math.tensornet import scalar_value
 from frag_resolve import frag_resolve
 
@@ -34,7 +35,7 @@ p, q, r, s, t, u, v, w = "pqrstuvw"
 
 # pq,pq-> :  ca0  t00
 def t00(supersys_info, subsystem, charges):
-    if "t00" not in supersys_info.timings:  supersys_info.timings["t00"] = 0.
+    if "t00" not in supersys_info.timings:  supersys_info.timings["t00"] = timer()
     X = frag_resolve(supersys_info, zip(subsystem, charges))
     prefactor = 1
     def diagram(i0,j0):
@@ -54,7 +55,7 @@ def t00(supersys_info, subsystem, charges):
 
 # p,q,pq-> :  c0  a1  t01
 def t01(supersys_info, subsystem, charges):
-    if "t01" not in supersys_info.timings:  supersys_info.timings["t01"] = 0.
+    if "t01" not in supersys_info.timings:  supersys_info.timings["t01"] = timer()
     result01 = _t01(supersys_info, subsystem, charges, permutation=(0,1))
     result10 = _t01(supersys_info, subsystem, charges, permutation=(1,0))
     return [result01, result10]
@@ -74,7 +75,7 @@ def _t01(supersys_info, subsystem, charges, permutation):
 
 # tq,pu,tu,pq-> :  ca0  ca1  s01  t10
 def s01t10(supersys_info, subsystem, charges):
-    if "s01t10" not in supersys_info.timings:  supersys_info.timings["s01t10"] = 0.
+    if "s01t10" not in supersys_info.timings:  supersys_info.timings["s01t10"] = timer()
     result01 = _s01t10(supersys_info, subsystem, charges, permutation=(0,1))
     result10 = _s01t10(supersys_info, subsystem, charges, permutation=(1,0))
     return [result01, result10]
@@ -94,7 +95,7 @@ def _s01t10(supersys_info, subsystem, charges, permutation):
 
 # ptq,u,tu,pq-> :  cca0  a1  s01  t00
 def s01t00(supersys_info, subsystem, charges):
-    if "s01t00" not in supersys_info.timings:  supersys_info.timings["s01t00"] = 0.
+    if "s01t00" not in supersys_info.timings:  supersys_info.timings["s01t00"] = timer()
     result01 = _s01t00(supersys_info, subsystem, charges, permutation=(0,1))
     result10 = _s01t00(supersys_info, subsystem, charges, permutation=(1,0))
     return [result01, result10]
@@ -114,7 +115,7 @@ def _s01t00(supersys_info, subsystem, charges, permutation):
 
 # t,puq,tu,pq-> :  c0  caa1  s01  t11
 def s01t11(supersys_info, subsystem, charges):
-    if "s01t11" not in supersys_info.timings:  supersys_info.timings["s01t11"] = 0.
+    if "s01t11" not in supersys_info.timings:  supersys_info.timings["s01t11"] = timer()
     result01 = _s01t11(supersys_info, subsystem, charges, permutation=(0,1))
     result10 = _s01t11(supersys_info, subsystem, charges, permutation=(1,0))
     return [result01, result10]
@@ -134,7 +135,7 @@ def _s01t11(supersys_info, subsystem, charges, permutation):
 
 # pt,uq,tu,pq-> :  cc0  aa1  s01  t01
 def s01t01(supersys_info, subsystem, charges):
-    if "s01t01" not in supersys_info.timings:  supersys_info.timings["s01t01"] = 0.
+    if "s01t01" not in supersys_info.timings:  supersys_info.timings["s01t01"] = timer()
     result01 = _s01t01(supersys_info, subsystem, charges, permutation=(0,1))
     result10 = _s01t01(supersys_info, subsystem, charges, permutation=(1,0))
     return [result01, result10]
