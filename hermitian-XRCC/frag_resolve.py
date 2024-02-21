@@ -29,7 +29,6 @@ class frag_resolve(object):
         self._storage = {}
 	#
         self._supersys_info = supersys_info
-        subsys_chgs = list(subsys_chgs)    # zip has no len
         self._n_frag = len(subsys_chgs)
         self.P = 0 if permutation==(0,1) else 1    # needs to be generalized for n>=3.
         # Some diagrams need to know the number of e- in the ket for the combined "latter" frags of the un(!)permuted subsystem

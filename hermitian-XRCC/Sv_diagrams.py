@@ -26,7 +26,7 @@ p, q, r, s, t, u, v, w = "pqrstuvw"    # some contraction indices for easier rea
 
 ##########
 # Here are the implementations of the actual diagrams.
-# They must take the arguments (supersys_info, subsystem, charges), but after that, it is up to you.
+# They must take the arguments (supersys_info, subsys_chgs), but after that, it is up to you.
 # It should return a list of kernels that takes state indices (for specified fragment charges) their relevant permutations.
 # Don't forget to update the "catalog" dictionary at the end.
 ##########
@@ -34,10 +34,36 @@ p, q, r, s, t, u, v, w = "pqrstuvw"    # some contraction indices for easier rea
 
 # monomer diagram
 
+
+
+
+def build_diagrams(contraction, Dchg0, permutations=((0,1),)):
+    def get_diagrams(supersys_info, subsys_chgs):
+        label = contraction.__name__
+        if label not in supersys_info.timings:  supersys_info.timings[label] = timer()
+        def get_diagram(X):
+            def diagram(i0,i1,j0,j1):
+                t0 = time.time()
+                result = contraction(X, i0,i1,j0,j1)
+                supersys_info.timings[label] += (time.time() - t0)
+                return result
+            return diagram
+        diagrams = []
+        for permutation in permutations:
+            X = frag_resolve(supersys_info, subsys_chgs, permutation)
+            if X.Dchg0==Dchg0 and X.Dchg1==-Dchg0:
+                diagrams += [(get_diagram(X), permutation)]
+            else:
+                diagrams += [None]
+        return diagrams
+    return get_diagrams
+
+
+
 # pqsr,pqrs-> :  ccaa0  v0000
-def v0000(supersys_info, subsystem, charges):
+def v0000(supersys_info, subsys_chgs):
     if "v0000" not in supersys_info.timings:  supersys_info.timings["v0000"] = timer()
-    X = frag_resolve(supersys_info, zip(subsystem, charges))
+    X = frag_resolve(supersys_info, subsys_chgs)
     prefactor = 1
     def diagram(i0,j0):
         t0 = time.time()
@@ -48,32 +74,12 @@ def v0000(supersys_info, subsystem, charges):
     if X.Dchg0==0:
         return [(diagram, (0,))]
     else:
-        return [(None, None)]
+        return [None]
 
 
 
 # dimer diagrams
 
-def build_diagrams(contraction, Dchg0, permutations=((0,1),)):
-    label = contraction.__name__
-    def get_diagrams(supersys_info, subsystem, charges):
-        if label not in supersys_info.timings:  supersys_info.timings[label] = timer()
-        def get_diagram(supersys_info, subsystem, charges, permutation):
-            X = frag_resolve(supersys_info, zip(subsystem, charges), permutation)
-            def diagram(i0,i1,j0,j1):
-                t0 = time.time()
-                result = contraction(X, i0,i1,j0,j1)
-                supersys_info.timings[label] += (time.time() - t0)
-                return result
-            if X.Dchg0==Dchg0 and X.Dchg1==-Dchg0:
-                return diagram, permutation
-            else:
-                return None, None
-        results = []
-        for permutation in permutations:
-            results += [get_diagram(supersys_info, subsystem, charges, permutation)]
-        return results
-    return get_diagrams
 
 # pr,qs,pqrs-> :  ca0  ca1  v0101
 def v0101(X, i0,i1,j0,j1):

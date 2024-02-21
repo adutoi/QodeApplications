@@ -67,13 +67,14 @@ class _charges(object):
         if label not in self._results:
             frag_order = len(self._subsystem)
             try:
-                terms = self._diagrams.catalog[frag_order][label](self._supersys_info, self._subsystem, self._charges)
+                terms = self._diagrams.catalog[frag_order][label](self._supersys_info, tuple(zip(self._subsystem, self._charges)))
             except:
                 raise NotImplementedError("diagram \'{}\' not implemented for {} bodies".format(label, frag_order))
             else:
                 self._results[label] = None
-                for term,permutation in terms:
-                    if term is not None:
+                for term_permutation in terms:
+                    if term_permutation is not None:
+                        term, permutation = term_permutation
                         result = _build_block(term, self._n_states(permutation), permutation)
                         if self._results[label] is None:  self._results[label]  = result
                         else:                             self._results[label] += result

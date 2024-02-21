@@ -26,7 +26,7 @@ p, q, r, s, t, u, v, w = "pqrstuvw"
 
 ##########
 # Here are the implementations of the actual diagrams.
-# The public @staticmethods must take the arguments (supersys_info, subsystem, charges), but after that, it is up to you.
+# The public @staticmethods must take the arguments (supersys_info, subsys_chgs), but after that, it is up to you.
 # It should return a list of kernels that takes state indices (for specified fragment charges) their relevant permutations.
 # Don't forget to update the "catalog" dictionary at the end.
 ##########
@@ -34,7 +34,7 @@ p, q, r, s, t, u, v, w = "pqrstuvw"
 # 0-mer diagram
 
 # -> :
-def identity(supersys_info, subsystem, charges):
+def identity(supersys_info, subsys_chgs):
     if "identity" not in supersys_info.timings:  supersys_info.timings["identity"] = timer()
     # Identity
     def diagram():
@@ -49,13 +49,13 @@ def identity(supersys_info, subsystem, charges):
 # dimer diagrams
 
 # p,q,pq-> :  c0  a1  s01
-def s01(supersys_info, subsystem, charges):
+def s01(supersys_info, subsys_chgs):
     if "s01" not in supersys_info.timings:  supersys_info.timings["s01"] = timer()
-    result01 = _s01(supersys_info, subsystem, charges, permutation=(0,1))
-    result10 = _s01(supersys_info, subsystem, charges, permutation=(1,0))
+    result01 = _s01(supersys_info, subsys_chgs, permutation=(0,1))
+    result10 = _s01(supersys_info, subsys_chgs, permutation=(1,0))
     return [result01, result10]
-def _s01(supersys_info, subsystem, charges, permutation):
-    X = frag_resolve(supersys_info, zip(subsystem, charges), permutation)
+def _s01(supersys_info, subsys_chgs, permutation):
+    X = frag_resolve(supersys_info, subsys_chgs, permutation)
     prefactor = (-1)**(X.n_i1 + X.P)
     def diagram(i0,i1,j0,j1):
         t0 = time.time()
@@ -66,12 +66,12 @@ def _s01(supersys_info, subsystem, charges, permutation):
     if X.Dchg0==-1 and X.Dchg1==+1:
         return diagram, permutation
     else:
-        return None, None
+        return None
 
 # ps,rq,pq,rs-> :  ca0  ca1  s01  s10
-def s01s10(supersys_info, subsystem, charges):
+def s01s10(supersys_info, subsys_chgs):
     if "s01s10" not in supersys_info.timings:  supersys_info.timings["s01s10"] = timer()
-    X = frag_resolve(supersys_info, zip(subsystem, charges), permutation=(0,1))
+    X = frag_resolve(supersys_info, subsys_chgs, permutation=(0,1))
     prefactor = -1
     def diagram(i0,i1,j0,j1):
         t0 = time.time()
@@ -81,16 +81,16 @@ def s01s10(supersys_info, subsystem, charges):
     if X.Dchg0==0 and X.Dchg1==0:
         return [(diagram, (0,1))]
     else:
-        return [(None, None)]
+        return [None]
 
 # pr,sq,pq,rs-> :  cc0  aa1  s01  s01
-def s01s01(supersys_info, subsystem, charges):
+def s01s01(supersys_info, subsys_chgs):
     if "s01s01" not in supersys_info.timings:  supersys_info.timings["s01s01"] = timer()
-    result01 = _s01s01(supersys_info, subsystem, charges, permutation=(0,1))
-    result10 = _s01s01(supersys_info, subsystem, charges, permutation=(1,0))
+    result01 = _s01s01(supersys_info, subsys_chgs, permutation=(0,1))
+    result10 = _s01s01(supersys_info, subsys_chgs, permutation=(1,0))
     return [result01, result10]
-def _s01s01(supersys_info, subsystem, charges, permutation):
-    X = frag_resolve(supersys_info, zip(subsystem, charges), permutation)
+def _s01s01(supersys_info, subsys_chgs, permutation):
+    X = frag_resolve(supersys_info, subsys_chgs, permutation)
     prefactor = 1/2.
     def diagram(i0,i1,j0,j1):
         t0 = time.time()
@@ -100,16 +100,16 @@ def _s01s01(supersys_info, subsystem, charges, permutation):
     if X.Dchg0==-2 and X.Dchg1==+2:
         return diagram, permutation
     else:
-        return None, None
+        return None
 
 # pru,tsq,pq,rs,tu-> :  cca0  caa1  s01  s01  s10
-def s01s01s10(supersys_info, subsystem, charges):
+def s01s01s10(supersys_info, subsys_chgs):
     if "s01s01s10" not in supersys_info.timings:  supersys_info.timings["s01s01s10"] = timer()
-    result01 = _s01s01s10(supersys_info, subsystem, charges, permutation=(0,1))
-    result10 = _s01s01s10(supersys_info, subsystem, charges, permutation=(1,0))
+    result01 = _s01s01s10(supersys_info, subsys_chgs, permutation=(0,1))
+    result10 = _s01s01s10(supersys_info, subsys_chgs, permutation=(1,0))
     return [result01, result10]
-def _s01s01s10(supersys_info, subsystem, charges, permutation):
-    X = frag_resolve(supersys_info, zip(subsystem, charges), permutation)
+def _s01s01s10(supersys_info, subsys_chgs, permutation):
+    X = frag_resolve(supersys_info, subsys_chgs, permutation)
     prefactor = (-1)**(X.n_i1 + X.P + 1) / 2.
     def diagram(i0,i1,j0,j1):
         t0 = time.time()
@@ -119,12 +119,12 @@ def _s01s01s10(supersys_info, subsystem, charges, permutation):
     if X.Dchg0==-1 and X.Dchg1==+1:
         return diagram, permutation
     else:
-        return None, None
+        return None
 
 # prwu,tvsq,pq,rs,tu,vw-> :  ccaa0  ccaa1  s01  s01  s10  s10
-def s01s01s10s10(supersys_info, subsystem, charges):
+def s01s01s10s10(supersys_info, subsys_chgs):
     if "s01s01s10s10" not in supersys_info.timings:  supersys_info.timings["s01s01s10s10"] = timer()
-    X = frag_resolve(supersys_info, zip(subsystem, charges), permutation=(0,1))
+    X = frag_resolve(supersys_info, subsys_chgs, permutation=(0,1))
     prefactor = 1/4.
     def diagram(i0,i1,j0,j1):
         t0 = time.time()
@@ -134,16 +134,16 @@ def s01s01s10s10(supersys_info, subsystem, charges):
     if X.Dchg0==0 and X.Dchg1==0:
         return [(diagram, (0,1))]
     else:
-        return [(None, None)]
+        return [None]
 
 # prtw,vusq,pq,rs,tu,vw-> :  ccca0  caaa1  s01  s01  s01  s10
-def s01s01s01s10(supersys_info, subsystem, charges):
+def s01s01s01s10(supersys_info, subsys_chgs):
     if "s01s01s01s10" not in supersys_info.timings:  supersys_info.timings["s01s01s01s10"] = timer()
-    result01 = _s01s01s01s10(supersys_info, subsystem, charges, permutation=(0,1))
-    result10 = _s01s01s01s10(supersys_info, subsystem, charges, permutation=(1,0))
+    result01 = _s01s01s01s10(supersys_info, subsys_chgs, permutation=(0,1))
+    result10 = _s01s01s01s10(supersys_info, subsys_chgs, permutation=(1,0))
     return [result01, result10]
-def _s01s01s01s10(supersys_info, subsystem, charges, permutation):
-    X = frag_resolve(supersys_info, zip(subsystem, charges), permutation)
+def _s01s01s01s10(supersys_info, subsys_chgs, permutation):
+    X = frag_resolve(supersys_info, subsys_chgs, permutation)
     prefactor = -1 / 6.
     def diagram(i0,i1,j0,j1):
         t0 = time.time()
@@ -153,7 +153,7 @@ def _s01s01s01s10(supersys_info, subsystem, charges, permutation):
     if X.Dchg0==-2 and X.Dchg1==+2:
         return diagram, permutation
     else:
-        return None, None
+        return None
 
 
 
