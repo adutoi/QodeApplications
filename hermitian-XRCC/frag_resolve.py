@@ -30,7 +30,7 @@ class frag_resolve(object):
 	#
         self._supersys_info = supersys_info
         self._n_frag = len(subsys_chgs)
-        self.P = 0 if permutation==(0,1) else 1    # needs to be generalized for n>=3.
+        self.P = 1 if permutation==(1,0) else 0    # needs to be generalized for n>=3.
         # Some diagrams need to know the number of e- in the ket for the combined "latter" frags of the un(!)permuted subsystem
         n_i = 0
         label = "".join(str(i) for i in range(self._n_frag))
@@ -61,6 +61,8 @@ class frag_resolve(object):
     def __getattr__(self, attr):
         if attr[:3]=="n_i":
             return self._storage[attr]
+        elif attr=="Dchg":
+            return self._storage["Dchg#"]
         else:
             frag_indices = tuple(int(i) for i in filter(lambda c: c.isdigit(), attr))    # extract the digits from the string (heaven forbid >=9-fragment subsystem)
             label_template = re.sub("\d", "#", attr)                                     # replace digits with hashes to anonymize the label

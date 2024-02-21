@@ -32,54 +32,18 @@ p, q, r, s, t, u, v, w = "pqrstuvw"    # some contraction indices for easier rea
 ##########
 
 
+
 # monomer diagram
 
-
-
-
-def build_diagrams(contraction, Dchg0, permutations=((0,1),)):
-    def get_diagrams(supersys_info, subsys_chgs):
-        label = contraction.__name__
-        if label not in supersys_info.timings:  supersys_info.timings[label] = timer()
-        def get_diagram(X):
-            def diagram(i0,i1,j0,j1):
-                t0 = time.time()
-                result = contraction(X, i0,i1,j0,j1)
-                supersys_info.timings[label] += (time.time() - t0)
-                return result
-            return diagram
-        diagrams = []
-        for permutation in permutations:
-            X = frag_resolve(supersys_info, subsys_chgs, permutation)
-            if X.Dchg0==Dchg0 and X.Dchg1==-Dchg0:
-                diagrams += [(get_diagram(X), permutation)]
-            else:
-                diagrams += [None]
-        return diagrams
-    return get_diagrams
-
-
-
 # pqsr,pqrs-> :  ccaa0  v0000
-def v0000(supersys_info, subsys_chgs):
-    if "v0000" not in supersys_info.timings:  supersys_info.timings["v0000"] = timer()
-    X = frag_resolve(supersys_info, subsys_chgs)
+def v0000(X, i0,j0):
     prefactor = 1
-    def diagram(i0,j0):
-        t0 = time.time()
-        result = scalar_value( prefactor * X.ccaa0pqsr_Vpqrs[i0,j0] )
-        #result = scalar_value( prefactor * X.ccaa0[i0,j0](p,q,s,r) @ X.v0000(p,q,r,s) )
-        supersys_info.timings["v0000"] += (time.time() - t0)
-        return result
-    if X.Dchg0==0:
-        return [(diagram, (0,))]
-    else:
-        return [None]
+    return scalar_value( prefactor * X.ccaa0pqsr_Vpqrs[i0,j0] )
+    #return scalar_value( prefactor * X.ccaa0[i0,j0](p,q,s,r) @ X.v0000(p,q,r,s) )
 
 
 
 # dimer diagrams
-
 
 # pr,qs,pqrs-> :  ca0  ca1  v0101
 def v0101(X, i0,i1,j0,j1):
@@ -172,24 +136,50 @@ def s01v0011(X, i0,i1,j0,j1):
 # A dictionary catalog.  the string association lets users specify active diagrams at the top level.
 ##########
 
+
+def build_diagrams(contraction, Dchgs=(0,), permutations=((0,),)):
+    def get_diagrams(supersys_info, subsys_chgs):
+        label = contraction.__name__
+        if label not in supersys_info.timings:  supersys_info.timings[label] = timer()
+        def get_diagram(X):
+            def diagram(*ij_args):
+                t0 = time.time()
+                result = contraction(X, *ij_args)
+                supersys_info.timings[label] += (time.time() - t0)
+                return result
+            return diagram
+        diagrams = []
+        for permutation in permutations:
+            X = frag_resolve(supersys_info, subsys_chgs, permutation)
+            yes = True
+            for m,Dchg in enumerate(Dchgs):
+                if X.Dchg[m]!=Dchg:  yes = False
+            if yes:
+                diagrams += [(get_diagram(X), permutation)]
+            else:
+                diagrams += [None]
+        return diagrams
+    return get_diagrams
+
+
 catalog = {}
 
 catalog[1] = {
-    "v0000": v0000
+    "v0000":    build_diagrams(v0000)
 }
 
 catalog[2] = {
-    "v0101":    build_diagrams(v0101,    Dchg0=0),
-    "v0010":    build_diagrams(v0010,    Dchg0=-1, permutations=[(0,1),(1,0)]),
-    "v0111":    build_diagrams(v0111,    Dchg0=-1, permutations=[(0,1),(1,0)]),
-    "v0011":    build_diagrams(v0011,    Dchg0=-2, permutations=[(0,1),(1,0)]),
-    "s01v1101": build_diagrams(s01v1101, Dchg0=0,  permutations=[(0,1),(1,0)]),
-    "s01v1000": build_diagrams(s01v1000, Dchg0=0,  permutations=[(0,1),(1,0)]),
-    "s01v0101": build_diagrams(s01v0101, Dchg0=-1, permutations=[(0,1),(1,0)]),
-    "s01v1100": build_diagrams(s01v1100, Dchg0=+1, permutations=[(0,1),(1,0)]),
-    "s01v1111": build_diagrams(s01v1111, Dchg0=-1, permutations=[(0,1),(1,0)]),
-    "s01v0000": build_diagrams(s01v0000, Dchg0=-1, permutations=[(0,1),(1,0)]),
-    "s01v0010": build_diagrams(s01v0010, Dchg0=-2, permutations=[(0,1),(1,0)]),
-    "s01v0111": build_diagrams(s01v0111, Dchg0=-2, permutations=[(0,1),(1,0)]),
-    "s01v0011": build_diagrams(s01v0011, Dchg0=-3, permutations=[(0,1),(1,0)])
+    "v0101":    build_diagrams(v0101,    Dchgs=( 0, 0), permutations=[(0,1)]),
+    "v0010":    build_diagrams(v0010,    Dchgs=(-1,+1), permutations=[(0,1),(1,0)]),
+    "v0111":    build_diagrams(v0111,    Dchgs=(-1,+1), permutations=[(0,1),(1,0)]),
+    "v0011":    build_diagrams(v0011,    Dchgs=(-2,+2), permutations=[(0,1),(1,0)]),
+    "s01v1101": build_diagrams(s01v1101, Dchgs=( 0, 0), permutations=[(0,1),(1,0)]),
+    "s01v1000": build_diagrams(s01v1000, Dchgs=( 0, 0), permutations=[(0,1),(1,0)]),
+    "s01v0101": build_diagrams(s01v0101, Dchgs=(-1,+1), permutations=[(0,1),(1,0)]),
+    "s01v1100": build_diagrams(s01v1100, Dchgs=(+1,-1), permutations=[(0,1),(1,0)]),
+    "s01v1111": build_diagrams(s01v1111, Dchgs=(-1,+1), permutations=[(0,1),(1,0)]),
+    "s01v0000": build_diagrams(s01v0000, Dchgs=(-1,+1), permutations=[(0,1),(1,0)]),
+    "s01v0010": build_diagrams(s01v0010, Dchgs=(-2,+2), permutations=[(0,1),(1,0)]),
+    "s01v0111": build_diagrams(s01v0111, Dchgs=(-2,+2), permutations=[(0,1),(1,0)]),
+    "s01v0011": build_diagrams(s01v0011, Dchgs=(-3,+3), permutations=[(0,1),(1,0)])
 }
