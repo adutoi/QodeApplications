@@ -15,164 +15,72 @@
 #    You should have received a copy of the GNU General Public License
 #    along with QodeApplications.  If not, see <http://www.gnu.org/licenses/>.
 #
-import time
 from qode.math.tensornet import scalar_value
-from build_diagram import frag_resolve, timer
+from build_diagram       import build_diagram
 
-p, q, r, s, t, u, v, w = "pqrstuvw"
+p, q, r, s, t, u, v, w = "pqrstuvw"    # some contraction indices for easier reading
 
 
 
 ##########
 # Here are the implementations of the actual diagrams.
-# They must take the arguments (supersys_info, subsys_chgs), but after that, it is up to you.
-# It should return a list of kernels that takes state indices (for specified fragment charges) their relevant permutations.
-# Don't forget to update the "catalog" dictionary at the end.
+# They must take the arguments (X, i0,i1,...,j0,j1,...) where and instance of frag_resolve (see build_diagram),
+# which provides all of the input tensors and/or intermediate contractions.  These functions then return a scalar
+# which is the evaluated diagram.  Don't forget to update the "catalog" dictionary at the end.
 ##########
 
 # monomer diagram
 
 # pq,pq-> :  ca0  t00
-def t00(supersys_info, subsys_chgs):
-    if "t00" not in supersys_info.timings:  supersys_info.timings["t00"] = timer()
-    X = frag_resolve(supersys_info, subsys_chgs)
-    prefactor = 1
-    def diagram(i0,j0):
-        t0 = time.time()
-        result = scalar_value( prefactor * X.ca0pq_Tpq[i0,j0] )
-        #result = scalar_value( prefactor * X.ca0[i0,j0](p,q) @ X.t00(p,q) )
-        supersys_info.timings["t00"] += (time.time() - t0)
-        return result
-    if X.Dchg[0]==0:
-        return [(diagram, (0,))]
-    else:
-        return [None]
-
-
+def t00(X, i0,j0):
+    return 1 * scalar_value( X.ca0pq_Tpq[i0,j0] )
+    #return 1 * scalar_value( X.ca0[i0,j0](p,q) @ X.t00(p,q) )
 
 # dimer diagrams
 
 # p,q,pq-> :  c0  a1  t01
-def t01(supersys_info, subsys_chgs):
-    if "t01" not in supersys_info.timings:  supersys_info.timings["t01"] = timer()
-    result01 = _t01(supersys_info, subsys_chgs, permutation=(0,1))
-    result10 = _t01(supersys_info, subsys_chgs, permutation=(1,0))
-    return [result01, result10]
-def _t01(supersys_info, subsys_chgs, permutation):
-    X = frag_resolve(supersys_info, subsys_chgs, permutation)
-    prefactor = (-1)**(X.n_i1 + X.P)
-    def diagram(i0,i1,j0,j1):
-        t0 = time.time()
-        result = scalar_value( prefactor * X.c0[i0,j0](p) @ X.a1q_T0q[i1,j1](p) )
-        #result = scalar_value( prefactor * X.c0[i0,j0](p) @ X.a1[i1,j1](q) @ X.t01(p,q) )
-        supersys_info.timings["t01"] += (time.time() - t0)
-        return result
-    if X.Dchg[0]==-1 and X.Dchg[1]==+1:
-        return diagram, permutation
-    else:
-        return None
+def t01(X, i0,i1,j0,j1):
+    return (-1)**(X.n_i1 + X.P) * scalar_value( X.c0[i0,j0](p) @ X.a1q_T0q[i1,j1](p) )
+    #return (-1)**(X.n_i1 + X.P) * scalar_value( X.c0[i0,j0](p) @ X.a1[i1,j1](q) @ X.t01(p,q) )
 
 # tq,pu,tu,pq-> :  ca0  ca1  s01  t10
-def s01t10(supersys_info, subsys_chgs):
-    if "s01t10" not in supersys_info.timings:  supersys_info.timings["s01t10"] = timer()
-    result01 = _s01t10(supersys_info, subsys_chgs, permutation=(0,1))
-    result10 = _s01t10(supersys_info, subsys_chgs, permutation=(1,0))
-    return [result01, result10]
-def _s01t10(supersys_info, subsys_chgs, permutation):
-    X = frag_resolve(supersys_info, subsys_chgs, permutation)
-    prefactor = -1
-    def diagram(i0,i1,j0,j1):
-        t0 = time.time()
-        result = scalar_value( prefactor * X.ca0tX_St1[i0,j0](q,u) @ X.ca1pX_Tp0[i1,j1](u,q) )
-        #result = scalar_value( prefactor * X.ca0[i0,j0](t,q) @ X.ca1[i1,j1](p,u) @ X.s01(t,u) @ X.t10(p,q) )
-        supersys_info.timings["s01t10"] += (time.time() - t0)
-        return result
-    if X.Dchg[0]==0 and X.Dchg[1]==0:
-        return diagram, permutation
-    else:
-        return None
+def s01t10(X, i0,i1,j0,j1):
+    return -1 * scalar_value( X.ca0tX_St1[i0,j0](q,u) @ X.ca1pX_Tp0[i1,j1](u,q) )
+    #return -1 * scalar_value( X.ca0[i0,j0](t,q) @ X.ca1[i1,j1](p,u) @ X.s01(t,u) @ X.t10(p,q) )
 
 # ptq,u,tu,pq-> :  cca0  a1  s01  t00
-def s01t00(supersys_info, subsys_chgs):
-    if "s01t00" not in supersys_info.timings:  supersys_info.timings["s01t00"] = timer()
-    result01 = _s01t00(supersys_info, subsys_chgs, permutation=(0,1))
-    result10 = _s01t00(supersys_info, subsys_chgs, permutation=(1,0))
-    return [result01, result10]
-def _s01t00(supersys_info, subsys_chgs, permutation):
-    X = frag_resolve(supersys_info, subsys_chgs, permutation)
-    prefactor = (-1)**(X.n_i1 + X.P + 1)
-    def diagram(i0,i1,j0,j1):
-        t0 = time.time()
-        result = scalar_value( prefactor * X.a1u_S0u[i1,j1](t) @ X.cca0pXq_Tpq[i0,j0](t) )
-        #result = scalar_value( prefactor * X.cca0[i0,j0](p,t,q) @ X.a1[i1,j1](u) @ X.s01(t,u) @ X.t00(p,q) )
-        supersys_info.timings["s01t00"] += (time.time() - t0)
-        return result
-    if X.Dchg[0]==-1 and X.Dchg[1]==+1:
-        return diagram, permutation
-    else:
-        return None
+def s01t00(X, i0,i1,j0,j1):
+    return (-1)**(X.n_i1 + X.P + 1) * scalar_value( X.a1u_S0u[i1,j1](t) @ X.cca0pXq_Tpq[i0,j0](t) )
+    #return (-1)**(X.n_i1 + X.P + 1) * scalar_value( X.cca0[i0,j0](p,t,q) @ X.a1[i1,j1](u) @ X.s01(t,u) @ X.t00(p,q) )
 
 # t,puq,tu,pq-> :  c0  caa1  s01  t11
-def s01t11(supersys_info, subsys_chgs):
-    if "s01t11" not in supersys_info.timings:  supersys_info.timings["s01t11"] = timer()
-    result01 = _s01t11(supersys_info, subsys_chgs, permutation=(0,1))
-    result10 = _s01t11(supersys_info, subsys_chgs, permutation=(1,0))
-    return [result01, result10]
-def _s01t11(supersys_info, subsys_chgs, permutation):
-    X = frag_resolve(supersys_info, subsys_chgs, permutation)
-    prefactor = (-1)**(X.n_i1 + X.P + 1)
-    def diagram(i0,i1,j0,j1):
-        t0 = time.time()
-        result = scalar_value( prefactor * X.c0t_St1[i0,j0](u) @ X.caa1pXq_Tpq[i1,j1](u) )
-        #result = scalar_value( prefactor * X.c0[i0,j0](t) @ X.caa1[i1,j1](p,u,q) @ X.s01(t,u) @ X.t11(p,q) )
-        supersys_info.timings["s01t11"] += (time.time() - t0)
-        return result
-    if X.Dchg[0]==-1 and X.Dchg[1]==+1:
-        return diagram, permutation
-    else:
-        return None
+def s01t11(X, i0,i1,j0,j1):
+    return (-1)**(X.n_i1 + X.P + 1) * scalar_value( X.c0t_St1[i0,j0](u) @ X.caa1pXq_Tpq[i1,j1](u) )
+    #return (-1)**(X.n_i1 + X.P + 1) * scalar_value( X.c0[i0,j0](t) @ X.caa1[i1,j1](p,u,q) @ X.s01(t,u) @ X.t11(p,q) )
 
 # pt,uq,tu,pq-> :  cc0  aa1  s01  t01
-def s01t01(supersys_info, subsys_chgs):
-    if "s01t01" not in supersys_info.timings:  supersys_info.timings["s01t01"] = timer()
-    result01 = _s01t01(supersys_info, subsys_chgs, permutation=(0,1))
-    result10 = _s01t01(supersys_info, subsys_chgs, permutation=(1,0))
-    return [result01, result10]
-def _s01t01(supersys_info, subsys_chgs, permutation):
-    X = frag_resolve(supersys_info, subsys_chgs, permutation)
-    prefactor = 1
-    def diagram(i0,i1,j0,j1):
-        t0 = time.time()
-        result = scalar_value( prefactor * X.cc0Xt_St1[i0,j0](p,u) @ X.aa1Xq_T0q[i1,j1](u,p) )
-        #result = scalar_value( prefactor * X.cc0[i0,j0](p,t) @ X.aa1[i1,j1](u,q) @ X.s01(t,u) @ X.t01(p,q) )
-        supersys_info.timings["s01t01"] += (time.time() - t0)
-        return result
-    if X.Dchg[0]==-2 and X.Dchg[1]==+2:
-        return diagram, permutation
-    else:
-        return None
+def s01t01(X, i0,i1,j0,j1):
+    return 1 * scalar_value( X.cc0Xt_St1[i0,j0](p,u) @ X.aa1Xq_T0q[i1,j1](u,p) )
+    #return 1 * scalar_value( X.cc0[i0,j0](p,t) @ X.aa1[i1,j1](u,q) @ X.s01(t,u) @ X.t01(p,q) )
 
 
 
 ##########
-# A dictionary catalog.  the string association lets users specify active diagrams at the top level.
-# would like to build automatically, but more difficult than expected to get function references correct
-# e.g., does not work
-#catalog[2] = {}
-#for k,v in body_2.__dict__.items():
-#    catalog[2][k] = v
+# A dictionary catalog.  The string association lets users specify active diagrams at the top level
+# for each kind of integral (symmetric, biorthogonal, ...).  The first argument to build_diagram() is
+# one of the functions found above, which performs the relevant contraction for the given diagram for
+# a fixed permutation (adjusted externally).
 ##########
 
 catalog = {}
 
 catalog[1] = {
-    "t00":   t00
+    "t00":   build_diagram(t00)
 }
-
 catalog[2] = {
-    "t01":      t01,
-    "s01t10":   s01t10,
-    "s01t00":   s01t00,
-    "s01t11":   s01t11,
-    "s01t01":   s01t01
+    "t01":      build_diagram(t01,    Dchgs=(-1,+1), permutations=[(0,1),(1,0)]),
+    "s01t10":   build_diagram(s01t10, Dchgs=( 0, 0), permutations=[(0,1),(1,0)]),
+    "s01t00":   build_diagram(s01t00, Dchgs=(-1,+1), permutations=[(0,1),(1,0)]),
+    "s01t11":   build_diagram(s01t11, Dchgs=(-1,+1), permutations=[(0,1),(1,0)]),
+    "s01t01":   build_diagram(s01t01, Dchgs=(-2,+2), permutations=[(0,1),(1,0)])
 }

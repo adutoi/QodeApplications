@@ -65,13 +65,16 @@ def build_diagram(contraction, Dchgs=(0,), permutations=((0,),)):
                 return result
             return do_contraction
         # build list of fully qualified diagram contraction functions for permutations where charge criteria met
-        permuted_diagrams = []
-        for permutation in permutations:
-            X = frag_resolve(supersys_info, subsys_chgs, permutation)    # see below
-            if all(X.Dchg[m]==Dchg for m,Dchg in enumerate(Dchgs)):
-                permuted_diagrams += [(permuted_diagram(X), permutation)]
-            else:
-                permuted_diagrams += [None]
+        if permutations is None:    # handles 0-mer/identity case
+            permuted_diagrams = [(permuted_diagram(None), tuple())]
+        else:
+            permuted_diagrams = []
+            for permutation in permutations:
+                X = frag_resolve(supersys_info, subsys_chgs, permutation)    # see below
+                if all(X.Dchg[m]==Dchg for m,Dchg in enumerate(Dchgs)):
+                    permuted_diagrams += [(permuted_diagram(X), permutation)]
+                else:
+                    permuted_diagrams += [None]
         return permuted_diagrams
     return get_permuted_diagrams
 
