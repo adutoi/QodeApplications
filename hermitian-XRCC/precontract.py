@@ -15,8 +15,6 @@
 #    You should have received a copy of the GNU General Public License
 #    along with QodeApplications.  If not, see <http://www.gnu.org/licenses/>.
 #
-import time
-from build_diagram import timer
 from qode.util.dynamic_array import dynamic_array, cached
 from qode.math.tensornet     import evaluate
 
@@ -26,8 +24,6 @@ from qode.math.tensornet     import evaluate
 #cca(p,q,0) @ V(p,q,1,2)
 
 def precontract(densities, integrals, timings):
-    if "  precontract" not in timings:  timings["  precontract"] = timer()
-
     n_frag = len(densities)
 
     def mother_rule(label):
@@ -71,10 +67,10 @@ def precontract(densities, integrals, timings):
 
             def contract_rho_int_m(chg_i,chg_j):
                 def contract_rho_int_m_chgs(i,j):
-                    t0 = time.time()
+                    timings.start()
                     rho = densities_m[rho_type][chg_i,chg_j][i,j]
                     result = evaluate(rho(*rho_indices) @ ints(*int_indices))
-                    timings["  precontract"] += (time.time() - t0)
+                    timings.record("  precontract")
                     return result
                 if chg_i-chg_j==Dchg:
                     return dynamic_array(cached(contract_rho_int_m_chgs), [range(n_states[chg_i]), range(n_states[chg_j])])

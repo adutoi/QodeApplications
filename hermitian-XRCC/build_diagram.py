@@ -15,7 +15,6 @@
 #    You should have received a copy of the GNU General Public License
 #    along with QodeApplications.  If not, see <http://www.gnu.org/licenses/>.
 #
-import time
 import re    # regular expressions
 from qode.util.dynamic_array import dynamic_array
 
@@ -35,18 +34,6 @@ from qode.util.dynamic_array import dynamic_array
 
 
 
-# A one-off class to keep track of both cumulative time and number of calls with a quick-and-dirty += syntax
-class timer(object):
-    def __init__(self):
-        self.n_calls = 0
-        self.cum_time = 0.
-    def __iadd__(self, delta_t):
-        self.n_calls += 1
-        self.cum_time += delta_t
-        return self
-
-
-
 # This function informs a primitive contraction of the charge cases for which it is valid and the permutations
 # of the anonymized fragments for which it should be executed.
 def build_diagram(contraction, Dchgs=(0,), permutations=((0,),)):
@@ -54,14 +41,13 @@ def build_diagram(contraction, Dchgs=(0,), permutations=((0,),)):
     # being computed, and their charges.
     def get_permuted_diagrams(supersys_info, subsys_chgs):
         label = contraction.__name__
-        if label not in supersys_info.timings:  supersys_info.timings[label] = timer()
         # This function is used immediately below.  It feeds permuted input tensors to the contraction and
         # returns the final objective function that does the contraction once informed of the fragment states.
         def permuted_diagram(X):
             def do_contraction(*ij_args):
-                t0 = time.time()
+                supersys_info.timings.start()
                 result = contraction(X, *ij_args)
-                supersys_info.timings[label] += (time.time() - t0)
+                supersys_info.timings.record(label)
                 return result
             return do_contraction
         # build list of fully qualified diagram contraction functions for permutations where charge criteria met

@@ -27,7 +27,7 @@ import numpy
 #import torch
 import tensorly
 import qode.util
-from qode.util import struct
+from qode.util import struct, timer
 import qode.math
 import excitonic
 import diagrammatic_expansion   # defines information structure for housing results of diagram evaluations
@@ -49,7 +49,7 @@ class empty(object):  pass     # Basically just a dictionary class
 # Load data
 #########
 
-t0 = time.time()
+timings = timer()    # starts the overall clock
 
 # Information about the Be2 supersystem
 n_frag       = 2
@@ -70,7 +70,6 @@ symm_ints, bior_ints, nuc_rep = get_ints(BeN, project_core)
 
 # The engines that build the terms
 BeN_rho = [frag.rho for frag in BeN]   # diagrammatic_expansion.blocks should take BeN directly? (n_states and n_elec one level higher)
-timings = {}
 contract_cache = precontract(BeN_rho, symm_ints.S, timings)
 S_blocks       = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=symm_ints.S,                               diagrams=S_diagrams,  contract_cache=contract_cache, timings=timings)
 St_blocks_symm = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, T=symm_ints.T),      diagrams=St_diagrams, contract_cache=contract_cache, timings=timings)
@@ -252,7 +251,4 @@ E, T = excitonic.ccsd((H1,[[None,H2],[None,None]]), out, resources)
 E += sum(nuc_rep[m1,m2] for m1 in range(n_frag) for m2 in range(m1+1))
 out.log("\nTotal Excitonic CCSD Energy (test) = ", E)
 
-t_tot = time.time() - t0
-print("Total time:", t_tot)
-for k,v in sorted(timings.items(), key=lambda item: item[1].cum_time):
-    print("{:8s}  {:5.2f}%  {:5d}".format(k, 100*v.cum_time/t_tot, v.n_calls))
+timings.print()
