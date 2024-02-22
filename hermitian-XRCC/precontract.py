@@ -16,7 +16,7 @@
 #    along with QodeApplications.  If not, see <http://www.gnu.org/licenses/>.
 #
 import time
-from timer import timer
+from build_diagram import timer
 from qode.util.dynamic_array import dynamic_array, cached
 from qode.math.tensornet     import evaluate
 

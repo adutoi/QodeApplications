@@ -15,22 +15,87 @@
 #    You should have received a copy of the GNU General Public License
 #    along with QodeApplications.  If not, see <http://www.gnu.org/licenses/>.
 #
+import time
 import re    # regular expressions
 from qode.util.dynamic_array import dynamic_array
 
+####
+# In this file is all the book keeping stuff for getting the right arrays to the diagram contraction
+# codes without burdening the user there with too many details (just focusing on some fragments that
+# are always numbered from zero onward (but which could be any (permutation of) fragments), and using
+# a lightweight syntax.  The backbone is dynamic_array, which could also be called lazy_array.  It
+# generates its elements (which in this case are themselves tensors) on demand and caches the ones it
+# has generated.  Meanwhile there is an encapsulating structure which interpolates between the relative
+# (temporary, dummy, anonymized) indices and the absolute indices that identify specific fragments,
+# and it generates its dot-referenced attributes dynanically, but dissecting their names, saving some
+# characters over using [""] for dict entries.  it also synthesizes several arrays that (must) live
+# at different scopes of the code, making everything look like it is in one place.  Oh, and it keeps
+# track of execution times.
+###
 
 
-#    densities and integrals are the full arrays for the supersystem
-#    subsystem is always in acending order, naming the fragment indices of interest here
-#    charges gives the bra and ket charges (as a 2-tuple) for each such respective fragment in the subsystem
-#    permutation gives a potential reordering of the fragments in the subsystem
+
+# A one-off class to keep track of both cumulative time and number of calls with a quick-and-dirty += syntax
+class timer(object):
+    def __init__(self):
+        self.n_calls = 0
+        self.cum_time = 0.
+    def __iadd__(self, delta_t):
+        self.n_calls += 1
+        self.cum_time += delta_t
+        return self
+
+
+
+# This function informs a primitive contraction of the charge cases for which it is valid and the permutations
+# of the anonymized fragments for which it should be executed.
+def build_diagram(contraction, Dchgs=(0,), permutations=((0,),)):
+    # The returned function further requires information about the actual fragments composing the subsystem
+    # being computed, and their charges.
+    def get_permuted_diagrams(supersys_info, subsys_chgs):
+        label = contraction.__name__
+        if label not in supersys_info.timings:  supersys_info.timings[label] = timer()
+        # This function is used immediately below.  It feeds permuted input tensors to the contraction and
+        # returns the final objective function that does the contraction once informed of the fragment states.
+        def permuted_diagram(X):
+            def do_contraction(*ij_args):
+                t0 = time.time()
+                result = contraction(X, *ij_args)
+                supersys_info.timings[label] += (time.time() - t0)
+                return result
+            return do_contraction
+        # build list of fully qualified diagram contraction functions for permutations where charge criteria met
+        permuted_diagrams = []
+        for permutation in permutations:
+            X = frag_resolve(supersys_info, subsys_chgs, permutation)    # see below
+            if all(X.Dchg[m]==Dchg for m,Dchg in enumerate(Dchgs)):
+                permuted_diagrams += [(permuted_diagram(X), permutation)]
+            else:
+                permuted_diagrams += [None]
+        return permuted_diagrams
+    return get_permuted_diagrams
+
+
+
+# This class's job is to look up and return information about specific fragments, in specific charge states, in a
+# specific permuation, mapping relative (temporary, dummy, anonymized) indices to absolute ones.  It can provide
+# blocks of integrals, arrays of density tensors (that take state indices), and cached contractions of such.  It can
+# also provide distilled information about numbers of electrons and charge changes.  It provides a very condensed 
+# syntax by parsing the string of the attribute requested (avoiding a lot of [""] patterns) and forwarding the 
+# request to a dynamic_array that maps indices and computes some distilled quantities.  The dynamic_array rules
+# are found after this class definition.
+#  supersys_info contains attributes for the full array of integrals (fragment blocked) and density tensors
+#  subsys_chgs   is an array of 2-tuples giving the absolute indices of the fragments in the subsystem (always in 
+#                ascending order) and their bra and ket charges (also a 2-tuple), relative to the reference state.
+#  permutation   gives the ordering of these fragments as they are to be used in the computation qualified by this
+#                information structure.
 class frag_resolve(object):
     def __init__(self, supersys_info, subsys_chgs, permutation=(0,)):
         self._storage = {}
 	#
         self._supersys_info = supersys_info
         self._n_frag = len(subsys_chgs)
-        self.P = 1 if permutation==(1,0) else 0    # needs to be generalized for n>=3.
+        self.P = 1 if permutation==(1,0) else 0    # needs to be generalized for n>2.
         # Some diagrams need to know the number of e- in the ket for the combined "latter" frags of the un(!)permuted subsystem
         n_i = 0
         label = "".join(str(i) for i in range(self._n_frag))
@@ -39,12 +104,13 @@ class frag_resolve(object):
             self._storage["n_i"+label[m:]] = n_i%2    # explicitly label which are included in the latter frags (to store all possibilities)
         # rearrange fragments to given permutation
         self._subsys_chgs = [subsys_chgs[m] for m in permutation]
-        # dynamically allocated, cached "virtual" arrays for the target information
-        self._storage["Dchg#"] =   _Dchg_array(self._subsys_chgs, self._n_frag)
+        # dynamically allocated, cached "virtual" arrays for the target information.  Not all integrals provided (or provided differently
+        # but if not provided, then it is not needed and can be skipped . . . a little dirty but works
+        self._storage["Dchg"] =   _Dchg_array(self._subsys_chgs, self._n_frag)
         try:
-            self._storage["s##"]   = _subsys_array(self._supersys_info.integrals.S, self._subsys_chgs, 2, self._n_frag)
+            self._storage["s##"]   = _subsys_array(self._supersys_info.integrals.S, self._subsys_chgs, 2, self._n_frag)    # one of these ...
         except:
-            self._storage["s##"]   = _subsys_array(self._supersys_info.integrals,   self._subsys_chgs, 2, self._n_frag)
+            self._storage["s##"]   = _subsys_array(self._supersys_info.integrals,   self._subsys_chgs, 2, self._n_frag)    # ... needs to work
         try:
             self._storage["t##"]   = _subsys_array(self._supersys_info.integrals.T, self._subsys_chgs, 2, self._n_frag)
         except:
@@ -59,10 +125,8 @@ class frag_resolve(object):
             pass
         self._densities        = _subsys_array(self._supersys_info.densities,   self._subsys_chgs, 1, self._n_frag)
     def __getattr__(self, attr):
-        if attr[:3]=="n_i":
+        if attr[:3]=="n_i" or attr=="Dchg":
             return self._storage[attr]
-        elif attr=="Dchg":
-            return self._storage["Dchg#"]
         else:
             frag_indices = tuple(int(i) for i in filter(lambda c: c.isdigit(), attr))    # extract the digits from the string (heaven forbid >=9-fragment subsystem)
             label_template = re.sub("\d", "#", attr)                                     # replace digits with hashes to anonymize the label
@@ -79,6 +143,8 @@ class frag_resolve(object):
             return self._storage[label_template][frag_indices]
 
 
+
+# The things below are wrapper functions to make the dynamic_array objects, encapsulating the rules used as element generators.
 
 def _subsys_array(array, subsys_chgs, n_indices, n_frag):
     subsystem, _ = zip(*subsys_chgs)    # "unzip" subsystem indices from their charges

@@ -16,9 +16,8 @@
 #    along with QodeApplications.  If not, see <http://www.gnu.org/licenses/>.
 #
 import time
-from timer import timer
 from qode.math.tensornet import scalar_value
-from frag_resolve import frag_resolve
+from build_diagram import frag_resolve, timer
 
 p, q, r, s, t, u, v, w = "pqrstuvw"
 
@@ -44,7 +43,7 @@ def t00(supersys_info, subsys_chgs):
         #result = scalar_value( prefactor * X.ca0[i0,j0](p,q) @ X.t00(p,q) )
         supersys_info.timings["t00"] += (time.time() - t0)
         return result
-    if X.Dchg0==0:
+    if X.Dchg[0]==0:
         return [(diagram, (0,))]
     else:
         return [None]
@@ -68,7 +67,7 @@ def _t01(supersys_info, subsys_chgs, permutation):
         #result = scalar_value( prefactor * X.c0[i0,j0](p) @ X.a1[i1,j1](q) @ X.t01(p,q) )
         supersys_info.timings["t01"] += (time.time() - t0)
         return result
-    if X.Dchg0==-1 and X.Dchg1==+1:
+    if X.Dchg[0]==-1 and X.Dchg[1]==+1:
         return diagram, permutation
     else:
         return None
@@ -88,7 +87,7 @@ def _s01t10(supersys_info, subsys_chgs, permutation):
         #result = scalar_value( prefactor * X.ca0[i0,j0](t,q) @ X.ca1[i1,j1](p,u) @ X.s01(t,u) @ X.t10(p,q) )
         supersys_info.timings["s01t10"] += (time.time() - t0)
         return result
-    if X.Dchg0==0 and X.Dchg1==0:
+    if X.Dchg[0]==0 and X.Dchg[1]==0:
         return diagram, permutation
     else:
         return None
@@ -108,7 +107,7 @@ def _s01t00(supersys_info, subsys_chgs, permutation):
         #result = scalar_value( prefactor * X.cca0[i0,j0](p,t,q) @ X.a1[i1,j1](u) @ X.s01(t,u) @ X.t00(p,q) )
         supersys_info.timings["s01t00"] += (time.time() - t0)
         return result
-    if X.Dchg0==-1 and X.Dchg1==+1:
+    if X.Dchg[0]==-1 and X.Dchg[1]==+1:
         return diagram, permutation
     else:
         return None
@@ -128,7 +127,7 @@ def _s01t11(supersys_info, subsys_chgs, permutation):
         #result = scalar_value( prefactor * X.c0[i0,j0](t) @ X.caa1[i1,j1](p,u,q) @ X.s01(t,u) @ X.t11(p,q) )
         supersys_info.timings["s01t11"] += (time.time() - t0)
         return result
-    if X.Dchg0==-1 and X.Dchg1==+1:
+    if X.Dchg[0]==-1 and X.Dchg[1]==+1:
         return diagram, permutation
     else:
         return None
@@ -148,7 +147,7 @@ def _s01t01(supersys_info, subsys_chgs, permutation):
         #result = scalar_value( prefactor * X.cc0[i0,j0](p,t) @ X.aa1[i1,j1](u,q) @ X.s01(t,u) @ X.t01(p,q) )
         supersys_info.timings["s01t01"] += (time.time() - t0)
         return result
-    if X.Dchg0==-2 and X.Dchg1==+2:
+    if X.Dchg[0]==-2 and X.Dchg[1]==+2:
         return diagram, permutation
     else:
         return None
