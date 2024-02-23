@@ -21,7 +21,7 @@ from qode.math import precise_numpy_inverse, linear_inner_product_space, iterati
 from qode.math.tensornet import tl_tensor
 from qode.math           import svd_decomposition
 from qode.util.PyC import Double
-from qode.util.dynamic_array import wrap, cached
+from qode.util.dynamic_array import dynamic_array, wrap, cached
 from qode.atoms.integrals.fragments import AO_integrals, fragMO_integrals, bra_transformed, ket_transformed, spin_orb_integrals, Nuc_repulsion, as_raw_mat, as_frag_blocked_mat, zeros2, Id, mat_as_rows, mat_as_columns, space_traits, add, subtract, mat_mul
 
 
@@ -33,6 +33,7 @@ def tensorly_wrapper(rule):
     def wrap_it(*indices):
         return svd_decomposition(rule(*indices), (0,1), wrapper=tens_wrap)
     return wrap_it
+
 def tensorly_wrapper2(rule):
     def wrap_it(*indices):
         print(indices)
@@ -44,6 +45,13 @@ def tensorly_wrapper2(rule):
         else:
             return svd_decomposition(rule(*indices), (0,1,2,3), wrapper=tens_wrap)
     return wrap_it
+
+def tens_diff(A, B):
+    def rule(*indices):
+        return A[indices] - B[indices]
+    return rule
+
+
 
 def direct_Sinv(fragments, S):
     S = as_raw_mat(S, fragments)
@@ -131,5 +139,6 @@ def get_ints(fragments, project_core=True):
     BiFragMO_spin_ints.U = wrap(BiFragMO_spin_ints_raw.U, [cached, tensorly_wrapper])
     BiFragMO_spin_ints.V = wrap(BiFragMO_spin_ints_raw.V, [cached, tensorly_wrapper2])
     BiFragMO_spin_ints.V_half = wrap(BiFragMO_spin_ints_raw.V_half, [cached, tensorly_wrapper2])
+    BiFragMO_spin_ints.V_diff = dynamic_array([cached, tensorly_wrapper2, tens_diff(BiFragMO_spin_ints_raw.V_half, BiFragMO_spin_ints_raw.V)], BiFragMO_spin_ints_raw.V.ranges)
 
     return FragMO_spin_ints, BiFragMO_spin_ints, Nuc_repulsion(fragments).matrix

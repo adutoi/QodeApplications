@@ -70,7 +70,7 @@ def precontract(densities, integrals, timings):
                     timings.start()
                     rho = densities_m[rho_type][chg_i,chg_j][i,j]
                     result = evaluate(rho(*rho_indices) @ ints(*int_indices))
-                    timings.record("  precontract")
+                    timings.record("  precontract {}".format(label))
                     return result
                 if chg_i-chg_j==Dchg:
                     return dynamic_array(cached(contract_rho_int_m_chgs), [range(n_states[chg_i]), range(n_states[chg_j])])
