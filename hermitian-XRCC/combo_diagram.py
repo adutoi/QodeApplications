@@ -15,7 +15,7 @@
 #    You should have received a copy of the GNU General Public License
 #    along with QodeApplications.  If not, see <http://www.gnu.org/licenses/>.
 #
-from qode.math.tensornet import scalar_value
+from qode.math.tensornet import scalar_value, evaluate
 from build_diagram       import build_diagram
 
 p, q, r, s, t, u, v, w = "pqrstuvw"    # some contraction indices for easier reading
@@ -26,11 +26,19 @@ p, q, r, s, t, u, v, w = "pqrstuvw"    # some contraction indices for easier rea
 # tq,pu,tu,pq-> :        ca0  ca1  s01  u1_10
 # qtsr,pu,tu,pqrs-> :  ccaa0  ca1  s01  v1000
 def combo(X, i0,i1,j0,j1):
-    value  =  2 * scalar_value( X.ca1Xu_S0u[i1,j1](p,t) @ X.ccaa0qXsr_V1qrs[i0,j0](t,p) )
-    value += -1 * scalar_value( X.ca0tX_St1[i0,j0](q,u) @ X.ca1pX_Tp0[i1,j1](u,q) )
-    value += -1 * scalar_value( X.ca0tX_St1[i0,j0](q,u) @ X.ca1pX_U0p0[i1,j1](u,q) )
-    value += -1 * scalar_value( X.ca0tX_St1[i0,j0](q,u) @ X.ca1pX_U1p0[i1,j1](u,q) )
-    return value
+    temp = evaluate(2 * X.ccaa0qXsr_V1qrs[i0,j0] - X.ca0Xq_T1q[i0,j0] - X.ca0Xq_U01q[i0,j0] - X.ca0Xq_U11q[i0,j0] )
+    return scalar_value( X.ca1Xu_S0u[i1,j1](p,t) @ temp(t,p) )
+    #value  =  2 * scalar_value( X.ca1Xu_S0u[i1,j1](p,t) @ X.ccaa0qXsr_V1qrs[i0,j0](t,p) )
+    #value += -1 * scalar_value( X.ca1Xu_S0u[i1,j1](p,t) @ X.ca0Xq_T1q[i0,j0](t,p) )
+    #value += -1 * scalar_value( X.ca1Xu_S0u[i1,j1](p,t) @ X.ca0Xq_U01q[i0,j0](t,p) )
+    #value += -1 * scalar_value( X.ca1Xu_S0u[i1,j1](p,t) @ X.ca0Xq_U11q[i0,j0](t,p) )
+    #value += -1 * scalar_value( X.ca0[i0,j0](t,q) @ X.ca1[i1,j1](p,u) @ X.s01(t,u) @ X.t10(p,q) )
+    #value += -1 * scalar_value( X.ca0[i0,j0](t,q) @ X.ca1[i1,j1](p,u) @ X.s01(t,u) @ X.u0_10(p,q) )
+    #value += -1 * scalar_value( X.ca0[i0,j0](t,q) @ X.ca1[i1,j1](p,u) @ X.s01(t,u) @ X.u1_10(p,q) )
+    #value += -1 * scalar_value( X.ca0tX_St1[i0,j0](q,u) @ X.ca1pX_Tp0[i1,j1](u,q) )
+    #value += -1 * scalar_value( X.ca0tX_St1[i0,j0](q,u) @ X.ca1pX_U0p0[i1,j1](u,q) )
+    #value += -1 * scalar_value( X.ca0tX_St1[i0,j0](q,u) @ X.ca1pX_U1p0[i1,j1](u,q) )
+    #return value
 
 
 
