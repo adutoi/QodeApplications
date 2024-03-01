@@ -56,10 +56,9 @@ def build_tensors(states, n_orbs, n_elec_0, thresh=1e-10, n_threads=1):
                     rho = field_op.build_densities(op_string, n_orbs, bra_coeffs, ket_coeffs, bra_configs, ket_configs, thresh, n_threads)
                     for i in range(len(bra_coeffs)):
                         for j in range(len(ket_coeffs)):
-                            if False and op_string in ["ccaaa", "cccaa"]:
-                                rho[i,j] = svd_decomposition(rho[i,j], (0,1), (2,3,4), wrapper=tens_wrap)
-                            else:
-                                rho[i,j] = tens_wrap(rho[i,j])
+                            indices = list(range(len(op_string)))
+                            c_count = op_string.count("c")
+                            rho[i,j] = svd_decomposition(rho[i,j], indices[:c_count], indices[c_count:], wrapper=tens_wrap)
                     densities[op_string][bra_chg,ket_chg] = rho
 
     return densities

@@ -1,0 +1,40 @@
+CCSD Time 0.04654693603515625
+CCSD Energy = -31.1073245720425 Hartree
+
+Total Excitonic CCSD Energy (test) =  -29.225805608166944
+Total time: 158.43900799751282
+identity     0.00%      1 calls
+u000         0.03%    402 calls
+t00          0.03%    402 calls
+s01t01       0.15%   2048 calls
+s01u001      0.15%   2048 calls
+s01u101      0.16%   2048 calls
+u100         0.18%  80802 calls
+s01v0010     0.29%   2048 calls
+v0011        0.32%   4096 calls
+v0000        0.36%   1206 calls
+s01v0111     0.39%   2048 calls
+s01          2.33%  34848 calls
+u001         2.37%  34848 calls
+u101         2.38%  34848 calls
+t01          2.38%  34848 calls
+s01u100      2.40%  34848 calls
+s01u011      2.40%  34848 calls
+s01u111      2.43%  34848 calls
+s01t00       2.44%  34848 calls
+s01u000      2.44%  34848 calls
+s01t11       2.47%  34848 calls
+s01v1100     3.16%  34848 calls
+s01v0101     3.46%  34848 calls
+v0111        4.78%  69696 calls
+v0010        4.81%  69696 calls
+s01v0000     4.89%  34848 calls
+s01v1111     5.87%  34848 calls
+v0101        5.87%  80802 calls
+s01t10       5.90%  80802 calls
+s01u110      5.91%  80802 calls
+s01u010      5.93%  80802 calls
+s01v1101     6.51%  80802 calls
+s01v1000     7.04%  80802 calls
+  precontract   9.58%  12012 calls
+python -u xr_-ccsd.py 4.5 Be631g  145.81s user 12.48s system 98% cpu 2:41.49 total

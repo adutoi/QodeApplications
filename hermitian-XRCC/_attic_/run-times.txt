@@ -1,0 +1,19 @@
+CCSD Energy = -29.225809052237032 Hartree
+Total Excitonic CCSD Energy (test) =  -29.225809052237032
+python -u xr_-ccsd.py 4.5 Be631g-uncompressed  983.86s user 19.01s system 99% cpu 16:50.73 total
+
+CCSD Energy = -29.2283700530741 Hartree
+Total Excitonic CCSD Energy (test) =  -29.2283700530741
+python -u xr_-ccsd.py 4.5 Be631g  885.42s user 10.26s system 99% cpu 15:00.88 total
+
+CCSD Energy = -29.225809052237015 Hartree
+Total Excitonic CCSD Energy (test) =  -29.225809052237015
+python -u xr_-ccsd.py 4.5 Be631g-ref  971.49s user 18.25s system 98% cpu 16:40.35 total
+
+CCSD Energy = -29.225742992001816 Hartree
+Total Excitonic CCSD Energy (test) =  -29.225742992001816
+python -u xr_-ccsd.py 4.5 Be631g-precon  718.95s user 3.01s system 99% cpu 12:03.34 total
+
+CCSD Energy = -29.225809052237032 Hartree
+Total Excitonic CCSD Energy (test) =  -29.225809052237032
+python -u xr_-ccsd.py 4.5 Be631g-uncompressed  724.94s user 13.45s system 99% cpu 12:21.22 total

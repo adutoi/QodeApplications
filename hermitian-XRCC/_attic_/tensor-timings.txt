@@ -1,0 +1,22 @@
+v0111        4.78%  69696 calls
+v0010        4.81%  69696 calls
+s01v0000     4.89%  34848 calls
+s01v1111     5.87%  34848 calls
+v0101        5.87%  80802 calls
+s01v1101     6.51%  80802 calls
+
+s01u110      5.91%  80802 calls
+s01u010      5.93%  80802 calls
+s01t10       5.90%  80802 calls
+s01v1000     7.04%  80802 calls
+
+>>> n3,n4,n5=4,11,8
+
+>>> 2* (n3*n3*n3*n3 + 2*n3*n4*n3*n4 + n4*n4*n4*n4 + 2*n4*n5*n4*n5 + n5*n5*n5*n5 + 2*n3*n5*n3*n5)
+80802 = number of 0-CT elements x permutation
+
+>>> 2* (n4*n3*n3*n4 + n5*n3*n4*n4 + n5*n4*n4*n5 + n4*n4*n3*n5)
+34848 = number of 1-CT elements x permutation
+
+>>> 4* (n4*n3*n3*n4 + n5*n3*n4*n4 + n5*n4*n4*n5 + n4*n4*n3*n5)
+69696 = number of 1-CT elements x permutation x redundant-comp
