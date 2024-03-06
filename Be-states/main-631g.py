@@ -30,24 +30,28 @@ import field_op_ham
 import configurations
 
 from qode.util.PyC import Double
-
 import densities
-
 import pickle
 
 class empty(object):  pass
+
+
+
+basis_label = "6-31G"
+n_spatial_orb = 9
 
 n_threads = 1
 dist = float(sys.argv[1])
 if len(sys.argv)==3:  n_threads = int(sys.argv[2])
 
 
+
 frag0 = empty()
 frag0.atoms = [("Be",[0,0,0])]
 frag0.n_elec_ref = 4	# The number of electrons in the reference state of the monomer ("cation (+1)" and "anion (-1)" and technically interpreted relative to the reference, not zero, as would be the chemical definition)
 frag0.basis = empty()
-frag0.basis.AOcode = "6-31G"
-frag0.basis.n_spatial_orb = 9
+frag0.basis.AOcode = basis_label
+frag0.basis.n_spatial_orb = n_spatial_orb
 frag0.basis.MOcoeffs = numpy.identity(frag0.basis.n_spatial_orb)    # rest of code assumes spin-restricted orbitals
 frag0.basis.core = [0]	# indices of spatial MOs to freeze in CI portions
 
@@ -74,8 +78,8 @@ frag1 = empty()
 frag1.atoms = [("Be",[0,0,dist])]
 frag1.n_elec_ref = 4
 frag1.basis = empty()
-frag1.basis.AOcode = "6-31G"
-frag1.basis.n_spatial_orb = 9
+frag1.basis.AOcode = basis_label
+frag1.basis.n_spatial_orb = n_spatial_orb
 frag1.basis.MOcoeffs = frag0.basis.MOcoeffs
 frag1.basis.core = [0]
 
@@ -96,7 +100,7 @@ h = T + U
 
 CI_space_atom = qode.math.linear_inner_product_space(CI_space_traits(configs_atom))
 H     = CI_space_atom.lin_op(field_op_ham.Hamiltonian(h,V, n_threads=n_threads))
-guess = CI_space_atom.member(CI_space_atom.aux.basis_vec([0,1,9,10]))
+guess = CI_space_atom.member(CI_space_atom.aux.basis_vec([0, 1, n_spatial_orb+0, n_spatial_orb+1]))
 
 print((guess|H|guess) + N)
 (Eval,Evec), = qode.math.lanczos.lowest_eigen(H, [guess], thresh=1e-8)
@@ -158,7 +162,7 @@ V = unblock_4(    bior_ints.V, [frag0,frag1], spin_orbs=True)
 h = T + U[0] + U[1]
 
 core = dimer_core + [c+2*frag0.basis.n_spatial_orb for c in dimer_core]
-orbs = list(range(4*9))
+orbs = list(range(4*n_spatial_orb))    # 4 because dimer spin orbs
 for p in orbs:
     for q in orbs:
         if (q in core) and (p!=q):  h[p,q] = 0
@@ -172,7 +176,7 @@ for p in orbs:
 
 CI_space_dimer = qode.math.linear_inner_product_space(CI_space_traits(configs_dimer))
 H     = CI_space_dimer.lin_op(field_op_ham.Hamiltonian(h,V, n_threads=n_threads))
-guess = CI_space_dimer.member(CI_space_dimer.aux.basis_vec([0,1,9,10,18,19,27,28]))
+guess = CI_space_dimer.member(CI_space_dimer.aux.basis_vec([0, 1, n_spatial_orb+0, n_spatial_orb+1, 2*n_spatial_orb+0, 2*n_spatial_orb+1, 3*n_spatial_orb+0, 3*n_spatial_orb+1]))
 
 print((guess|H|guess) + N)
 (Eval,Evec), = qode.math.lanczos.lowest_eigen(H, [guess], thresh=1e-8)
@@ -236,4 +240,7 @@ for i in range(len(states[ref_chg].coeffs)):
 for chg in states:
     if chg!=ref_chg:  frag0.state_indices += [(chg,i) for i in range(len(states[chg].coeffs))]
 
-pickle.dump(frag0, open("Be631g.pkl", "wb"))
+
+
+#pickle.dump(frag0, open("/scratch/adutoi/Be631g.pkl", "wb"))    # Medusa
+#pickle.dump(frag0, open("Be631g.pkl", "wb"))                    # Tengri
