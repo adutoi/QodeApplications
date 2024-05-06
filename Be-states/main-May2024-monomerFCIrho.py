@@ -77,41 +77,38 @@ symm_ints, bior_ints, nuc_rep = get_ints([frag0], spin_ints=True)
 N, S, T, U, V = nuc_rep[0,0], symm_ints.S[0,0], symm_ints.T[0,0], symm_ints.U[0,0,0], symm_ints.V[0,0,0,0]
 h = T + U
 
-
-
-n_elec        = frag0.n_elec_ref
 n_spatial_orb = frag0.basis.n_spatial_orb
-spin_core     = frag0.basis.core + [p+n_spatial_orb for p in frag0.basis.core]
 n_spin_orb    = 2 * n_spatial_orb
-n_active_elec = n_elec - len(spin_core)
+spin_core     = frag0.basis.core + [p+n_spatial_orb for p in frag0.basis.core]
 
-configs = configurations.all_configs(n_spin_orb, n_active_elec, frozen_occ_orbs=spin_core)
-CI_space_atom = qode.math.linear_inner_product_space(CI_space_traits(configs))
-H = CI_space_atom.lin_op(field_op_ham.Hamiltonian(h,V, n_threads=n_threads))
+states = {}
+for charge, n_subset in [(+1, 5), (0, 5), (-1, 5)]:
 
-n_config = len(configs)
-CI_basis = []
-for i in range(n_config):
-    v = numpy.zeros(n_config, dtype=Double.numpy)
-    v[i] = 1
-    CI_basis += [CI_space_atom.member(v)]
+    n_elec        = frag0.n_elec_ref - charge
+    n_active_elec = n_elec - len(spin_core)
+    configs = configurations.all_configs(n_spin_orb, n_active_elec, frozen_occ_orbs=spin_core)
+    n_config = len(configs)
 
-Hmat = numpy.zeros((n_config,n_config), dtype=Double.numpy)
-for j,w in enumerate(CI_basis):
-    Hmat[j,j] = N
-    Hw = H|w
-    for i,v in enumerate(CI_basis):
-        Hmat[i,j] += v|Hw
+    CI_space_atom = qode.math.linear_inner_product_space(CI_space_traits(configs))
+    H = CI_space_atom.lin_op(field_op_ham.Hamiltonian(h,V, n_threads=n_threads))
+    CI_basis = [CI_space_atom.member(v) for v in CI_space_atom.aux.complete_basis()]
 
-evals, evecs = qode.util.sort_eigen(numpy.linalg.eigh(Hmat))
-print(evals)
-print(evals[0])
+    Hmat = numpy.zeros((n_config,n_config), dtype=Double.numpy)
+    for j,w in enumerate(CI_basis):
+        Hmat[j,j] = N
+        Hw = H|w
+        for i,v in enumerate(CI_basis):
+            Hmat[i,j] += v|Hw
+
+    evals, evecs = qode.util.sort_eigen(numpy.linalg.eigh(Hmat))
+    print()
+    print(evals)
+    print(evals[0])
+
+    states[charge] = empty()
+    states[charge].configs = configs
+    states[charge].coeffs = [evecs[:,i] for i in range(n_subset)]
 
 
-
-n_subset = 5
-states = {0: empty()}
-states[0].configs = configs
-states[0].coeffs = [evecs[:,i] for i in range(n_subset)]
 
 rho = densities.build_tensors(states, n_spin_orb, n_elec)
