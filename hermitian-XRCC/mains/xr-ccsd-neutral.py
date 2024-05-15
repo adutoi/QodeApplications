@@ -20,22 +20,24 @@
 #     python [-u] <this-file.py> <displacement> <rhos>
 # where <rhos> can be the filestem of any one of the .pkl files in atomic_states/ prepared by Be631g.py.
 
+import time
 import sys
 import pickle
 import numpy
 #import torch
 import tensorly
 import qode.util
+from qode.util import struct, timer
 import qode.math
 import excitonic
 import diagrammatic_expansion   # defines information structure for housing results of diagram evaluations
 import XR_term                  # knows how to use ^this information to pack a matrix for use in XR model
 import S_diagrams               # contains definitions of actual diagrams needed for S operator in BO rep
-import Sn_diagrams              # contains definitions of actual diagrams needed for SH operator in BO rep
 import St_diagrams              # contains definitions of actual diagrams needed for SH operator in BO rep
 import Su_diagrams              # contains definitions of actual diagrams needed for SH operator in BO rep
 import Sv_diagrams              # contains definitions of actual diagrams needed for SH operator in BO rep
 from   get_ints import get_ints
+from precontract import precontract
 
 # needed for unpickling?!
 class empty(object):  pass     # Basically just a dictionary class
@@ -46,6 +48,8 @@ class empty(object):  pass     # Basically just a dictionary class
 #########
 # Load data
 #########
+
+timings = timer()    # starts the overall clock
 
 # Information about the Be2 supersystem
 n_frag       = 2
@@ -69,20 +73,20 @@ print("done")
 
 # The engines that build the terms
 BeN_rho = [frag.rho for frag in BeN]   # diagrammatic_expansion.blocks should take BeN directly? (n_states and n_elec one level higher)
-S_blocks       = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=symm_ints.S,                     diagrams=S_diagrams)
-Sn_blocks      = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=(symm_ints.S, nuc_rep),          diagrams=Sn_diagrams)
-St_blocks_symm = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=(symm_ints.S, symm_ints.T),      diagrams=St_diagrams)
-Su_blocks_symm = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=(symm_ints.S, symm_ints.U),      diagrams=Su_diagrams)
-Sv_blocks_symm = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=(symm_ints.S, symm_ints.V),      diagrams=Sv_diagrams)
-St_blocks_bior = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=(symm_ints.S, bior_ints.T),      diagrams=St_diagrams)
-Su_blocks_bior = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=(symm_ints.S, bior_ints.U),      diagrams=Su_diagrams)
-Sv_blocks_bior = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=(symm_ints.S, bior_ints.V),      diagrams=Sv_diagrams)
-Sv_blocks_half = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=(symm_ints.S, bior_ints.V_half), diagrams=Sv_diagrams)
+contract_cache = precontract(BeN_rho, symm_ints.S, timings)
+S_blocks       = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=symm_ints.S,                               diagrams=S_diagrams,  contract_cache=contract_cache, timings=timings)
+St_blocks_symm = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, T=symm_ints.T),      diagrams=St_diagrams, contract_cache=contract_cache, timings=timings)
+Su_blocks_symm = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, U=symm_ints.U),      diagrams=Su_diagrams, contract_cache=contract_cache, timings=timings)
+Sv_blocks_symm = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, V=symm_ints.V),      diagrams=Sv_diagrams, contract_cache=contract_cache, timings=timings)
+St_blocks_bior = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, T=bior_ints.T),      diagrams=St_diagrams, contract_cache=contract_cache, timings=timings)
+Su_blocks_bior = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, U=bior_ints.U),      diagrams=Su_diagrams, contract_cache=contract_cache, timings=timings)
+Sv_blocks_bior = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, V=bior_ints.V),      diagrams=Sv_diagrams, contract_cache=contract_cache, timings=timings)
+Sv_blocks_half = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, V=bior_ints.V_half), diagrams=Sv_diagrams, contract_cache=contract_cache, timings=timings)
 
 # charges under consideration
 monomer_charges = [0]
 dimer_charges = {
-                 8:  [(0, 0)],
+                 8:  [(0, 0)]
                 }
 all_dimer_charges = [(0,0)]
 
@@ -90,17 +94,11 @@ all_dimer_charges = [(0,0)]
 # Build and test
 #########
 
-print("starting H1")
+print("build H1")
 
 H1 = []
 for m in [0,1]:
-    H1_m  = XR_term.monomer_matrix(Sn_blocks, {
-                          1: [
-                              "n00"
-                             ]
-                         }, m, monomer_charges)
-
-    H1_m += XR_term.monomer_matrix(St_blocks_bior, {
+    H1_m  = XR_term.monomer_matrix(St_blocks_bior, {
                           1: [
                               "t00"
                              ]
@@ -119,7 +117,8 @@ for m in [0,1]:
     H1 += [H1_m]
 
 
-print("starting S2")
+
+print("build S2inv")
 
 S2     = XR_term.dimer_matrix(S_blocks, {
                         0: [
@@ -131,22 +130,14 @@ S2inv = qode.math.precise_numpy_inverse(S2)
 
 
 
-print("starting S2H2")
-print("starting N")
+print("build S2H2 (1e)")
 
-S2H2   = XR_term.dimer_matrix(Sn_blocks, {
-                        2: [
-                            "n01"
-                           ]
-                       }, (0,1), all_dimer_charges)
-
-print("starting T")
-S2H2  += XR_term.dimer_matrix(St_blocks_bior, {
+S2H2   = XR_term.dimer_matrix(St_blocks_bior, {
                         2: [
                             "t01"
                            ]
                        }, (0,1), all_dimer_charges)
-print("starting U")
+
 S2H2  += XR_term.dimer_matrix(Su_blocks_bior, {
                         2: [
                             "u100",
@@ -154,17 +145,21 @@ S2H2  += XR_term.dimer_matrix(Su_blocks_bior, {
                            ]
                        }, (0,1), all_dimer_charges)
 
-print("starting V")
+print("build S2H2 (2e)")
+
 S2H2  += XR_term.dimer_matrix(Sv_blocks_bior, {
                         2: [
-                            "v0101", "v0010", "v0100", "v0011"
+                            "v0101", "v0010", "v0111", "v0011"
                            ]
                        }, (0,1), all_dimer_charges)
 
 
-print("finished H build")
+
+print("Apply H")
 
 H2blocked = S2inv @ S2H2
+
+
 
 """
 # well, this sucks.  reorder the states
@@ -195,4 +190,7 @@ H2 = H2blocked
 
 out, resources = qode.util.output(log=qode.util.textlog(echo=True)), qode.util.parallel.resources(1)
 E, T = excitonic.ccsd((H1,[[None,H2],[None,None]]), out, resources)
+E += sum(nuc_rep[m1,m2] for m1 in range(n_frag) for m2 in range(m1+1))
 out.log("\nTotal Excitonic CCSD Energy (test) = ", E)
+
+timings.print()

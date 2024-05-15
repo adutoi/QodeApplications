@@ -96,13 +96,13 @@ def s01v1100(X, i0,i1,j0,j1):
 
 # pqts,ur,tu,pqrs-> :  ccca0  aa1  s01  v0010
 def s01v0010(X, i0,i1,j0,j1):
-    return 2 * scalar_value( X.v0010(s,t,u,r) @ X.ccca0[i0,j0](s,t,p,u) @ X.s01(p,q) @ X.aa1[i1,j1](q,r) )
+    return -2 * scalar_value( X.aa1uX_S0u[i1,j1](r,t) @ X.ccca0pqXs_Vpq1s[i0,j0](t,r) )
     #return -2 * scalar_value( X.aa1[i1,j1](u,r) @ X.s01(t,u) @ X.ccca0pqXs_Vpq1s[i0,j0](t,r) )
     #return -2 * scalar_value( X.ccca0[i0,j0](p,q,t,s) @ X.aa1[i1,j1](u,r) @ X.s01(t,u) @ X.v0010(p,q,r,s) )
 
 # pt,qusr,tu,pqrs-> :  cc0  caaa1  s01  v0111
 def s01v0111(X, i0,i1,j0,j1):
-    return 2 * scalar_value( X.v0100(s,t,r,u) @ X.caaa0[i0,j0](s,q,t,u) @ X.s10(p,q) @ X.cc1[i1,j1](r,p) )
+    return -2 * scalar_value( X.cc0Xt_St1[i0,j0](p,u) @ X.caaa1qXsr_V0qrs[i1,j1](u,p) )
     #return -2 * scalar_value( X.cc0[i0,j0](p,t) @ X.s01(t,u) @ X.caaa1qXsr_V0qrs[i1,j1](u,p) )
     #return -2 * scalar_value( X.cc0[i0,j0](p,t) @ X.caaa1[i1,j1](q,u,s,r) @ X.s01(t,u) @ X.v0111(p,q,r,s) )
 
@@ -136,6 +136,6 @@ catalog[2] = {
     "s01v1111": build_diagram(s01v1111, Dchgs=(-1,+1), permutations=[(0,1),(1,0)]),
     "s01v0000": build_diagram(s01v0000, Dchgs=(-1,+1), permutations=[(0,1),(1,0)]),
     "s01v0010": build_diagram(s01v0010, Dchgs=(-2,+2), permutations=[(0,1),(1,0)]),
-    "s01v0111": build_diagram(s01v0111, Dchgs=(+2,-2), permutations=[(0,1),(1,0)]),
+    "s01v0111": build_diagram(s01v0111, Dchgs=(-2,+2), permutations=[(0,1),(1,0)]),
     "s01v0011": build_diagram(s01v0011, Dchgs=(-3,+3), permutations=[(0,1),(1,0)])
 }
