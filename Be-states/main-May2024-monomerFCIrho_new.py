@@ -111,6 +111,6 @@ for charge, n_subset in [(+1, 5), (0, 5), (-1, 5)]:
 
 
 
-rho = densities.build_tensors(states, n_spin_orb, n_elec)
+rho = densities.build_tensors(states, n_spin_orb, n_elec, compress=False)
 
 pickle.dump(rho, open("Be631g.pkl", "wb"))
