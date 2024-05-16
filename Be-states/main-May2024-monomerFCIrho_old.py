@@ -31,7 +31,7 @@ import field_op_ham
 import configurations
 import qode.util
 from qode.util.PyC import Double
-import densities
+import densities_old
 import pickle
 class empty(object):  pass
 
@@ -78,8 +78,9 @@ N, S, T, U, V = nuc_rep[0,0], symm_ints.S[0,0], symm_ints.T[0,0], symm_ints.U[0,
 h = T + U
 
 n_spatial_orb = frag0.basis.n_spatial_orb
+spatial_core  = frag0.basis.core
 n_spin_orb    = 2 * n_spatial_orb
-spin_core     = frag0.basis.core + [p+n_spatial_orb for p in frag0.basis.core]
+spin_core     = spatial_core + [p+n_spatial_orb for p in spatial_core]
 
 states = {}
 for charge, n_subset in [(+1, 5), (0, 5), (-1, 5)]:
@@ -111,4 +112,6 @@ for charge, n_subset in [(+1, 5), (0, 5), (-1, 5)]:
 
 
 
-rho = densities.build_tensors(states, n_spin_orb, n_elec)
+rho = densities_old.build_tensors(states, n_spatial_orb, spatial_core, n_threads)
+
+pickle.dump(rho, open("Be631g.pkl", "wb"))

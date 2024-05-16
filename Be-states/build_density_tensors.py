@@ -127,12 +127,12 @@ def build_density_tensors(z_lists, n_orbs, n_core, n_threads=1):
 				densities['caa'][bra_chg,ket_chg] = numpy_storage_to_lists(result, n_bra_states, n_ket_states, n_spin_orbs, ((0,),(1,2)))
 				total_size += allocation
 				# ccaaa
-				#print("ccaaa", bra_chg, ket_chg)
-				#allocation = n_tensors*(n_spin_orbs**5)
-				#result = numpy.zeros(allocation, dtype=Double.numpy)
-				#build.ccaaa_tensor(result, idx[bra_chg], idx[ket_chg], n_elec, n_states, z_coeffs, n_configs, z_configs, n_orbs, n_core, combo_mat_list, n_threads)
-				#densities['ccaaa'][bra_chg,ket_chg] = numpy_storage_to_lists(result, n_bra_states, n_ket_states, n_spin_orbs, ((0,1),(2,3,4)))
-				#total_size += allocation
+				print("ccaaa", bra_chg, ket_chg)
+				allocation = n_tensors*(n_spin_orbs**5)
+				result = numpy.zeros(allocation, dtype=Double.numpy)
+				build.ccaaa_tensor(result, idx[bra_chg], idx[ket_chg], n_elec, n_states, z_coeffs, n_configs, z_configs, n_orbs, n_core, combo_mat_list, n_threads)
+				densities['ccaaa'][bra_chg,ket_chg] = numpy_storage_to_lists(result, n_bra_states, n_ket_states, n_spin_orbs, ((0,1),(2,3,4)))
+				total_size += allocation
 			if chg_diff==0:
 				# Identity not needed since constants removed from calculation at a higher level (because result is trivial too)
 				# ca
@@ -165,12 +165,12 @@ def build_density_tensors(z_lists, n_orbs, n_core, n_threads=1):
 				densities['cca'][bra_chg,ket_chg] = numpy_storage_to_lists(result, n_bra_states, n_ket_states, n_spin_orbs, ((0,1),(2,)))
 				total_size += allocation
 				# cccaa
-				#print("cccaa", bra_chg, ket_chg)
-				#allocation = n_tensors*(n_spin_orbs**5)
-				#result = numpy.zeros(allocation, dtype=Double.numpy)
-				#build.cccaa_tensor(result, idx[bra_chg], idx[ket_chg], n_elec, n_states, z_coeffs, n_configs, z_configs, n_orbs, n_core, combo_mat_list, n_threads)
-				#densities['cccaa'][bra_chg,ket_chg] = numpy_storage_to_lists(result, n_bra_states, n_ket_states, n_spin_orbs, ((0,1,2),(3,4)))
-				#total_size += allocation
+				print("cccaa", bra_chg, ket_chg)
+				allocation = n_tensors*(n_spin_orbs**5)
+				result = numpy.zeros(allocation, dtype=Double.numpy)
+				build.cccaa_tensor(result, idx[bra_chg], idx[ket_chg], n_elec, n_states, z_coeffs, n_configs, z_configs, n_orbs, n_core, combo_mat_list, n_threads)
+				densities['cccaa'][bra_chg,ket_chg] = numpy_storage_to_lists(result, n_bra_states, n_ket_states, n_spin_orbs, ((0,1,2),(3,4)))
+				total_size += allocation
 			if chg_diff==-2:
 				# cc
 				print("cc", bra_chg, ket_chg)
