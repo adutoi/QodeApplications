@@ -16,6 +16,8 @@
 #    along with QodeApplications.  If not, see <http://www.gnu.org/licenses/>.
 #
 
+# python [-u] main-631g.py <distance> <compression> <nthreads> [no-svd]
+
 import sys
 import numpy
 import qode
@@ -40,11 +42,13 @@ class empty(object):  pass
 basis_label = "6-31G"
 n_spatial_orb = 9
 
-n_threads = 1
-dist = float(sys.argv[1])
-if len(sys.argv)==3:  n_threads = int(sys.argv[2])
-
-
+dist        = float(sys.argv[1])
+compression =       sys.argv[2]
+n_threads   =   int(sys.argv[3])
+svd = True
+if len(sys.argv)==5:
+    if sys.argv[4]=="no-svd":  svd = False
+    else:                      raise RuntimeError()
 
 frag0 = empty()
 frag0.atoms = [("Be",[0,0,0])]
@@ -204,25 +208,42 @@ for n in range(num_elec_dimer+1):
                     (n_j1,j1),(n_j0,j0) = dimer_to_frags[Q]
                     rho_1[n][i1,j1] += Evec.v[P] * Evec.v[Q]    # should have n_i0==n_j0==num_elec_dimer-n and  i0==j0  and n_i1==n_j1==n
 
-thresh = 1e-6
-
-states = {}
+evals_evecs = {}
+all_evals = []
 for n in range(num_elec_dimer+1):
-    chg = frag0.n_elec_ref - n
     if rho_0[n] is not None:
         rho = (rho_1[n] + rho_0[n]) / 2    # relies on fragments being the same
         evals, evecs = qode.util.sort_eigen(numpy.linalg.eigh(rho), order="descending")
-        n_config_n = len(evals)
-        print("n_config_n", n_config_n)
-        for i,e in enumerate(evals):
-            if e>thresh:
-                if chg not in states:
-                    states[chg] = empty()
-                    states[chg].configs = sorted_configs_0[n]  # relies on fragments being the same
-                    states[chg].coeffs  = []
-                tmp = numpy.zeros(n_config_n, dtype=Double.numpy)
-                tmp[:] = evecs[:,i]
-                states[chg].coeffs += [tmp]
+        evals_evecs[n] = (evals, evecs)
+        all_evals += list(evals)
+
+label = "svd-"
+if not svd:  label = "new-"
+criterion, crit_val = compression.split("=")
+label += crit_val
+if criterion=="thresh":
+    thresh = float(crit_val)
+elif criterion=="nstates":
+    nstates = int(crit_val)
+    all_evals = list(reversed(sorted(all_evals)))
+    thresh = (all_evals[nstates-1] + all_evals[nstates]) / 2
+else:
+    raise RuntimeError()
+
+states = {}
+for n, (evals, evecs) in evals_evecs.items():
+    chg = frag0.n_elec_ref - n
+    n_config_n = len(evals)
+    print("n_config_n", n_config_n)
+    for i,e in enumerate(evals):
+        if e>thresh:
+            if chg not in states:
+                states[chg] = empty()
+                states[chg].configs = sorted_configs_0[n]  # relies on fragments being the same
+                states[chg].coeffs  = []
+            tmp = numpy.zeros(n_config_n, dtype=Double.numpy)
+            tmp[:] = evecs[:,i]
+            states[chg].coeffs += [tmp]
 
 for chg,states_chg in states.items():
     num_states = len(states_chg.coeffs)
@@ -231,7 +252,7 @@ for chg,states_chg in states.items():
         #for config in states_chg.configs:
         #    print("  {:018b}".format(config))
 
-frag0.rho = densities.build_tensors(states, 2*frag0.basis.n_spatial_orb, frag0.n_elec_ref, thresh=1e-30, n_threads=n_threads)
+frag0.rho = densities.build_tensors(states, 2*frag0.basis.n_spatial_orb, frag0.n_elec_ref, thresh=1e-30, compress=svd, n_threads=n_threads)
 
 ref_chg, ref_idx = 0, 0
 frag0.state_indices = [(ref_chg,ref_idx)]                # List of all charge and state indices, reference state needs to be first, but otherwise irrelevant order
@@ -240,7 +261,6 @@ for i in range(len(states[ref_chg].coeffs)):
 for chg in states:
     if chg!=ref_chg:  frag0.state_indices += [(chg,i) for i in range(len(states[chg].coeffs))]
 
-
-
 #pickle.dump(frag0, open("/scratch/adutoi/Be631g.pkl", "wb"))    # Medusa
 #pickle.dump(frag0, open("Be631g.pkl", "wb"))                    # Tengri
+#pickle.dump(frag0, open("rho/Be631g-{}.pkl".format(label), "wb"))    # very specific to a certain workflow, maybe useful again
