@@ -63,11 +63,14 @@ if len(sys.argv)==4:
 
 # "Assemble" the supersystem for the displaced fragments and get integrals
 BeN = []
+print("load states ...")
 for m in range(int(n_frag)):
     Be = pickle.load(open(states,"rb"))
     for elem,coords in Be.atoms:  coords[2] += m * displacement    # displace along z
     BeN += [Be]
+print("get_ints ...")
 symm_ints, bior_ints, nuc_rep = get_ints(BeN, project_core)
+print("done")
 
 # The engines that build the terms
 BeN_rho = [frag.rho for frag in BeN]   # diagrammatic_expansion.blocks should take BeN directly? (n_states and n_elec one level higher)
@@ -120,7 +123,6 @@ for m in [0,1]:
                               "v0000"
                              ]
                          }, m, monomer_charges)
-
     H1 += [H1_m]
 
 
@@ -212,13 +214,11 @@ S2H2 += XR_term.dimer_matrix(Combo_blocks_bior, {
                           ]
                       }, (0,1), all_dimer_charges)
 
+
+
 print("Apply H")
 
-
-
 H2blocked = S2inv @ S2H2
-
-
 
 H2blocked -= XR_term.dimer_matrix(St_blocks_symm, {
                        1: [
@@ -236,6 +236,7 @@ H2blocked -= XR_term.dimer_matrix(Sv_blocks_symm, {
                            "v0000"
                           ]
                       }, (0,1), all_dimer_charges)
+
 
 
 # well, this sucks.  reorder the states

@@ -30,7 +30,7 @@ def tens_wrap(tensor):
 # states[n].coeffs  = [numpy.array, numpy.array, . . .]   One (effectively 1D) array of coefficients per n-electron state
 # states[n].configs = [int, int, . . . ]                  Each int represents a configuration (has the same length as arrays in list above)
 
-def build_tensors(states, n_orbs, n_elec_0, thresh=1e-10, n_threads=1):
+def build_tensors(states, n_orbs, n_elec_0, thresh=1e-10, compress=True, n_threads=1):
     densities = {}
     densities["n_elec"]   = {chg:(n_elec_0-chg)          for chg in states}
     densities["n_states"] = {chg:len(states[chg].coeffs) for chg in states}
@@ -58,7 +58,10 @@ def build_tensors(states, n_orbs, n_elec_0, thresh=1e-10, n_threads=1):
                         for j in range(len(ket_coeffs)):
                             indices = list(range(len(op_string)))
                             c_count = op_string.count("c")
-                            rho[i,j] = svd_decomposition(rho[i,j], indices[:c_count], indices[c_count:], wrapper=tens_wrap)
+                            if compress:
+                                rho[i,j] = svd_decomposition(rho[i,j], indices[:c_count], indices[c_count:], wrapper=tens_wrap)
+                            else:
+                                rho[i,j] = tens_wrap(rho[i,j])
                     densities[op_string][bra_chg,ket_chg] = rho
 
     return densities
