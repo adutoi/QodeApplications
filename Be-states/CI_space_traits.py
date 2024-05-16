@@ -29,6 +29,16 @@ class _auxilliary(object):
         i = field_op.find_index_by_occ(occupied, self.parent.configs)
         v[i] = 1
         return v
+    def complete_basis(self):
+        n_config = len(self.parent.configs)
+        basis = []
+        for i in range(n_config):
+            v = numpy.zeros(n_config, dtype=Double.numpy)
+            v[i] = 1
+            basis += [v]
+        return basis
+        
+
 
 class CI_space_traits(object):
     def __init__(self, configs):
