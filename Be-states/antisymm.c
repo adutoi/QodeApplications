@@ -15,6 +15,7 @@
  *   You should have received a copy of the GNU General Public License
  *   along with QodeApplications.  If not, see <http://www.gnu.org/licenses/>.
  */
+#include <stdlib.h>       // malloc(), free()
 #include "PyC_types.h"    // PyInt, Double
 
 // This takes a tensor with an arbitrary number of axes (all of the same length), whereby the only
@@ -111,15 +112,15 @@ void antisymmetrize(Double** tensors,      // array of density tensors to antisy
                     PyInt    n_annihil)    // number of annihilation operators
     {
     PyInt one    = 1;                                      // &one is a PyInt array with one element that is 1: ie, [1]
-    PyInt stride = 1;                                      // basically just stride = n_orbs^n_annihil, which is the size of ...
+    PyInt stride = 1;                                      // stride = n_orbs^n_annihil, which is the size of ...
     for (int i=0; i<n_annihil; i++) {stride *= n_orbs;}    // ... the a-string subtensor for each value of c-string indices
 
     if (n_annihil > 1)    // first antisymmetrize the latter a-string tensor for all values of the c-string indices
         {
-        PyInt n_subtensors = 1;                                      // basically just n_subtensors = n_orbs^n_create, because there is ...
+        PyInt n_subtensors = 1;                                      // n_subtensors = n_orbs^n_create, because there is ...
         for (int i=0; i<n_create;  i++) {n_subtensors *= n_orbs;}    // ... one a-string subtensor for each value of c-string indices
+        Double** all_tensors = (Double**)malloc(n_tensors * n_subtensors * sizeof(Double*));  // storage for pointers to every subtensor of every tensor. Seg-fault with: Double* all_tensors[n_tensors * n_subtensors]
 
-        Double* all_tensors[n_tensors * n_subtensors];               // storage for pointers to every subtensor of every tensor (this can segfault if length of all_tensors too long ... use malloc/free to fix)
         int k = 0;    // a running index for all subtensor of every tensor
         for (int i=0; i<n_tensors; i++)    // loop over all top-level tensors
             {
@@ -132,6 +133,8 @@ void antisymmetrize(Double** tensors,      // array of density tensors to antisy
 
         //
         antisymmetrize_recur(all_tensors, n_tensors*n_subtensors, n_annihil, n_orbs, &one,    0, 0, 1, NULL, &one);
+
+        free(all_tensors);
         }
 
     if (n_create > 1)    // then antisymmetrize the among the former indices by treating the entire a-string subtensor as an "element" of the c-string tensor
