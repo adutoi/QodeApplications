@@ -17,7 +17,7 @@
 #
 import math
 import numpy
-from qode.util.PyC import import_C, Double, BigInt
+from qode.util.PyC import import_C, Int, Double, BigInt
 
 # Import the C module in a python wrapper for external aesthetics and to avoid having compile
 # flags in multiple places (which points to a weakness in PyC that changing these does not
@@ -67,6 +67,10 @@ def find_index_by_occ(occupied, configs):
 
 
 def opPsi_1e(HPsi, Psi, h, configs, thresh, n_threads):
+    generate_wisdom = 0
+    wisdom_occupied = [numpy.zeros((1,), dtype=Int.numpy)]
+    wisdom_det_idx  = [numpy.zeros((1,), dtype=BigInt.numpy)]
+    wisdom_phases   = [numpy.zeros((1,), dtype=Int.numpy)]
     field_op.op_Psi(1,                 # electron order of the operator
                     h,                 # tensor of matrix elements (integrals), assumed antisymmetrized
                     h.shape[0],        # edge dimension of the integrals tensor
@@ -77,9 +81,15 @@ def opPsi_1e(HPsi, Psi, h, configs, thresh, n_threads):
                     len(configs),      # number of configurations in the configs basis (call signature ok if PyInt not longer than BigInt)
                     configs.size,      # number of BigInts needed to store a single configuration in configs
                     thresh,            # perform no further work if result will be smaller than this
-                    n_threads)         # number of threads to spread the work over
+                    n_threads,         # number of threads to spread the work over
+                    generate_wisdom, wisdom_occupied, wisdom_det_idx, wisdom_phases)
+    return None
 
 def opPsi_2e(HPsi, Psi, V, configs, thresh, n_threads):
+    generate_wisdom = 0
+    wisdom_occupied = [numpy.zeros((1,), dtype=Int.numpy)]
+    wisdom_det_idx  = [numpy.zeros((1,), dtype=BigInt.numpy)]
+    wisdom_phases   = [numpy.zeros((1,), dtype=Int.numpy)]
     field_op.op_Psi(2,                 # electron order of the operator
                     V,                 # tensor of matrix elements (integrals), assumed antisymmetrized
                     V.shape[0],        # edge dimension of the integrals tensor
@@ -90,7 +100,9 @@ def opPsi_2e(HPsi, Psi, V, configs, thresh, n_threads):
                     len(configs),      # number of configurations in the configs basis (call signature ok if PyInt not longer than BigInt)
                     configs.size,      # number of BigInts needed to store a single configuration in configs
                     thresh,            # perform no further work if result will be smaller than this
-                    n_threads)         # number of threads to spread the work over
+                    n_threads,         # number of threads to spread the work over
+                    generate_wisdom, wisdom_occupied, wisdom_det_idx, wisdom_phases)
+    return None
 
 def build_densities(op_string, n_orbs, bras, kets, bra_configs, ket_configs, thresh, n_threads):
     n_create  = op_string.count("c")
@@ -99,6 +111,10 @@ def build_densities(op_string, n_orbs, bras, kets, bra_configs, ket_configs, thr
     shape = [n_orbs] * (n_create + n_annihil)
     print("####", op_string, "->", shape, "x", len(bras)*len(kets))
     rho = [numpy.zeros(shape, dtype=Double.numpy) for _ in range(len(bras)*len(kets))]
+    generate_wisdom = 0
+    wisdom_occupied = [numpy.zeros((1,), dtype=Int.numpy)]
+    wisdom_det_idx  = [numpy.zeros((1,), dtype=BigInt.numpy)]
+    wisdom_phases   = [numpy.zeros((1,), dtype=Int.numpy)]
     field_op.densities(n_create,              # number of creation operators
                        n_annihil,             # number of annihilation operators
                        rho,                   # array of storage for density tensors (for each bra-ket pair in linear list)
@@ -114,11 +130,11 @@ def build_densities(op_string, n_orbs, bras, kets, bra_configs, ket_configs, thr
                        len(ket_configs),      # number of configurations in the ket basis (call signature ok if PyInt not longer than BigInt)
                        ket_configs.size,      # number of BigInts needed to store a single configuration in the ket basis
                        thresh,                # perform no further work if result will be smaller than this
-                       n_threads)             # number of threads to spread the work over
+                       n_threads,             # number of threads to spread the work over
+                       generate_wisdom, wisdom_occupied, wisdom_det_idx, wisdom_phases)
     antisymm.antisymmetrize(rho,          # linear array of density tensors to antisymmetrize
                             len(rho),     # number of density tensors to antisymmetrize
                             n_orbs,       # number of orbitals
                             n_create,     # number of creation operators
                             n_annihil)    # number of annihilation operators
-    #return [rho[i*len(kets):(i+1)*len(kets)] for i in range(len(bras))]
     return {(i,j):rho[i*len(kets)+j] for i in range(len(bras)) for j in range(len(kets))}
