@@ -62,6 +62,13 @@
 #include <omp.h>          // multithreading
 #endif
 
+int sign(BigInt i)
+    {
+    return (i > 0) - (i < 0);
+    }
+
+
+
 // The operation of the recursive kernel for performing the action of an operator on a vector
 // to produce a new vector or to build transition-density tensors between vectors is largely the
 // same, so there iw one piece of code, where one of two modes is activated upon bottoming out.
@@ -189,7 +196,6 @@ void resolve_recur(int      mode,             // OP_ACTION or COMPUTE_D (determi
                    Double   thresh,           // perform no further work if result will be smaller than this
                    PyInt    generate_wisdom,
                    BigInt*  wisdom_det_idx,     // they should all be not NULL
-                   Int*     wisdom_phases,      //
                    int*     wisdom_op_idx)
     {
     // Some admin that needs to be done for either mode at any level of recursion
@@ -245,7 +251,7 @@ void resolve_recur(int      mode,             // OP_ACTION or COMPUTE_D (determi
             if (reset_p_0)  {q_0 = 0;}      // ... unless we are switching from annihilation to creation operators
             other_orb_list_entry[0] = p;    // if we annihlated orbital p, we will want to loop over its creation as well (vice versa has no effect (or harm))
             // recur, passing through appropriately modified quantities (see below about inline updates)
-            resolve_recur(mode, n_create, n_annihil, Psi_L, n_Psi_L, configs_L, n_configs_L, n_configint_L, Psi_R, n_Psi_R, p_config_R, config_idx_R, n_configint_R, tensors, n_orbs, occupied, n_occ, empty, n_emt, p_cum_occ, p_permute, op_idx+p*stride, stride*n_orbs, factor, q_0, thresh, generate_wisdom, wisdom_det_idx, wisdom_phases, wisdom_op_idx);
+            resolve_recur(mode, n_create, n_annihil, Psi_L, n_Psi_L, configs_L, n_configs_L, n_configint_L, Psi_R, n_Psi_R, p_config_R, config_idx_R, n_configint_R, tensors, n_orbs, occupied, n_occ, empty, n_emt, p_cum_occ, p_permute, op_idx+p*stride, stride*n_orbs, factor, q_0, thresh, generate_wisdom, wisdom_det_idx, wisdom_op_idx);
             }
         }
     else if (mode == OP_ACTION)    // bottom out option
@@ -266,13 +272,13 @@ void resolve_recur(int      mode,             // OP_ACTION or COMPUTE_D (determi
                 if (generate_wisdom)
                     {
                     i = wisdom_op_idx[0]++;
-                    wisdom_det_idx[i] = config_idx_L;
+                    wisdom_det_idx[i] = config_idx_L + 1;
                     }
                 if (config_idx_L != -1)    // do nothing if action takes outside of space of configurations
                     {
                     int p_permute = permute + cum_occ[n_orbs-1] - cum_occ[p];    // final permutation and ...
                     int phase = (p_permute%2) ? -1 : 1;                          // ... multiplication by resulting phase ...
-                    if (generate_wisdom)  {wisdom_phases[i] = phase;}
+                    if (generate_wisdom)  {wisdom_det_idx[i] *= phase;}
                     if (compute_it)
                         {
                         val *= phase;                                            // ... delayed until we know operation was nonzero
@@ -301,14 +307,14 @@ void resolve_recur(int      mode,             // OP_ACTION or COMPUTE_D (determi
             if (generate_wisdom)
                 {
                 i = wisdom_op_idx[0]++;
-                wisdom_det_idx[i] = config_idx_L;
+                wisdom_det_idx[i] = config_idx_L + 1;
                 }
             if (config_idx_L != -1)    // do nothing if action takes outside of space of configurations
                 {
                 int p_op_idx = p*stride + op_idx;                            // finish building tensor index (done inline with recursion above)
                 int p_permute = permute + cum_occ[n_orbs-1] - cum_occ[p];    // final permutation and ...
                 int phase = (p_permute%2) ? -1 : 1;                          // ... computation of resulting phase
-                if (generate_wisdom)  {wisdom_phases[i] = phase;}
+                if (generate_wisdom)  {wisdom_det_idx[i] *= phase;}
                 int braket = 0;                                              // initialize a running index for the bra-ket pairs
                 for (int vL=0; vL<n_Psi_L; vL++)    // loop over the bra states ...
                     {
@@ -381,8 +387,7 @@ void resolve(int      mode,             // OP_ACTION or COMPUTE_D (determines wh
              PyInt    n_threads,        // number of threads to spread the work over
              PyInt    generate_wisdom,
              Int**    wisdom_occupied,       // if one is not NULL
-             BigInt** wisdom_det_idx,     // they should all be not NULL
-             Int**    wisdom_phases)      //
+             BigInt** wisdom_det_idx)     // they should all be not NULL
     {
     omp_set_num_threads(n_threads);       // declare the number of threads to use
     int n_bits = orbs_per_configint();    // number of bits/orbitals in a BigInt
@@ -416,19 +421,17 @@ void resolve(int      mode,             // OP_ACTION or COMPUTE_D (determines wh
                 }
 
             BigInt* wisdom_det_idx_n = (BigInt*)NULL;
-            Int*    wisdom_phases_n  =    (Int*)NULL;
             int     wisdom_op_idx[1];
             if (generate_wisdom)
                 {
                 wisdom_det_idx_n = wisdom_det_idx[n];
-                wisdom_phases_n  = wisdom_phases[n];
                 wisdom_op_idx[0] = 0;
                 for (int i=0; i<n_occ; i++)  {wisdom_occupied[n][i] = occupied[i];}
                 }
 
             // begin the recursive kernel that loops over orbital indices for the operator string, and coefficients for the ket (and perhaps bra) state(s)
             // dividing thresh/biggest yields a an effective threshold for multiploer of a ket coefficient (like a matrix element or a bra coefficient)
-            resolve_recur(mode, n_create, n_annihil, Psi_L, n_Psi_L, configs_L, n_configs_L, n_configint_L, Psi_R, n_Psi_R, config, n, n_configint_R, tensors, n_orbs, occupied, n_occ, empty, n_emt, cum_occ, permute, 0, 1, 1, 0, thresh/biggest, generate_wisdom, wisdom_det_idx_n, wisdom_phases_n, wisdom_op_idx);
+            resolve_recur(mode, n_create, n_annihil, Psi_L, n_Psi_L, configs_L, n_configs_L, n_configint_L, Psi_R, n_Psi_R, config, n, n_configint_R, tensors, n_orbs, occupied, n_occ, empty, n_emt, cum_occ, permute, 0, 1, 1, 0, thresh/biggest, generate_wisdom, wisdom_det_idx_n, wisdom_op_idx);
             }
         }
 
@@ -475,12 +478,11 @@ void op_Psi(PyInt    n_elec,        // electron order of the operator
             PyInt    n_threads,     // number of threads to spread the work over
             PyInt    generate_wisdom,
             Int**    wisdom_occupied,       // if one is not NULL
-            BigInt** wisdom_det_idx,     // they should all be not NULL
-            Int**    wisdom_phases)      //
+            BigInt** wisdom_det_idx)     // they should all be not NULL
     {
     int permute = (n_elec/2) % 2;    // accounts for a permutation of the type seen in the far right of the equation in the comments, to align index orders
     // call the generic driver in operator-action mode
-    resolve(OP_ACTION, n_elec, n_elec, opPsi, n_Psi, configs, n_configs, n_configint, Psi, n_Psi, configs, n_configs, n_configint, &op, n_orbs, permute, thresh, n_threads, generate_wisdom, wisdom_occupied, wisdom_det_idx, wisdom_phases);
+    resolve(OP_ACTION, n_elec, n_elec, opPsi, n_Psi, configs, n_configs, n_configint, Psi, n_Psi, configs, n_configs, n_configint, &op, n_orbs, permute, thresh, n_threads, generate_wisdom, wisdom_occupied, wisdom_det_idx);
     return;
     }
 
@@ -529,11 +531,10 @@ void densities(PyInt    n_create,           // number of creation operators
                PyInt    n_threads,          // number of threads to spread the work over
                PyInt    generate_wisdom,
                Int**    wisdom_occupied,       // if one is not NULL
-               BigInt** wisdom_det_idx,     // they should all be not NULL
-               Int**    wisdom_phases)      //
+               BigInt** wisdom_det_idx)     // they should all be not NULL
     {
     // call the generic driver in compute-densities mode
-    resolve(COMPUTE_D, n_create, n_annihil, bras, n_bras, configs_bra, n_configs_bra, n_configint_bra, kets, n_kets, configs_ket, n_configs_ket, n_configint_ket, rho, n_orbs, 0, thresh, n_threads, generate_wisdom, wisdom_occupied, wisdom_det_idx, wisdom_phases);
+    resolve(COMPUTE_D, n_create, n_annihil, bras, n_bras, configs_bra, n_configs_bra, n_configint_bra, kets, n_kets, configs_ket, n_configs_ket, n_configint_ket, rho, n_orbs, 0, thresh, n_threads, generate_wisdom, wisdom_occupied, wisdom_det_idx);
     return;
     }
 

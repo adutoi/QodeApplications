@@ -103,7 +103,7 @@ N, S, T, U, V = nuc_rep[0,0], symm_ints.S[0,0], symm_ints.T[0,0], symm_ints.U[0,
 h = T + U
 
 CI_space_atom = qode.math.linear_inner_product_space(CI_space_traits(configs_atom))
-H     = CI_space_atom.lin_op(field_op_ham.Hamiltonian(h,V, n_threads=n_threads))
+H     = CI_space_atom.lin_op(field_op_ham.Hamiltonian(h,V, n_elec=frag0.n_elec_ref, n_threads=n_threads))
 guess = CI_space_atom.member(CI_space_atom.aux.basis_vec([0, 1, n_spatial_orb+0, n_spatial_orb+1]))
 
 print((guess|H|guess) + N)

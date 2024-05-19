@@ -53,12 +53,13 @@ def build_tensors(states, n_orbs, n_elec_0, thresh=1e-10, compress=True, n_threa
                 for op_string in op_strings[chg_diff]:
                     if op_string not in densities:  densities[op_string] = {}
                     print(op_string, bra_chg, ket_chg)
-                    rho = field_op.build_densities(op_string, n_orbs, bra_coeffs, ket_coeffs, bra_configs, ket_configs, thresh, n_threads)
+                    wisdom = field_op.det_densities(n_elec_0-ket_chg) # this is dumb bc will not be used ... just testing ... should be None
+                    rho = field_op.build_densities(op_string, n_orbs, bra_coeffs, ket_coeffs, bra_configs, ket_configs, thresh, wisdom, n_threads)
                     for i in range(len(bra_coeffs)):
                         for j in range(len(ket_coeffs)):
-                            indices = list(range(len(op_string)))
-                            c_count = op_string.count("c")
                             if compress:
+                                indices = list(range(len(op_string)))
+                                c_count = op_string.count("c")
                                 rho[i,j] = svd_decomposition(rho[i,j], indices[:c_count], indices[c_count:], wrapper=tens_wrap)
                             else:
                                 rho[i,j] = tens_wrap(rho[i,j])
