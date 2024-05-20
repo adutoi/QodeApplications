@@ -18,6 +18,8 @@
 import math
 import numpy
 from qode.util.PyC import import_C, Double, BigInt
+from qode.math.tensornet import tl_tensor
+import tensorly
 
 # Import the C module in a python wrapper for external aesthetics and to avoid having compile
 # flags in multiple places (which points to a weakness in PyC that changing these does not
@@ -29,6 +31,9 @@ field_op.orbs_per_configint.return_type(int)
 field_op.bisect_search.return_type(int)
 
 antisymm = import_C("antisymm", flags="-O3")
+
+def tens_wrap(tensor):
+    return tl_tensor(tensorly.tensor(tensor, dtype=tensorly.float64))
 
 
 
@@ -98,27 +103,35 @@ def build_densities(op_string, n_orbs, bras, kets, bra_configs, ket_configs, thr
     if (op_string != "c"*n_create + "a"*n_annihil):  raise ValueError("density operator string is not vacuum normal ordered")
     shape = [n_orbs] * (n_create + n_annihil)
     print("####", op_string, "->", shape, "x", len(bras)*len(kets))
-    rho = [numpy.zeros(shape, dtype=Double.numpy) for _ in range(len(bras)*len(kets))]
-    field_op.densities(n_create,              # number of creation operators
-                       n_annihil,             # number of annihilation operators
-                       rho,                   # array of storage for density tensors (for each bra-ket pair in linear list)
-                       n_orbs,                # edge dimension of each density tensor
-                       bras,                  # array of row vectors: bras for transition-density tensors
-                       len(bras),             # number of bras
-                       bra_configs.packed,    # configuration strings representing the basis for the bras (see packed_configs above)
-                       len(bra_configs),      # number of configurations in the bra basis (call signature ok if PyInt not longer than BigInt)
-                       bra_configs.size,      # number of BigInts needed to store a single configuration in the bra basis
-                       kets,                  # array of row vectors: kets for transition-density tensors
-                       len(kets),             # number of kets
-                       ket_configs.packed,    # configuration strings representing the basis for the kets (see packed_configs above)
-                       len(ket_configs),      # number of configurations in the ket basis (call signature ok if PyInt not longer than BigInt)
-                       ket_configs.size,      # number of BigInts needed to store a single configuration in the ket basis
-                       thresh,                # perform no further work if result will be smaller than this
-                       n_threads)             # number of threads to spread the work over
-    antisymm.antisymmetrize(rho,          # linear array of density tensors to antisymmetrize
-                            len(rho),     # number of density tensors to antisymmetrize
-                            n_orbs,       # number of orbitals
-                            n_create,     # number of creation operators
-                            n_annihil)    # number of annihilation operators
+    if len(bras) > 200 and op_string == "ccaa":
+        # only do this for ccaa -1 -1
+        tmp = tens_wrap(numpy.zeros(shape[0]))
+        print("this density was taken as zero tensor")
+        rho = [tmp(0) @ tmp(1) @ tmp(2) @ tmp(3) for _ in range(len(bras)*len(kets))]
+        #rho = [numpy.zeros(shape, dtype=Double.numpy) for _ in range(len(bras)*len(kets))]
+        #return {(i,j): rho[i*len(kets)+j] for i in range(len(bras)) for j in range(len(kets))}
+    else:
+        rho = [numpy.zeros(shape, dtype=Double.numpy) for _ in range(len(bras)*len(kets))]
+        field_op.densities(n_create,              # number of creation operators
+                        n_annihil,             # number of annihilation operators
+                        rho,                   # array of storage for density tensors (for each bra-ket pair in linear list)
+                        n_orbs,                # edge dimension of each density tensor
+                        bras,                  # array of row vectors: bras for transition-density tensors
+                        len(bras),             # number of bras
+                        bra_configs.packed,    # configuration strings representing the basis for the bras (see packed_configs above)
+                        len(bra_configs),      # number of configurations in the bra basis (call signature ok if PyInt not longer than BigInt)
+                        bra_configs.size,      # number of BigInts needed to store a single configuration in the bra basis
+                        kets,                  # array of row vectors: kets for transition-density tensors
+                        len(kets),             # number of kets
+                        ket_configs.packed,    # configuration strings representing the basis for the kets (see packed_configs above)
+                        len(ket_configs),      # number of configurations in the ket basis (call signature ok if PyInt not longer than BigInt)
+                        ket_configs.size,      # number of BigInts needed to store a single configuration in the ket basis
+                        thresh,                # perform no further work if result will be smaller than this
+                        n_threads)             # number of threads to spread the work over
+        antisymm.antisymmetrize(rho,          # linear array of density tensors to antisymmetrize
+                                len(rho),     # number of density tensors to antisymmetrize
+                                n_orbs,       # number of orbitals
+                                n_create,     # number of creation operators
+                                n_annihil)    # number of annihilation operators
     #return [rho[i*len(kets):(i+1)*len(kets)] for i in range(len(bras))]
     return {(i,j):rho[i*len(kets)+j] for i in range(len(bras)) for j in range(len(kets))}

@@ -36,8 +36,8 @@ def _evaluate_block(result, op_blocks, frag_order, active_diagrams, subsys_indic
     rho = op_blocks.densities
     m = subsys_indices    # alias makes code more readable
     n_frag = len(m)
-    n_states_i = [rho[m[x]]['n_states'][chg_i] for x,(chg_i,_) in enumerate(subsys_charges)]
-    n_states_j = [rho[m[x]]['n_states'][chg_j] for x,(_,chg_j) in enumerate(subsys_charges)]
+    n_states_i = [rho[m[x]]['n_states_bra'][chg_i] for x,(chg_i,_) in enumerate(subsys_charges)]
+    n_states_j = [rho[m[x]]['n_states_ket'][chg_j] for x,(_,chg_j) in enumerate(subsys_charges)]
     loops = [(m_,range(n_frag)) for m_ in range(frag_order)]
     def kernel(*frags):
         nonlocal result
@@ -59,10 +59,17 @@ def _evaluate_block(result, op_blocks, frag_order, active_diagrams, subsys_indic
                         if block is None:
                             block = numpy.zeros(n_states_i+n_states_j)    # concatenate lists and make ndarray
                         # !!! phases not yet implemented should be handled here.
-                        for I in compound_range([range(n) for n in n_states_i], inactive=frags):    # with frags of interest inactive, i vs j does not matter here
+                        #count = 0
+                        for I in compound_range([range(n) for n in n_states_j], inactive=frags):    # with frags of interest inactive, i vs j does not matter here
                             for frag in frags:  I[frag] = full
                             indices = tuple(I+I)    # concatenate I with itself for "diagonal" element (wrt specified indices)
+                            #try:
                             block[indices] += diagram_block
+                            #except IndexError:
+                            #    print(indices)
+                            #    count += 1
+                            #    if count >= 130:
+                            #        raise IndexError("blablabla")
                 if block is not None:
                     block = block.reshape(numpy.prod(n_states_i), numpy.prod(n_states_j))
                     result += block
@@ -71,15 +78,16 @@ def _evaluate_block(result, op_blocks, frag_order, active_diagrams, subsys_indic
 def monomer_matrix(op_blocks, active_diagrams, subsys_index, charge_blocks):
     # This code is restricted specifically to monomer (sub)systems
     rho = op_blocks.densities[subsys_index]
-    dim = sum(rho['n_states'][chg] for chg in charge_blocks)
-    Matrix = numpy.zeros((dim,dim))
+    dim_bra = sum(rho['n_states_bra'][chg] for chg in charge_blocks)
+    dim_ket = sum(rho['n_states_ket'][chg] for chg in charge_blocks)
+    Matrix = numpy.zeros((dim_bra,dim_ket))
     #
     Ibeg = 0
     for chg_i in charge_blocks:
-        Iend = Ibeg + rho['n_states'][chg_i]
+        Iend = Ibeg + rho['n_states_bra'][chg_i]
         Jbeg = 0
         for chg_j in charge_blocks:
-            Jend = Jbeg + rho['n_states'][chg_j]
+            Jend = Jbeg + rho['n_states_ket'][chg_j]
             result = Matrix[Ibeg:Iend,Jbeg:Jend]
             subsys_charges = [(chg_i,chg_j)]
             for frag_order in active_diagrams:
@@ -91,15 +99,16 @@ def monomer_matrix(op_blocks, active_diagrams, subsys_index, charge_blocks):
 def dimer_matrix(op_blocks, active_diagrams, subsys_indices, charge_blocks):
     # This code is restricted specifically to dimer (sub)systems
     rho1, rho2 = (op_blocks.densities[m] for m in subsys_indices)
-    dim = sum(rho1['n_states'][chg1]*rho2['n_states'][chg2] for chg1,chg2 in charge_blocks)
-    Matrix = numpy.zeros((dim,dim))
+    dim_bra = sum(rho1['n_states_bra'][chg1]*rho2['n_states_bra'][chg2] for chg1,chg2 in charge_blocks)
+    dim_ket = sum(rho1['n_states_ket'][chg1]*rho2['n_states_ket'][chg2] for chg1,chg2 in charge_blocks)
+    Matrix = numpy.zeros((dim_bra,dim_ket))
     #
     Ibeg = 0
     for chg_i1,chg_i2 in charge_blocks:
-        Iend = Ibeg + rho1['n_states'][chg_i1]*rho2['n_states'][chg_i2]
+        Iend = Ibeg + rho1['n_states_bra'][chg_i1]*rho2['n_states_bra'][chg_i2]
         Jbeg = 0
         for chg_j1,chg_j2 in charge_blocks:
-            Jend = Jbeg + rho1['n_states'][chg_j1]*rho2['n_states'][chg_j2]
+            Jend = Jbeg + rho1['n_states_ket'][chg_j1]*rho2['n_states_ket'][chg_j2]
             result = Matrix[Ibeg:Iend,Jbeg:Jend]
             subsys_charges = [(chg_i1,chg_j1),(chg_i2,chg_j2)]
             for frag_order in active_diagrams:

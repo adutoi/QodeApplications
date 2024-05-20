@@ -62,7 +62,8 @@ def precontract(densities, integrals, timings):
             if int_type=="U":  ints = integrals.U[int_blocks]
             if int_type=="V":  ints = integrals.V[int_blocks]
             densities_m = densities[indices[0]]
-            n_states = densities_m["n_states"]
+            n_states_bra = densities_m["n_states_bra"]
+            n_states_ket = densities_m["n_states_ket"]
             Dchg = rho_type.count("a") - rho_type.count("c")    # get rid of this and allow the exception
 
             def contract_rho_int_m(chg_i,chg_j):
@@ -73,10 +74,10 @@ def precontract(densities, integrals, timings):
                     timings.record("  precontract {}".format(label))
                     return result
                 if chg_i-chg_j==Dchg:
-                    return dynamic_array(cached(contract_rho_int_m_chgs), [range(n_states[chg_i]), range(n_states[chg_j])])
+                    return dynamic_array(cached(contract_rho_int_m_chgs), [range(n_states_bra[chg_i]), range(n_states_ket[chg_j])])
                 else:
                     return None
-            return dynamic_array(cached(contract_rho_int_m), [n_states.keys()]*2)
+            return dynamic_array(cached(contract_rho_int_m), [n_states_ket.keys()]*2)  # no specification between bra and ket needed, because only keys are required
 
         def contract_rho_rho_int(*indices):
             raise NotImplementedError

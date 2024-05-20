@@ -24,7 +24,7 @@ from precontract import precontract
 # This function does the heavy lifting.  Called by instances of innermost class below.
 ##########
 
-def _build_block(diagram_term, n_states, permutation):
+def _build_block(diagram_term, n_states, permutation, bra_det):
     frag_order = len(permutation)
     if frag_order==0:
         result = diagram_term()
@@ -35,10 +35,24 @@ def _build_block(diagram_term, n_states, permutation):
         result = numpy.zeros([r for m,r in dims])
         def kernel(*states):
             ordering, states = list(zip(*states))
-            indices = [None]*len(states)
-            for i,o in enumerate(ordering):
-                indices[o] = states[i]
-            result[tuple(indices)] = diagram_term(*states)    # This is where the actual evaluation of the diagram happens
+
+            def populate_res(ordering, states):
+                indices = [None]*len(states)
+                for i,o in enumerate(ordering):
+                    indices[o] = states[i]
+                result[tuple(indices)] = diagram_term(*states)    # This is where the actual evaluation of the diagram happens
+
+            if bra_det == False:
+                populate_res(ordering, states)
+            else:
+                if len(states) == 4:  # this only works for dimer terms (monomer terms are unaffected)
+                    if states[1] == states[3]:
+                        populate_res(ordering, states)
+                    else:
+                        pass  # dont make an extra computation, because these elements are not required for bra_det == True
+                else:
+                    populate_res(ordering, states)   
+
         recursive_looper(loops, kernel, order_aware=True)
     return result
 
@@ -49,19 +63,20 @@ def _build_block(diagram_term, n_states, permutation):
 ##########
 
 class _charges(object):
-    def __init__(self, supersys_info, subsystem, charges, diagrams):
+    def __init__(self, supersys_info, subsystem, charges, diagrams, bra_det):
         self._supersys_info = supersys_info
         self._subsystem = subsystem
         self._charges = charges
         self._diagrams = diagrams
         self._results = {}
+        self._bra_det = bra_det
     def _n_states(self, permutation):
         n_states_i = []
         n_states_j = []
         for m in permutation:
             chg_i, chg_j = self._charges[m]
-            n_states_i += [self._supersys_info.densities[self._subsystem[m]]['n_states'][chg_i]]
-            n_states_j += [self._supersys_info.densities[self._subsystem[m]]['n_states'][chg_j]]
+            n_states_i += [self._supersys_info.densities[self._subsystem[m]]['n_states_bra'][chg_i]]
+            n_states_j += [self._supersys_info.densities[self._subsystem[m]]['n_states_ket'][chg_j]]
         return n_states_i, n_states_j
     def __getitem__(self, label):
         if label not in self._results:
@@ -75,34 +90,36 @@ class _charges(object):
                 for term_permutation in terms:
                     if term_permutation is not None:
                         term, permutation = term_permutation
-                        result = _build_block(term, self._n_states(permutation), permutation)
+                        result = _build_block(term, self._n_states(permutation), permutation, self._bra_det)
                         if self._results[label] is None:  self._results[label]  = result
                         else:                             self._results[label] += result
         return self._results[label]
 
 class _subsystem(object):
-    def __init__(self, supersys_info, subsystem, diagrams):
+    def __init__(self, supersys_info, subsystem, diagrams, bra_det):
         self._supersys_info = supersys_info
         self._subsystem = subsystem
         self._diagrams = diagrams
         self._items = {}
+        self._bra_det = bra_det
     def __getitem__(self, charges):
         if charges is None:  charges = tuple()    # just to make top-level syntax prettier
         charges = tuple(charges)                  # dict index must be hashable
         if charges not in self._items:
-            self._items[charges] = _charges(self._supersys_info, self._subsystem, charges, self._diagrams)
+            self._items[charges] = _charges(self._supersys_info, self._subsystem, charges, self._diagrams, self._bra_det)
         return self._items[charges]
 
 class blocks(object):
-    def __init__(self, densities, integrals, diagrams, contract_cache, timings):
+    def __init__(self, densities, integrals, diagrams, contract_cache, timings, bra_det=False):
         contract_cache = struct(rho_S=contract_cache, general=precontract(densities, integrals, timings))
         self._supersys_info = struct(densities=densities, integrals=integrals, contract_cache=contract_cache, timings=timings)
         self._diagrams = diagrams
         self._items = {}
         self.densities = self._supersys_info.densities    # "public" member providing access to system definition
+        self._bra_det = bra_det
     def __getitem__(self, subsystem):
         if subsystem is None:  subsystem = tuple()        # just to make top-level syntax prettier
         subsystem = tuple(subsystem)                      # dict index must be hashable
         if subsystem not in self._items:
-            self._items[subsystem] = _subsystem(self._supersys_info, subsystem, self._diagrams)
+            self._items[subsystem] = _subsystem(self._supersys_info, subsystem, self._diagrams, self._bra_det)
         return self._items[subsystem]

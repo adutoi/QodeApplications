@@ -80,4 +80,4 @@ def fci(H, out):
 		E = Eval
 
 	out.log("FCI Energy  =", E)
-	return E
+	return E, vecs[0]

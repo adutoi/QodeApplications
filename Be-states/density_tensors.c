@@ -139,14 +139,14 @@ BigInt all_core_occupied(BigInt* config, BigInt n_elec, BigInt n_orbs, BigInt n_
  * For a given (non-zero) combination of field operators and bra-ket configurations, the contribution to each relevant tensor is computed.
  */
 
-void z_contract(Double storage[], BigInt parity, BigInt index, BigInt tensor_size, BigInt bra_chg_idx, BigInt ket_chg_idx, BigInt n_states[], Double* z_list[], BigInt n_configs[], BigInt P, BigInt Q)
+void z_contract(Double storage[], BigInt parity, BigInt index, BigInt tensor_size, BigInt bra_chg_idx, BigInt ket_chg_idx, BigInt n_states_bra[], BigInt n_states[], Double* z_list_bra[], Double* z_list[], BigInt n_configs[], BigInt P, BigInt Q)
 	{
-	for (BigInt I=0;  I<n_states[bra_chg_idx];  I++)
+	for (BigInt I=0;  I<n_states_bra[bra_chg_idx];  I++)
 		{
-		Double zI_P = z_list[bra_chg_idx][I*n_configs[bra_chg_idx] + P];
+		Double zI_P = z_list_bra[bra_chg_idx][I*n_configs[bra_chg_idx] + P];  // left coeff vector
 		for (BigInt J=0;  J<n_states[ket_chg_idx];  J++)
 			{
-			Double zJ_Q = z_list[ket_chg_idx][J*n_configs[ket_chg_idx] + Q];
+			Double zJ_Q = z_list[ket_chg_idx][J*n_configs[ket_chg_idx] + Q];  // right coeff vector
 			Double* tensor = storage + (I*n_states[ket_chg_idx] + J)*tensor_size;
 			tensor[index] += parity * zI_P * zJ_Q;
 			}
@@ -160,7 +160,7 @@ void z_contract(Double storage[], BigInt parity, BigInt index, BigInt tensor_siz
  */
 
 void a_tensor(Double storage[],  PyInt  bra_chg_idx_py,  PyInt   ket_chg_idx_py,
-              BigInt n_elec[],   BigInt n_states[],      Double* z_list[],         BigInt n_configs[],  BigInt* configs[],
+              BigInt n_elec[],   BigInt n_states_bra[], BigInt n_states[],      Double* z_list_bra[], Double* z_list[],         BigInt n_configs[],  BigInt* configs[],
               PyInt  n_orbs_py,  PyInt  n_core_py,       BigInt* combinatorics[],
               PyInt  n_threads_py)
 	{
@@ -188,7 +188,7 @@ void a_tensor(Double storage[],  PyInt  bra_chg_idx_py,  PyInt   ket_chg_idx_py,
 					{
 					// by construction the number of electrons in config_pQ must be n_elec[bra_chg_idx]
 					BigInt P = find_config_index(config_pQ, n_elec[bra_chg_idx], n_orbs, n_core, combinatorics[bra_chg_idx]);
-					z_contract(storage, parity_pQ, p, dim, bra_chg_idx, ket_chg_idx, n_states, z_list, n_configs, P, Q);
+					z_contract(storage, parity_pQ, p, dim, bra_chg_idx, ket_chg_idx, n_states_bra, n_states, z_list_bra, z_list, n_configs, P, Q);
 					}
 				}
 			}
@@ -197,7 +197,7 @@ void a_tensor(Double storage[],  PyInt  bra_chg_idx_py,  PyInt   ket_chg_idx_py,
 	}
 
 void c_tensor(Double storage[],  PyInt  bra_chg_idx_py,  PyInt   ket_chg_idx_py,
-              BigInt n_elec[],   BigInt n_states[],      Double* z_list[],         BigInt n_configs[],  BigInt* configs[],
+              BigInt n_elec[],   BigInt n_states_bra[], BigInt n_states[],      Double* z_list_bra[], Double* z_list[],         BigInt n_configs[],  BigInt* configs[],
               PyInt  n_orbs_py,  PyInt  n_core_py,       BigInt* combinatorics[],
               PyInt  n_threads_py)
 	{
@@ -225,7 +225,7 @@ void c_tensor(Double storage[],  PyInt  bra_chg_idx_py,  PyInt   ket_chg_idx_py,
 					{
 					// by construction the number of electrons in config_pQ must be n_elec[bra_chg_idx]
 					BigInt P = find_config_index(config_pQ, n_elec[bra_chg_idx], n_orbs, n_core, combinatorics[bra_chg_idx]);
-					z_contract(storage, parity_pQ, p, dim, bra_chg_idx, ket_chg_idx, n_states, z_list, n_configs, P, Q);
+					z_contract(storage, parity_pQ, p, dim, bra_chg_idx, ket_chg_idx, n_states_bra, n_states, z_list_bra, z_list, n_configs, P, Q);
 					}
 				}
 			}
@@ -234,7 +234,7 @@ void c_tensor(Double storage[],  PyInt  bra_chg_idx_py,  PyInt   ket_chg_idx_py,
 	}
 
 void ca_tensor(Double storage[],  PyInt  bra_chg_idx_py,  PyInt   ket_chg_idx_py,
-               BigInt n_elec[],   BigInt n_states[],      Double* z_list[],         BigInt n_configs[],  BigInt* configs[],
+               BigInt n_elec[],   BigInt n_states_bra[], BigInt n_states[],      Double* z_list_bra[], Double* z_list[],         BigInt n_configs[],  BigInt* configs[],
                PyInt  n_orbs_py,  PyInt  n_core_py,       BigInt* combinatorics[],
                PyInt  n_threads_py)
 	{
@@ -270,7 +270,7 @@ void ca_tensor(Double storage[],  PyInt  bra_chg_idx_py,  PyInt   ket_chg_idx_py
 							// by construction the number of electrons in config_pqQ must be n_elec[bra_chg_idx]
 							BigInt P = find_config_index(config_pqQ, n_elec[bra_chg_idx], n_orbs, n_core, combinatorics[bra_chg_idx]);
 							BigInt pq = p*dim + q;
-							z_contract(storage, parity_pqQ, pq, dim*dim, bra_chg_idx, ket_chg_idx, n_states, z_list, n_configs, P, Q);
+							z_contract(storage, parity_pqQ, pq, dim*dim, bra_chg_idx, ket_chg_idx, n_states_bra, n_states, z_list_bra, z_list, n_configs, P, Q);
 							}
 						}
 					}
@@ -281,7 +281,7 @@ void ca_tensor(Double storage[],  PyInt  bra_chg_idx_py,  PyInt   ket_chg_idx_py
 	}
 
 void aa_tensor(Double storage[],  PyInt  bra_chg_idx_py,  PyInt   ket_chg_idx_py,
-               BigInt n_elec[],   BigInt n_states[],      Double* z_list[],         BigInt n_configs[],  BigInt* configs[],
+               BigInt n_elec[],   BigInt n_states_bra[], BigInt n_states[],      Double* z_list_bra[], Double* z_list[],         BigInt n_configs[],  BigInt* configs[],
                PyInt  n_orbs_py,  PyInt  n_core_py,       BigInt* combinatorics[],
                PyInt  n_threads_py)
 	{
@@ -317,7 +317,7 @@ void aa_tensor(Double storage[],  PyInt  bra_chg_idx_py,  PyInt   ket_chg_idx_py
 							// by construction the number of electrons in config_pqQ must be n_elec[bra_chg_idx]
 							BigInt P = find_config_index(config_pqQ, n_elec[bra_chg_idx], n_orbs, n_core, combinatorics[bra_chg_idx]);
 							BigInt pq = p*dim + q;
-							z_contract(storage, parity_pqQ, pq, dim*dim, bra_chg_idx, ket_chg_idx, n_states, z_list, n_configs, P, Q);
+							z_contract(storage, parity_pqQ, pq, dim*dim, bra_chg_idx, ket_chg_idx, n_states_bra, n_states, z_list_bra, z_list, n_configs, P, Q);
 							}
 						}
 					}
@@ -328,7 +328,7 @@ void aa_tensor(Double storage[],  PyInt  bra_chg_idx_py,  PyInt   ket_chg_idx_py
 	}
 
 void cc_tensor(Double storage[],  PyInt  bra_chg_idx_py,  PyInt   ket_chg_idx_py,
-               BigInt n_elec[],   BigInt n_states[],      Double* z_list[],         BigInt n_configs[],  BigInt* configs[],
+               BigInt n_elec[],   BigInt n_states_bra[], BigInt n_states[],      Double* z_list_bra[], Double* z_list[],         BigInt n_configs[],  BigInt* configs[],
                PyInt  n_orbs_py,  PyInt  n_core_py,       BigInt* combinatorics[],
                PyInt  n_threads_py)
 	{
@@ -364,7 +364,7 @@ void cc_tensor(Double storage[],  PyInt  bra_chg_idx_py,  PyInt   ket_chg_idx_py
 							// by construction the number of electrons in config_pqQ must be n_elec[bra_chg_idx]
 							BigInt P = find_config_index(config_pqQ, n_elec[bra_chg_idx], n_orbs, n_core, combinatorics[bra_chg_idx]);
 							BigInt pq = p*dim + q;
-							z_contract(storage, parity_pqQ, pq, dim*dim, bra_chg_idx, ket_chg_idx, n_states, z_list, n_configs, P, Q);
+							z_contract(storage, parity_pqQ, pq, dim*dim, bra_chg_idx, ket_chg_idx, n_states_bra, n_states, z_list_bra, z_list, n_configs, P, Q);
 							}
 						}
 					}
@@ -375,7 +375,7 @@ void cc_tensor(Double storage[],  PyInt  bra_chg_idx_py,  PyInt   ket_chg_idx_py
 	}
 
 void caa_tensor(Double storage[],  PyInt  bra_chg_idx_py,  PyInt   ket_chg_idx_py,
-                BigInt n_elec[],   BigInt n_states[],      Double* z_list[],         BigInt n_configs[],  BigInt* configs[],
+                BigInt n_elec[],   BigInt n_states_bra[], BigInt n_states[],      Double* z_list_bra[], Double* z_list[],         BigInt n_configs[],  BigInt* configs[],
                 PyInt  n_orbs_py,  PyInt  n_core_py,       BigInt* combinatorics[],
                 PyInt  n_threads_py)
 	{
@@ -418,7 +418,7 @@ void caa_tensor(Double storage[],  PyInt  bra_chg_idx_py,  PyInt   ket_chg_idx_p
 									// by construction the number of electrons in config_pqrQ must be n_elec[bra_chg_idx]
 									BigInt P = find_config_index(config_pqrQ, n_elec[bra_chg_idx], n_orbs, n_core, combinatorics[bra_chg_idx]);
 									BigInt pqr = (p*dim + q)*dim + r;
-									z_contract(storage, parity_pqrQ, pqr, dim*dim*dim, bra_chg_idx, ket_chg_idx, n_states, z_list, n_configs, P, Q);
+									z_contract(storage, parity_pqrQ, pqr, dim*dim*dim, bra_chg_idx, ket_chg_idx, n_states_bra, n_states, z_list_bra, z_list, n_configs, P, Q);
 									}
 								//else {printf("\n");}
 								}
@@ -435,7 +435,7 @@ void caa_tensor(Double storage[],  PyInt  bra_chg_idx_py,  PyInt   ket_chg_idx_p
 	}
 
 void cca_tensor(Double storage[],  PyInt  bra_chg_idx_py,  PyInt   ket_chg_idx_py,
-                BigInt n_elec[],   BigInt n_states[],      Double* z_list[],         BigInt n_configs[],  BigInt* configs[],
+                BigInt n_elec[],   BigInt n_states_bra[], BigInt n_states[],      Double* z_list_bra[], Double* z_list[],         BigInt n_configs[],  BigInt* configs[],
                 PyInt  n_orbs_py,  PyInt  n_core_py,       BigInt* combinatorics[],
                 PyInt  n_threads_py)
 	{
@@ -478,7 +478,7 @@ void cca_tensor(Double storage[],  PyInt  bra_chg_idx_py,  PyInt   ket_chg_idx_p
 									// by construction the number of electrons in config_pqrQ must be n_elec[bra_chg_idx]
 									BigInt P = find_config_index(config_pqrQ, n_elec[bra_chg_idx], n_orbs, n_core, combinatorics[bra_chg_idx]);
 									BigInt pqr = (p*dim + q)*dim + r;
-									z_contract(storage, parity_pqrQ, pqr, dim*dim*dim, bra_chg_idx, ket_chg_idx, n_states, z_list, n_configs, P, Q);
+									z_contract(storage, parity_pqrQ, pqr, dim*dim*dim, bra_chg_idx, ket_chg_idx, n_states_bra, n_states, z_list_bra, z_list, n_configs, P, Q);
 									}
 								}
 							}
@@ -491,7 +491,7 @@ void cca_tensor(Double storage[],  PyInt  bra_chg_idx_py,  PyInt   ket_chg_idx_p
 	}
 
 void ccaa_tensor(Double storage[],  PyInt  bra_chg_idx_py,  PyInt   ket_chg_idx_py,
-                 BigInt n_elec[],   BigInt n_states[],      Double* z_list[],         BigInt n_configs[],  BigInt* configs[],
+                 BigInt n_elec[],   BigInt n_states_bra[], BigInt n_states[],      Double* z_list_bra[], Double* z_list[],         BigInt n_configs[],  BigInt* configs[],
                  PyInt  n_orbs_py,  PyInt  n_core_py,       BigInt* combinatorics[],
                  PyInt  n_threads_py)
 	{
@@ -541,7 +541,7 @@ void ccaa_tensor(Double storage[],  PyInt  bra_chg_idx_py,  PyInt   ket_chg_idx_
 											// by construction the number of electrons in config_pqrsQ must be n_elec[bra_chg_idx]
 											BigInt P = find_config_index(config_pqrsQ, n_elec[bra_chg_idx], n_orbs, n_core, combinatorics[bra_chg_idx]);
 											BigInt pqrs = ((p*dim + q)*dim + r)*dim + s;
-											z_contract(storage, parity_pqrsQ, pqrs, dim*dim*dim*dim, bra_chg_idx, ket_chg_idx, n_states, z_list, n_configs, P, Q);
+											z_contract(storage, parity_pqrsQ, pqrs, dim*dim*dim*dim, bra_chg_idx, ket_chg_idx, n_states_bra, n_states, z_list_bra, z_list, n_configs, P, Q);
 											}
 										}
 									}
@@ -558,7 +558,7 @@ void ccaa_tensor(Double storage[],  PyInt  bra_chg_idx_py,  PyInt   ket_chg_idx_
 // Added in Apr. 2023 (ADD) -----------------------------------------------------------------------------------------------------
 
 void caaa_tensor(Double storage[],  PyInt  bra_chg_idx_py,  PyInt   ket_chg_idx_py,
-                 BigInt n_elec[],   BigInt n_states[],      Double* z_list[],         BigInt n_configs[],  BigInt* configs[],
+                 BigInt n_elec[],   BigInt n_states_bra[], BigInt n_states[],      Double* z_list_bra[], Double* z_list[],         BigInt n_configs[],  BigInt* configs[],
                  PyInt  n_orbs_py,  PyInt  n_core_py,       BigInt* combinatorics[],
                  PyInt  n_threads_py)
 	{
@@ -608,7 +608,7 @@ void caaa_tensor(Double storage[],  PyInt  bra_chg_idx_py,  PyInt   ket_chg_idx_
 											// by construction the number of electrons in config_pqrsQ must be n_elec[bra_chg_idx]
 											BigInt P = find_config_index(config_pqrsQ, n_elec[bra_chg_idx], n_orbs, n_core, combinatorics[bra_chg_idx]);
 											BigInt pqrs = ((p*dim + q)*dim + r)*dim + s;
-											z_contract(storage, parity_pqrsQ, pqrs, dim*dim*dim*dim, bra_chg_idx, ket_chg_idx, n_states, z_list, n_configs, P, Q);
+											z_contract(storage, parity_pqrsQ, pqrs, dim*dim*dim*dim, bra_chg_idx, ket_chg_idx, n_states_bra, n_states, z_list_bra, z_list, n_configs, P, Q);
 											}
 										}
 									}
@@ -623,7 +623,7 @@ void caaa_tensor(Double storage[],  PyInt  bra_chg_idx_py,  PyInt   ket_chg_idx_
 	}
 
 void ccca_tensor(Double storage[],  PyInt  bra_chg_idx_py,  PyInt   ket_chg_idx_py,
-                 BigInt n_elec[],   BigInt n_states[],      Double* z_list[],         BigInt n_configs[],  BigInt* configs[],
+                 BigInt n_elec[],   BigInt n_states_bra[], BigInt n_states[],      Double* z_list_bra[], Double* z_list[],         BigInt n_configs[],  BigInt* configs[],
                  PyInt  n_orbs_py,  PyInt  n_core_py,       BigInt* combinatorics[],
                  PyInt  n_threads_py)
 	{
@@ -673,7 +673,7 @@ void ccca_tensor(Double storage[],  PyInt  bra_chg_idx_py,  PyInt   ket_chg_idx_
 											// by construction the number of electrons in config_pqrsQ must be n_elec[bra_chg_idx]
 											BigInt P = find_config_index(config_pqrsQ, n_elec[bra_chg_idx], n_orbs, n_core, combinatorics[bra_chg_idx]);
 											BigInt pqrs = ((p*dim + q)*dim + r)*dim + s;
-											z_contract(storage, parity_pqrsQ, pqrs, dim*dim*dim*dim, bra_chg_idx, ket_chg_idx, n_states, z_list, n_configs, P, Q);
+											z_contract(storage, parity_pqrsQ, pqrs, dim*dim*dim*dim, bra_chg_idx, ket_chg_idx, n_states_bra, n_states, z_list_bra, z_list, n_configs, P, Q);
 											}
 										}
 									}
@@ -688,7 +688,7 @@ void ccca_tensor(Double storage[],  PyInt  bra_chg_idx_py,  PyInt   ket_chg_idx_
 	}
 
 void cccaa_tensor(Double storage[],  PyInt  bra_chg_idx_py,  PyInt   ket_chg_idx_py,
-                  BigInt n_elec[],   BigInt n_states[],      Double* z_list[],         BigInt n_configs[],  BigInt* configs[],
+                  BigInt n_elec[],   BigInt n_states_bra[], BigInt n_states[],      Double* z_list_bra[], Double* z_list[],         BigInt n_configs[],  BigInt* configs[],
                   PyInt  n_orbs_py,  PyInt  n_core_py,       BigInt* combinatorics[],
                   PyInt  n_threads_py)
 	{
@@ -745,7 +745,7 @@ void cccaa_tensor(Double storage[],  PyInt  bra_chg_idx_py,  PyInt   ket_chg_idx
 													// by construction the number of electrons in config_opqrsQ must be n_elec[bra_chg_idx]
 													BigInt P = find_config_index(config_opqrsQ, n_elec[bra_chg_idx], n_orbs, n_core, combinatorics[bra_chg_idx]);
 													BigInt opqrs = (((o*dim + p)*dim + q)*dim + r)*dim + s;
-													z_contract(storage, parity_opqrsQ, opqrs, dim*dim*dim*dim*dim, bra_chg_idx, ket_chg_idx, n_states, z_list, n_configs, P, Q);
+													z_contract(storage, parity_opqrsQ, opqrs, dim*dim*dim*dim*dim, bra_chg_idx, ket_chg_idx, n_states_bra, n_states, z_list_bra, z_list, n_configs, P, Q);
 													}
 												}
 											}
@@ -762,7 +762,7 @@ void cccaa_tensor(Double storage[],  PyInt  bra_chg_idx_py,  PyInt   ket_chg_idx
 	}
 
 void ccaaa_tensor(Double storage[],  PyInt  bra_chg_idx_py,  PyInt   ket_chg_idx_py,
-                  BigInt n_elec[],   BigInt n_states[],      Double* z_list[],         BigInt n_configs[],  BigInt* configs[],
+                  BigInt n_elec[],   BigInt n_states_bra[], BigInt n_states[],      Double* z_list_bra[], Double* z_list[],         BigInt n_configs[],  BigInt* configs[],
                   PyInt  n_orbs_py,  PyInt  n_core_py,       BigInt* combinatorics[],
                   PyInt  n_threads_py)
 	{
@@ -819,7 +819,7 @@ void ccaaa_tensor(Double storage[],  PyInt  bra_chg_idx_py,  PyInt   ket_chg_idx
 													// by construction the number of electrons in config_opqrsQ must be n_elec[bra_chg_idx]
 													BigInt P = find_config_index(config_opqrsQ, n_elec[bra_chg_idx], n_orbs, n_core, combinatorics[bra_chg_idx]);
 													BigInt opqrs = (((o*dim + p)*dim + q)*dim + r)*dim + s;
-													z_contract(storage, parity_opqrsQ, opqrs, dim*dim*dim*dim*dim, bra_chg_idx, ket_chg_idx, n_states, z_list, n_configs, P, Q);
+													z_contract(storage, parity_opqrsQ, opqrs, dim*dim*dim*dim*dim, bra_chg_idx, ket_chg_idx, n_states_bra, n_states, z_list_bra, z_list, n_configs, P, Q);
 													}
 												}
 											}

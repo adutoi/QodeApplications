@@ -53,7 +53,7 @@ def add_core(core, configs):
 
 
 
-def build_tensors(states, n_spatial_orb, spatial_core, n_threads=1):
+def build_tensors(states, n_spatial_orb, spatial_core, n_threads=1, bra_det=False):
     n_spatial_core = len(spatial_core)
     n_spin_orb     = 2 * n_spatial_orb
     n_spin_core    = 2 * n_spatial_core
@@ -63,8 +63,9 @@ def build_tensors(states, n_spatial_orb, spatial_core, n_threads=1):
     z_lists = {}
     for chg,data in states.items():
         n_states  = len(data.coeffs)
+        #print("n_states", n_states)
         n_configs = len(data.configs)
-        n_elec    = data.configs[0].bit_count()
+        n_elec    = bin(data.configs[0]).count("1")  #.bit_count()
         z_lists[chg] = empty()
         z_lists[chg].coeffs  = [numpy.zeros(n_configs, dtype=Double.numpy) for _ in range(n_states)]
         z_lists[chg].configs = add_core(spin_core, all_configs(spin_active, n_elec-n_spin_core))
@@ -73,8 +74,24 @@ def build_tensors(states, n_spatial_orb, spatial_core, n_threads=1):
         for a,config in enumerate(z_lists[chg].configs):
             i = data.configs.index(array_to_configint(config))    # list.index() will raise an exception if not found
             for z in range(n_states):
+                #print("z", z)
                 z_lists[chg].coeffs[z][a] = data.coeffs[z][i]
         z_lists[chg].coeffs  = numpy.array(z_lists[chg].coeffs,  dtype=Double.numpy)
         z_lists[chg].configs = numpy.array(z_lists[chg].configs, dtype=BigInt.numpy)
 
-    return build_density_tensors(z_lists, n_spatial_orb, n_spatial_core, n_threads)
+    dens = build_density_tensors(z_lists, n_spatial_orb, n_spatial_core, n_threads, bra_det=bra_det)[0]  # this has the wrong format for the new version
+    ret = {}
+    for dens_key in dens:
+        ret[dens_key] = {}
+        for chg in dens[dens_key]:
+            if type(chg) == int:
+                ret[dens_key][chg] = dens[dens_key][chg]
+            else:
+                ret[dens_key][chg] = {}
+                for bra_ind, tens_pre in enumerate(dens[dens_key][chg]):
+                    for ket_ind, tens in enumerate(tens_pre):
+                        ret[dens_key][chg][(bra_ind, ket_ind)] = tens
+
+    return ret
+
+
