@@ -738,10 +738,10 @@ void determinant_densities(PyInt    n_create,           // number of creation op
                PyInt    n_configint_ket,    // number of BigInts needed to store a single configuration in configs_ket
                PyInt    n_threads,          // number of threads to spread the work over
                Int**    wisdom_occupied,       // if one is not NULL
-               BigInt** wisdom_det_idx)     // they should all be not NULL
+               BigInt** wisdom_det_idx, PyInt hack)     // they should all be not NULL
     {
     // call the generic driver in compute-densities mode
-    resolve(WISDOM_ONLY, n_create, n_annihil, (Double**)NULL, 0, configs_bra, n_configs_bra, n_configint_bra, (Double**)NULL, 0, configs_ket, n_configs_ket, n_configint_ket, (Double**)NULL, n_orbs, 0, 0., n_threads, GENERATE, wisdom_occupied, wisdom_det_idx);
+    resolve(WISDOM_ONLY, n_create, n_annihil, (Double**)NULL, 0, configs_bra, n_configs_bra, n_configint_bra, (Double**)NULL, 0, configs_ket, n_configs_ket, n_configint_ket, (Double**)NULL, n_orbs, hack, 0., n_threads, GENERATE, wisdom_occupied, wisdom_det_idx);
     return;
     }
 
