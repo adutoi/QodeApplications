@@ -28,7 +28,8 @@ class Hamiltonian(object):
         self.V = V
         self.thresh = thresh
         self.n_threads = n_threads
-        self.wisdom = None
+        self.wisdom_1e = None
+        self.wisdom_2e = None
         if n_elec is not None:
             self.wisdom_1e = field_op.det_densities(n_elec)
             self.wisdom_2e = field_op.det_densities(n_elec)

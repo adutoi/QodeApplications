@@ -82,9 +82,6 @@ class det_densities(object):
         self._occupied    = [numpy.zeros((self._n_elec_right,), dtype=Int.numpy)    for _ in range(len(configs_right))]
         self._det_indices = [numpy.zeros((size,),               dtype=BigInt.numpy) for _ in range(len(configs_right))]
         self._initialized = True
-    #def check(self, configs_left, configs_right):
-    #    if ((configs_left is not self._configs_left) or (configs_right is not self._configs_right)):
-    #        raise ValueError("inapplicable wisdom given to field_op engine")
     def check_initialization(self, n_orbs, n_create, n_annihil, configs_left, configs_right):
         unpopulated = False
         if not self._initialized:
@@ -124,8 +121,7 @@ def opPsi_2e(HPsi, Psi, V, configs, thresh, wisdom, n_threads):
     if wisdom is not None:
         wisdom_occupied, wisdom_det_idx, unpopulated = wisdom.check_initialization(V.shape[0], 2, 2, configs, configs)
         if unpopulated:  generate_wisdom = 1
-        else:            generate_wisdom = 0
-    generate_wisdom = 0
+        else:            generate_wisdom = 2
     field_op.op_Psi(2,                 # electron order of the operator
                     V,                 # tensor of matrix elements (integrals), assumed antisymmetrized
                     V.shape[0],        # edge dimension of the integrals tensor
@@ -152,8 +148,7 @@ def build_densities(op_string, n_orbs, bras, kets, bra_configs, ket_configs, thr
     if wisdom is not None:
         wisdom_occupied, wisdom_det_idx, unpopulated = wisdom.check_initialization(n_orbs, n_create, n_annihil, bra_configs, ket_configs)
         if unpopulated:  generate_wisdom = 1
-        else:            generate_wisdom = 0
-    generate_wisdom = 0
+        else:            generate_wisdom = 2
     field_op.densities(n_create,              # number of creation operators
                        n_annihil,             # number of annihilation operators
                        rho,                   # array of storage for density tensors (for each bra-ket pair in linear list)
