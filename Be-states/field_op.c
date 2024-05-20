@@ -88,9 +88,12 @@ void extract(int* sign, PyInt* absval, BigInt val)
 // to produce a new vector or to build transition-density tensors between vectors is largely the
 // same, so there iw one piece of code, where one of two modes is activated upon bottoming out.
 //
-#define OP_ACTION 1
-#define COMPUTE_D 2
-
+#define OP_ACTION   1
+#define COMPUTE_D   2
+#define WISDOM_ONLY 3
+#define IGNORE      0
+#define GENERATE    1
+#define APPLY       2
 
 
 // The number of orbitals represented by a single BigInt.
@@ -209,11 +212,10 @@ void resolve_recur(int      mode,             // OP_ACTION or COMPUTE_D (determi
                    int      factor,           // recursive build of factor to avoid looping over redundant matrix elements (must start as 1)
                    int      p_0,              // initial orbital index at this level, to avoid looping over redundant matrix elements (must start as 0)
                    Double   thresh,           // perform no further work if result will be smaller than this
-                   PyInt    generate_wisdom,
+                   PyInt    wisdom,
                    BigInt*  wisdom_det_idx,     // they should all be not NULL
                    BigInt*     wisdom_op_idx)
     {
-    //if (generate_wisdom) {printf("%p %d %d\n", wisdom_det_idx, n_annihil, n_create);}
     // Some admin that needs to be done for either mode at any level of recursion
     int    n_bits = orbs_per_configint();                        // number of bits/orbitals in a BigInt
     int    n_bytes_config_R = n_configint_R * sizeof(BigInt);    // number of bytes in the ket config (for memcpy)
@@ -267,7 +269,7 @@ void resolve_recur(int      mode,             // OP_ACTION or COMPUTE_D (determi
             if (reset_p_0)  {q_0 = 0;}      // ... unless we are switching from annihilation to creation operators
             other_orb_list_entry[0] = p;    // if we annihlated orbital p, we will want to loop over its creation as well (vice versa has no effect (or harm))
             // recur, passing through appropriately modified quantities (see below about inline updates)
-            resolve_recur(mode, n_create, n_annihil, Psi_L, n_Psi_L, configs_L, n_configs_L, n_configint_L, Psi_R, n_Psi_R, p_config_R, config_idx_R, n_configint_R, tensors, n_orbs, occupied, n_occ, empty, n_emt, p_cum_occ, p_permute, op_idx+p*stride, stride*n_orbs, factor, q_0, thresh, generate_wisdom, wisdom_det_idx, wisdom_op_idx);
+            resolve_recur(mode, n_create, n_annihil, Psi_L, n_Psi_L, configs_L, n_configs_L, n_configint_L, Psi_R, n_Psi_R, p_config_R, config_idx_R, n_configint_R, tensors, n_orbs, occupied, n_occ, empty, n_emt, p_cum_occ, p_permute, op_idx+p*stride, stride*n_orbs, factor, q_0, thresh, wisdom, wisdom_det_idx, wisdom_op_idx);
             }
         }
     else if (mode == OP_ACTION)    // bottom out option
@@ -277,7 +279,7 @@ void resolve_recur(int      mode,             // OP_ACTION or COMPUTE_D (determi
             int p = orb_list[p_];                                   // absolute index (see above)
             Double val = factor * tensors[0][p*stride + op_idx];    // finish building tensor index (done inline with recursion above) and get integral from only tensor
             int compute_it = (fabs(val) > thresh);
-            if (compute_it || generate_wisdom)    // do nothing if the integral is too small (thresh considers also ket coefficient)
+            if (compute_it || (wisdom == GENERATE))    // do nothing if the integral is too small (thresh considers also ket coefficient)
                 {
                 int Q = p / n_bits;                                // build ...
                 int r = p % n_bits;                                // ... modified configuration ...
@@ -285,7 +287,7 @@ void resolve_recur(int      mode,             // OP_ACTION or COMPUTE_D (determi
                 p_config_R[Q] = p_config_R[Q] ^ ((BigInt)1<<r);    // ... above
                 PyInt config_idx_L = bisect_search(p_config_R, configs_L, n_configint_L, 0, n_configs_L-1);    // EXPENSIVE! -- find left-basis index of full string on right config
                 int i;
-                if (generate_wisdom)
+                if (wisdom == GENERATE)
                     {
                     i = wisdom_op_idx[0]++;
                     wisdom_det_idx[i] = config_idx_L + 1;
@@ -295,7 +297,7 @@ void resolve_recur(int      mode,             // OP_ACTION or COMPUTE_D (determi
                     {
                     int p_permute = permute + cum_occ[n_orbs-1] - cum_occ[p];    // final permutation and ...
                     int phase = (p_permute%2) ? -1 : 1;                          // ... multiplication by resulting phase ...
-                    if (generate_wisdom)  {wisdom_det_idx[i] *= phase;}
+                    if (wisdom == GENERATE)  {wisdom_det_idx[i] *= phase;}
                     if (compute_it)
                         {
                         val *= phase;                                            // ... delayed until we know operation was nonzero
@@ -321,7 +323,7 @@ void resolve_recur(int      mode,             // OP_ACTION or COMPUTE_D (determi
             p_config_R[Q] = p_config_R[Q] ^ ((BigInt)1<<r);    // ... above
             PyInt config_idx_L = bisect_search(p_config_R, configs_L, n_configint_L, 0, n_configs_L-1);    // EXPENSIVE! -- find left-basis index of full string on right config
             int i;
-            if (generate_wisdom)
+            if (wisdom == GENERATE)
                 {
                 i = wisdom_op_idx[0]++;
                 wisdom_det_idx[i] = config_idx_L + 1;
@@ -331,7 +333,7 @@ void resolve_recur(int      mode,             // OP_ACTION or COMPUTE_D (determi
                 int p_op_idx = p*stride + op_idx;                            // finish building tensor index (done inline with recursion above)
                 int p_permute = permute + cum_occ[n_orbs-1] - cum_occ[p];    // final permutation and ...
                 int phase = (p_permute%2) ? -1 : 1;                          // ... computation of resulting phase
-                if (generate_wisdom)  {wisdom_det_idx[i] *= phase;}
+                if (wisdom == GENERATE)  {wisdom_det_idx[i] *= phase;}
                 int braket = 0;                                              // initialize a running index for the bra-ket pairs
                 for (int vL=0; vL<n_Psi_L; vL++)    // loop over the bra states ...
                     {
@@ -350,6 +352,27 @@ void resolve_recur(int      mode,             // OP_ACTION or COMPUTE_D (determi
                         braket += n_Psi_R;                                        // make sure to increment the running index even if ket loop skipped
                         }
                     }
+                }
+            }
+        }
+    else if (mode == WISDOM_ONLY)    // bottom out option
+        {
+        for (int p_=p_0; p_<p_n; p_++)    // final orbital loop (see above)
+            {
+            int p = orb_list[p_];                // absolute index (see above)
+            int Q = p / n_bits;                                // build ...
+            int r = p % n_bits;                                // ... modified configuration ...
+            memcpy(p_config_R, config_R, n_bytes_config_R);    // ... as discussed ...
+            p_config_R[Q] = p_config_R[Q] ^ ((BigInt)1<<r);    // ... above
+            PyInt config_idx_L = bisect_search(p_config_R, configs_L, n_configint_L, 0, n_configs_L-1);    // EXPENSIVE! -- find left-basis index of full string on right config
+            int i = wisdom_op_idx[0]++;
+            wisdom_det_idx[i] = config_idx_L + 1;
+            if (config_idx_L != -1)    // do nothing if action takes outside of space of configurations
+                {
+                int p_op_idx = p*stride + op_idx;                            // finish building tensor index (done inline with recursion above)
+                int p_permute = permute + cum_occ[n_orbs-1] - cum_occ[p];    // final permutation and ...
+                int phase = (p_permute%2) ? -1 : 1;                          // ... computation of resulting phase
+                wisdom_det_idx[i] *= phase;
                 }
             }
         }
@@ -541,7 +564,7 @@ void resolve(int      mode,             // OP_ACTION or COMPUTE_D (determines wh
              int      permute,          // number of permutations performed at global scope to align sign conventions
              PyFloat  thresh,           // perform no further work if result will be smaller than this
              PyInt    n_threads,        // number of threads to spread the work over
-             PyInt    generate_wisdom,
+             PyInt    wisdom,
              Int**    wisdom_occupied,       // if one is not NULL
              BigInt** wisdom_det_idx)     // they should all be not NULL
     {
@@ -558,7 +581,7 @@ void resolve(int      mode,             // OP_ACTION or COMPUTE_D (determines wh
             if (size > biggest)  {biggest = size;}    // ... for each state and compare to others
             }
 
-        if ((biggest > thresh) || (generate_wisdom == 1))    // do nothing if the configuration has no significant coefficients
+        if ((biggest > thresh) || (wisdom == GENERATE))    // do nothing if the configuration has no significant coefficients
             {
             BigInt* config = configs_R + (n * n_configint_R);    // config[] is now an array of integers collectively holding the present configuration
 
@@ -578,17 +601,17 @@ void resolve(int      mode,             // OP_ACTION or COMPUTE_D (determines wh
 
             BigInt* wisdom_det_idx_n = (BigInt*)NULL;
             BigInt     wisdom_op_idx[1];
-            if (generate_wisdom > 0)
+            if ((wisdom == GENERATE) || (wisdom == APPLY))
                 {
                 wisdom_det_idx_n = wisdom_det_idx[n];
                 wisdom_op_idx[0] = 0;
-                if (generate_wisdom == 1)
-                    {
-                    for (int i=0; i<n_occ; i++)  {wisdom_occupied[n][i] = occupied[i];}
-                    }
+                }
+            if (wisdom == GENERATE)
+                {
+                for (int i=0; i<n_occ; i++)  {wisdom_occupied[n][i] = occupied[i];}
                 }
 
-            if (generate_wisdom == 2)
+            if (wisdom == APPLY)
                 {
                 resolve_recur_wise(mode, n_create, n_annihil, Psi_L, n_Psi_L, Psi_R, n_Psi_R, n, tensors, n_orbs, occupied, n_occ, empty, n_emt, 0, 1, 1, 0, thresh/biggest, wisdom_det_idx_n, wisdom_op_idx);
                 }
@@ -596,7 +619,7 @@ void resolve(int      mode,             // OP_ACTION or COMPUTE_D (determines wh
                 {
                 // begin the recursive kernel that loops over orbital indices for the operator string, and coefficients for the ket (and perhaps bra) state(s)
                 // dividing thresh/biggest yields a an effective threshold for multiploer of a ket coefficient (like a matrix element or a bra coefficient)
-                resolve_recur(mode, n_create, n_annihil, Psi_L, n_Psi_L, configs_L, n_configs_L, n_configint_L, Psi_R, n_Psi_R, config, n, n_configint_R, tensors, n_orbs, occupied, n_occ, empty, n_emt, cum_occ, permute, 0, 1, 1, 0, thresh/biggest, generate_wisdom, wisdom_det_idx_n, wisdom_op_idx);
+                resolve_recur(mode, n_create, n_annihil, Psi_L, n_Psi_L, configs_L, n_configs_L, n_configint_L, Psi_R, n_Psi_R, config, n, n_configint_R, tensors, n_orbs, occupied, n_occ, empty, n_emt, cum_occ, permute, 0, 1, 1, 0, thresh/biggest, wisdom, wisdom_det_idx_n, wisdom_op_idx);
                 }
             }
         }
@@ -642,13 +665,13 @@ void op_Psi(PyInt    n_elec,        // electron order of the operator
             PyInt    n_configint,   // number of BigInts needed to store a single configuration in configs
             PyFloat  thresh,        // perform no further work if result will be smaller than this
             PyInt    n_threads,     // number of threads to spread the work over
-            PyInt    generate_wisdom,
+            PyInt    wisdom,
             Int**    wisdom_occupied,       // if one is not NULL
             BigInt** wisdom_det_idx)     // they should all be not NULL
     {
     int permute = (n_elec/2) % 2;    // accounts for a permutation of the type seen in the far right of the equation in the comments, to align index orders
     // call the generic driver in operator-action mode
-    resolve(OP_ACTION, n_elec, n_elec, opPsi, n_Psi, configs, n_configs, n_configint, Psi, n_Psi, configs, n_configs, n_configint, &op, n_orbs, permute, thresh, n_threads, generate_wisdom, wisdom_occupied, wisdom_det_idx);
+    resolve(OP_ACTION, n_elec, n_elec, opPsi, n_Psi, configs, n_configs, n_configint, Psi, n_Psi, configs, n_configs, n_configint, &op, n_orbs, permute, thresh, n_threads, wisdom, wisdom_occupied, wisdom_det_idx);
     return;
     }
 
@@ -695,12 +718,30 @@ void densities(PyInt    n_create,           // number of creation operators
                PyInt    n_configint_ket,    // number of BigInts needed to store a single configuration in configs_ket
                PyFloat  thresh,             // perform no further work if result will be smaller than this
                PyInt    n_threads,          // number of threads to spread the work over
-               PyInt    generate_wisdom,
+               PyInt    wisdom,
                Int**    wisdom_occupied,       // if one is not NULL
                BigInt** wisdom_det_idx)     // they should all be not NULL
     {
     // call the generic driver in compute-densities mode
-    resolve(COMPUTE_D, n_create, n_annihil, bras, n_bras, configs_bra, n_configs_bra, n_configint_bra, kets, n_kets, configs_ket, n_configs_ket, n_configint_ket, rho, n_orbs, 0, thresh, n_threads, generate_wisdom, wisdom_occupied, wisdom_det_idx);
+    resolve(COMPUTE_D, n_create, n_annihil, bras, n_bras, configs_bra, n_configs_bra, n_configint_bra, kets, n_kets, configs_ket, n_configs_ket, n_configint_ket, rho, n_orbs, 0, thresh, n_threads, wisdom, wisdom_occupied, wisdom_det_idx);
+    return;
+    }
+
+void determinant_densities(PyInt    n_create,           // number of creation operators
+               PyInt    n_annihil,          // number of annihilation operators
+               PyInt    n_orbs,             // edge dimension of each density tensor
+               BigInt*  configs_bra,        // configuration strings representing the basis for the bras (see global comments above about format)
+               PyInt    n_configs_bra,      // number of configurations in the basis configs_bra (call signature ok if PyInt not longer than BigInt)
+               PyInt    n_configint_bra,    // number of BigInts needed to store a single configuration in configs_bra
+               BigInt*  configs_ket,        // configuration strings representing the basis for the kets (see global comments above about format)
+               PyInt    n_configs_ket,      // number of configurations in the basis configs_ket (call signature ok if PyInt not longer than BigInt)
+               PyInt    n_configint_ket,    // number of BigInts needed to store a single configuration in configs_ket
+               PyInt    n_threads,          // number of threads to spread the work over
+               Int**    wisdom_occupied,       // if one is not NULL
+               BigInt** wisdom_det_idx)     // they should all be not NULL
+    {
+    // call the generic driver in compute-densities mode
+    resolve(WISDOM_ONLY, n_create, n_annihil, (Double**)NULL, 0, configs_bra, n_configs_bra, n_configint_bra, (Double**)NULL, 0, configs_ket, n_configs_ket, n_configint_ket, (Double**)NULL, n_orbs, 0, 0., n_threads, GENERATE, wisdom_occupied, wisdom_det_idx);
     return;
     }
 
