@@ -54,7 +54,8 @@
  * - spin symmetry?
  */
 
-#include <stdlib.h>       // exit()
+#include <stdio.h>        // printf() for debug
+#include <stdlib.h>       // exit(), llabs()
 #include <string.h>       // memcpy()
 #include <math.h>         // fabs()
 #include "PyC_types.h"    // PyInt, BigInt, Double
@@ -62,11 +63,25 @@
 #include <omp.h>          // multithreading
 #endif
 
-int sign(BigInt i)
-    {
-    return (i > 0) - (i < 0);
-    }
+//int sign(BigInt i)
+//    {
+//    return (i > 0) - (i < 0);
+//    }
 
+void extract(int* sign, PyInt* absval, BigInt val)
+    {
+    if (val >= 0)
+        {
+        *sign   = 1;
+        *absval = val - 1;
+        }
+    else
+        {
+        *sign   = -1;
+        *absval = (-val) - 1;
+        }
+    return;
+    }
 
 
 // The operation of the recursive kernel for performing the action of an operator on a vector
@@ -196,8 +211,9 @@ void resolve_recur(int      mode,             // OP_ACTION or COMPUTE_D (determi
                    Double   thresh,           // perform no further work if result will be smaller than this
                    PyInt    generate_wisdom,
                    BigInt*  wisdom_det_idx,     // they should all be not NULL
-                   int*     wisdom_op_idx)
+                   BigInt*     wisdom_op_idx)
     {
+    //if (generate_wisdom) {printf("%p %d %d\n", wisdom_det_idx, n_annihil, n_create);}
     // Some admin that needs to be done for either mode at any level of recursion
     int    n_bits = orbs_per_configint();                        // number of bits/orbitals in a BigInt
     int    n_bytes_config_R = n_configint_R * sizeof(BigInt);    // number of bytes in the ket config (for memcpy)
@@ -273,6 +289,7 @@ void resolve_recur(int      mode,             // OP_ACTION or COMPUTE_D (determi
                     {
                     i = wisdom_op_idx[0]++;
                     wisdom_det_idx[i] = config_idx_L + 1;
+                    //printf("%d  %d\n", i, wisdom_det_idx[i]);
                     }
                 if (config_idx_L != -1)    // do nothing if action takes outside of space of configurations
                     {
@@ -346,6 +363,193 @@ void resolve_recur(int      mode,             // OP_ACTION or COMPUTE_D (determi
 
 
 
+
+void resolve_recur_wise(int      mode,             // OP_ACTION or COMPUTE_D (determines whether using Psi_L for storing new states or as bras)
+                   PyInt    n_create,         // number of creation operators at present level of recursion
+                   PyInt    n_annihil,        // number of annihilation operators at present level of recursion
+                   Double** Psi_L,            // states being produced (LHS of equation) for OP_ACTION; states in the bra (on left) for COMPUTE_D
+                   PyInt    n_Psi_L,          // number of states in Psi_L (for OP_ACTION, must have n_Psi_L==n_Psi_R, below)
+                   BigInt*  configs_L,        // configuration strings representing the basis for the states in Psi_L
+                   PyInt    n_configs_L,      // number of configurations in the basis configs_L
+                   PyInt    n_configint_L,    // number of BigInts needed to store a single configuration in configs_L
+                   Double** Psi_R,            // states being acted on (RHS of equation) for OP_ACTION; states in the ket (on right) for COMPUTE_D
+                   PyInt    n_Psi_R,          // number of states in Psi_R (for OP_ACTION, must have n_Psi_L==n_Psi_R, above)
+                   BigInt*  config_R,         // ket (right-hand) configuration being acted upon at present layer of recursion
+                   PyInt    config_idx_R,     // index of the configuration (in the right-hand basis) acted upon at the *top* layer of recursion
+                   PyInt    n_configint_R,    // number of BigInts needed to store the ket configuration being acted on, at any level of recursion
+                   Double** tensors,          // tensor of matrix elements (sole entry) for OP_ACTION, or storage for output (array of arrays) for COMPUTE_D
+                   PyInt    n_orbs,           // edge dimension of the tensor(s)
+                   int*     occupied,         // indices of orbitals that are occupied in the configuration at the present level of recursion (not necessarily in order)
+                   int      n_occ,            // number of orbitals that are occupied at the present level of recursion
+                   int*     empty,            // indices of orbitals that are empty in the configuration at the present level of recursion (not necessarily in order)
+                   int      n_emt,            // number of orbitals that are empty at the present level of recursion
+                   int*     cum_occ,          // cumulative number of orbitals at or below a given index that are occupied at present level of recursion
+                   int      permute,          // number of permutations performed so far to satisfy the field-operator prepend convention for ket orbitals in descending order
+                   int      op_idx,           // recursive build of index for the tensors array
+                   int      stride,           // stride to be applied at this level of recursion in order to build op_idx (must start as 1)
+                   int      factor,           // recursive build of factor to avoid looping over redundant matrix elements (must start as 1)
+                   int      p_0,              // initial orbital index at this level, to avoid looping over redundant matrix elements (must start as 0)
+                   Double   thresh,           // perform no further work if result will be smaller than this
+                   PyInt    generate_wisdom,
+                   BigInt*  wisdom_det_idx,     // they should all be not NULL
+                   BigInt*     wisdom_op_idx)
+    {
+    //printf("%p\n", wisdom_det_idx);
+    // Some admin that needs to be done for either mode at any level of recursion
+    int    n_bits = orbs_per_configint();                        // number of bits/orbitals in a BigInt
+    int    n_bytes_config_R = n_configint_R * sizeof(BigInt);    // number of bytes in the ket config (for memcpy)
+    BigInt p_config_R[n_configint_R];                            // a place to store modified configurations
+    int    p_n;                                                  // see ...
+    int*   orb_list;                                             // ... below
+    if (n_annihil > 0)    // will loop over annihilation (occupied) index
+        {
+        p_n      = n_occ;       // upper limit of the orbital loop if doing annihlation operator
+        orb_list = occupied;    // resolution of counting index to orbital index draws from occupied orbitals of present configurations
+        }
+    else                  // will loop over creation (empty) index
+        {
+        p_n      = n_emt;       // upper limit of the orbital loop if doing creation operator
+        orb_list = empty;       // resolution of counting index to orbital index draws from empty orbitals of present configurations
+        }
+
+    if (n_annihil + n_create > 1)    // recursive part (there is still >1 loop to go)
+        {
+        int  n_bytes_cum_occ = n_orbs * sizeof(int);    // number of bytes in cum_occ array (for memcpy)
+        int  p_cum_occ[n_orbs];                         // a place to store modified cum_occ arrays
+        int  reset_p_0 = 0;                             // see ...
+        int  occ_change;                                //   ...
+        int* other_orb_list_entry;                      // ... below
+        if (n_annihil > 0)    // will loop over annihilation (occupied) index
+            {
+            factor *= n_annihil;                          // increase the redundancy factor (only used for OP_ACTION)
+            n_annihil--;                                  // there will be one less annihilation loop
+            other_orb_list_entry = empty + n_emt++;       // we will eventually add the orbital index to the end of the empty array (whose length is incremented)
+            occ_change = -1;                              // occupancies in cum_occ array will go down
+            if (n_annihil == 0) {reset_p_0 = 1;}          // if this is the last annihilation operator we will reset the beginning index of the orbital loops (for creation loops)
+            }
+	else                  // will loop over creation (empty) index
+            {
+            factor *= n_create;                           // increase the redundancy factor (only used for OP_ACTION)
+            n_create--;                                   // there will be one less creation loop
+            other_orb_list_entry = occupied + n_occ++;    // we will eventually add the orbital index to the end of the occupied array (whose length is incremented). Ignored (see below)
+            occ_change = +1;                              // occupancies in cum_occ array will go up
+            }
+        for (int p_=p_0; p_<p_n; p_++)    // loop over the "counting" index for either occupieds or empties (starting from the given value; see below)
+            {
+            int p = orb_list[p_];    // "absolute" index of the orbital
+            int Q = p / n_bits;      // Q=quotient:  in which component of config is orbital p?
+            int r = p % n_bits;      // r=remainder: which bit in ^this component is this orbital?
+            int p_permute = permute + cum_occ[n_orbs-1] - cum_occ[p];     // how many permutations does it take to get to/from position p to the front (prepend convention)
+            memcpy(p_config_R, config_R, n_bytes_config_R);               // a copy of the original configuration ...
+            p_config_R[Q] = p_config_R[Q] ^ ((BigInt)1<<r);               // ... with occupancy of postion p flipped
+            memcpy(p_cum_occ, cum_occ, n_bytes_cum_occ);                  // a copy of the cum_occ array ...
+            for (int i=p; i<n_orbs; i++) {p_cum_occ[i] -= occ_change;}    // ... with occupancies appropriately altered
+            int q_0 = p_ + 1;               // the beginning of the next loop starts above the current index ...
+            if (reset_p_0)  {q_0 = 0;}      // ... unless we are switching from annihilation to creation operators
+            other_orb_list_entry[0] = p;    // if we annihlated orbital p, we will want to loop over its creation as well (vice versa has no effect (or harm))
+            // recur, passing through appropriately modified quantities (see below about inline updates)
+            resolve_recur_wise(mode, n_create, n_annihil, Psi_L, n_Psi_L, configs_L, n_configs_L, n_configint_L, Psi_R, n_Psi_R, p_config_R, config_idx_R, n_configint_R, tensors, n_orbs, occupied, n_occ, empty, n_emt, p_cum_occ, p_permute, op_idx+p*stride, stride*n_orbs, factor, q_0, thresh, 1, wisdom_det_idx, wisdom_op_idx);
+            }
+        }
+    else if (mode == OP_ACTION)    // bottom out option
+        {
+        for (int p_=p_0; p_<p_n; p_++)    // final orbital loop (see above)
+            {
+            int p = orb_list[p_];                                   // absolute index (see above)
+            Double val = factor * tensors[0][p*stride + op_idx];    // finish building tensor index (done inline with recursion above) and get integral from only tensor
+            int compute_it = (fabs(val) > thresh);
+            if (compute_it || generate_wisdom)    // do nothing if the integral is too small (thresh considers also ket coefficient)
+                {
+                int Q = p / n_bits;                                // build ...
+                int r = p % n_bits;                                // ... modified configuration ...
+                memcpy(p_config_R, config_R, n_bytes_config_R);    // ... as discussed ...
+                p_config_R[Q] = p_config_R[Q] ^ ((BigInt)1<<r);    // ... above
+                PyInt config_idx_L = bisect_search(p_config_R, configs_L, n_configint_L, 0, n_configs_L-1);    // EXPENSIVE! -- find left-basis index of full string on right config
+                int i;
+                int phase;
+                if (generate_wisdom)
+                    {
+                    i = wisdom_op_idx[0]++;
+                    //wisdom_det_idx[i] = config_idx_L + 1;
+                    PyInt tmp;
+                    extract(&phase, &config_idx_L, wisdom_det_idx[i]);
+                    //printf("%d %d %d %d\n", i, config_idx_L, tmp, wisdom_det_idx[i]);
+                    }
+                if (config_idx_L != -1)    // do nothing if action takes outside of space of configurations
+                    {
+                    int p_permute = permute + cum_occ[n_orbs-1] - cum_occ[p];    // final permutation and ...
+                    //phase = (p_permute%2) ? -1 : 1;                          // ... multiplication by resulting phase ...
+                    if (generate_wisdom)  {wisdom_det_idx[i] *= phase;}
+                    if (compute_it)
+                        {
+                        val *= phase;                                            // ... delayed until we know operation was nonzero
+                        for (int v=0; v<n_Psi_R; v++)    // for each vector in the input set ...
+                            {
+                            Double update = val * Psi_R[v][config_idx_R];    // ... connect the input configuration ...
+                            #pragma omp atomic                               // ... (in a thread-safe way) ...
+                            Psi_L[v][config_idx_L] += update;                // ... to the slot of the output
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    else if (mode == COMPUTE_D)    // bottom out option
+        {
+        for (int p_=p_0; p_<p_n; p_++)    // final orbital loop (see above)
+            {
+            int p = orb_list[p_];                // absolute index (see above)
+            int Q = p / n_bits;                                // build ...
+            int r = p % n_bits;                                // ... modified configuration ...
+            memcpy(p_config_R, config_R, n_bytes_config_R);    // ... as discussed ...
+            p_config_R[Q] = p_config_R[Q] ^ ((BigInt)1<<r);    // ... above
+            PyInt config_idx_L = bisect_search(p_config_R, configs_L, n_configint_L, 0, n_configs_L-1);    // EXPENSIVE! -- find left-basis index of full string on right config
+            int i;
+            if (generate_wisdom)
+                {
+                i = wisdom_op_idx[0]++;
+                wisdom_det_idx[i] = config_idx_L + 1;
+                }
+            if (config_idx_L != -1)    // do nothing if action takes outside of space of configurations
+                {
+                int p_op_idx = p*stride + op_idx;                            // finish building tensor index (done inline with recursion above)
+                int p_permute = permute + cum_occ[n_orbs-1] - cum_occ[p];    // final permutation and ...
+                int phase = (p_permute%2) ? -1 : 1;                          // ... computation of resulting phase
+                if (generate_wisdom)  {wisdom_det_idx[i] *= phase;}
+                int braket = 0;                                              // initialize a running index for the bra-ket pairs
+                for (int vL=0; vL<n_Psi_L; vL++)    // loop over the bra states ...
+                    {
+                    Double coeff_L = phase * Psi_L[vL][config_idx_L];    // ... and get the phased coefficient of the left configuration for each state
+                    if (fabs(coeff_L) > thresh)    // do nothing if left coefficient is too small (thresh considers also ket coefficient)
+                        {
+                        for (int vR=0; vR<n_Psi_R; vR++)    // loop over the ket states ...
+                            {
+                            Double update = coeff_L * Psi_R[vR][config_idx_R];    // ... and add the (phased) product of the left and right coefficients ...
+                            #pragma omp atomic                                    // ... (in a thread-safe way) ...
+                            tensors[braket++][p_op_idx] += update;                // ... to the precomputed location in the tensor for the corresponding bra-ket pair (which is incremented)
+                            }
+                        }
+                    else
+                        {
+                        braket += n_Psi_R;                                        // make sure to increment the running index even if ket loop skipped
+                        }
+                    }
+                }
+            }
+        }
+    else
+       {
+       exit(EXIT_FAILURE);    // unlikely, but just in case, an exit here will be easier to debug
+       }
+
+    return;
+    }
+
+
+
+
+
+
 // The set-up/driver for the recursive kernel, which is itself called by more specialized code to
 // perform one of two actions (described shortly).  See comments with the recursive kernel above
 // for more information on the implementation, and see comments with the top-level functions below
@@ -402,7 +606,7 @@ void resolve(int      mode,             // OP_ACTION or COMPUTE_D (determines wh
             if (size > biggest)  {biggest = size;}    // ... for each state and compare to others
             }
 
-        if (biggest > thresh)    // do nothing if the configuration has no significant coefficients
+        if ((biggest > thresh) || (generate_wisdom == 1))    // do nothing if the configuration has no significant coefficients
             {
             BigInt* config = configs_R + (n * n_configint_R);    // config[] is now an array of integers collectively holding the present configuration
 
@@ -421,17 +625,27 @@ void resolve(int      mode,             // OP_ACTION or COMPUTE_D (determines wh
                 }
 
             BigInt* wisdom_det_idx_n = (BigInt*)NULL;
-            int     wisdom_op_idx[1];
-            if (generate_wisdom)
+            BigInt     wisdom_op_idx[1];
+            if (generate_wisdom > 0)
                 {
                 wisdom_det_idx_n = wisdom_det_idx[n];
                 wisdom_op_idx[0] = 0;
-                for (int i=0; i<n_occ; i++)  {wisdom_occupied[n][i] = occupied[i];}
+                if (generate_wisdom == 1)
+                    {
+                    for (int i=0; i<n_occ; i++)  {wisdom_occupied[n][i] = occupied[i];}
+                    }
                 }
 
-            // begin the recursive kernel that loops over orbital indices for the operator string, and coefficients for the ket (and perhaps bra) state(s)
-            // dividing thresh/biggest yields a an effective threshold for multiploer of a ket coefficient (like a matrix element or a bra coefficient)
-            resolve_recur(mode, n_create, n_annihil, Psi_L, n_Psi_L, configs_L, n_configs_L, n_configint_L, Psi_R, n_Psi_R, config, n, n_configint_R, tensors, n_orbs, occupied, n_occ, empty, n_emt, cum_occ, permute, 0, 1, 1, 0, thresh/biggest, generate_wisdom, wisdom_det_idx_n, wisdom_op_idx);
+            if (generate_wisdom == 2)
+                {
+                resolve_recur_wise(mode, n_create, n_annihil, Psi_L, n_Psi_L, configs_L, n_configs_L, n_configint_L, Psi_R, n_Psi_R, config, n, n_configint_R, tensors, n_orbs, occupied, n_occ, empty, n_emt, cum_occ, permute, 0, 1, 1, 0, thresh/biggest, 1, wisdom_det_idx_n, wisdom_op_idx);
+                }
+            else
+                {
+                // begin the recursive kernel that loops over orbital indices for the operator string, and coefficients for the ket (and perhaps bra) state(s)
+                // dividing thresh/biggest yields a an effective threshold for multiploer of a ket coefficient (like a matrix element or a bra coefficient)
+                resolve_recur(mode, n_create, n_annihil, Psi_L, n_Psi_L, configs_L, n_configs_L, n_configint_L, Psi_R, n_Psi_R, config, n, n_configint_R, tensors, n_orbs, occupied, n_occ, empty, n_emt, cum_occ, permute, 0, 1, 1, 0, thresh/biggest, generate_wisdom, wisdom_det_idx_n, wisdom_op_idx);
+                }
             }
         }
 

@@ -30,11 +30,12 @@ class Hamiltonian(object):
         self.n_threads = n_threads
         self.wisdom = None
         if n_elec is not None:
-            self.wisdom = field_op.det_densities(n_elec)
+            self.wisdom_1e = field_op.det_densities(n_elec)
+            self.wisdom_2e = field_op.det_densities(n_elec)
     def set_n_threads(self, n_threads):
         self.n_threads = n_threads
     def __call__(self, Psi, configs):
         HPsi = numpy.zeros(len(configs), dtype=Double.numpy)
-        field_op.opPsi_1e(HPsi, Psi, self.h, configs, self.thresh, self.wisdom, self.n_threads)
-        field_op.opPsi_2e(HPsi, Psi, self.V, configs, self.thresh, self.wisdom, self.n_threads)
+        field_op.opPsi_1e(HPsi, Psi, self.h, configs, self.thresh, self.wisdom_1e, self.n_threads)
+        field_op.opPsi_2e(HPsi, Psi, self.V, configs, self.thresh, self.wisdom_2e, self.n_threads)
         return HPsi

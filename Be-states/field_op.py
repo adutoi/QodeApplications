@@ -69,33 +69,41 @@ def find_index_by_occ(occupied, configs):
 class det_densities(object):
     def __init__(self, n_elec_right):
         self._n_elec_right  = n_elec_right
-        self.occupied      = None
-        self.det_indices   = None
+        self._occupied      = None
+        self._det_indices   = None
         self._configs_left  = None
         self._configs_right = None
-        self.initialized    = False
-    def initialize(self, n_orbs, n_create, n_annihil, configs_left, configs_right):
+        self._scal_params   = None
+        self._initialized    = False
+    def _initialize(self, n_orbs, n_create, n_annihil, configs_left, configs_right):
         self._configs_left, self._configs_right = configs_left, configs_right
+        self._scal_params = (n_orbs, n_create, n_annihil)
         size = (n_orbs - self._n_elec_right + n_annihil)**n_create * self._n_elec_right**n_annihil
-        self.occupied    = [numpy.zeros((self._n_elec_right,), dtype=Int.numpy)    for _ in range(len(configs_right))]
-        self.det_indices = [numpy.zeros((size,),               dtype=BigInt.numpy) for _ in range(len(configs_right))]
-        self.initialized = True
-    def check(self, configs_left, configs_right):
+        self._occupied    = [numpy.zeros((self._n_elec_right,), dtype=Int.numpy)    for _ in range(len(configs_right))]
+        self._det_indices = [numpy.zeros((size,),               dtype=BigInt.numpy) for _ in range(len(configs_right))]
+        self._initialized = True
+    #def check(self, configs_left, configs_right):
+    #    if ((configs_left is not self._configs_left) or (configs_right is not self._configs_right)):
+    #        raise ValueError("inapplicable wisdom given to field_op engine")
+    def check_initialization(self, n_orbs, n_create, n_annihil, configs_left, configs_right):
+        unpopulated = False
+        if not self._initialized:
+            self._initialize(n_orbs, n_create, n_annihil, configs_left, configs_right)
+            unpopulated = True
         if ((configs_left is not self._configs_left) or (configs_right is not self._configs_right)):
             raise ValueError("inapplicable wisdom given to field_op engine")
+        if ((n_orbs, n_create, n_annihil) != self._scal_params):
+            raise ValueError("inapplicable wisdom given to field_op engine")
+        return self._occupied, self._det_indices, unpopulated
 
 def opPsi_1e(HPsi, Psi, h, configs, thresh, wisdom, n_threads):
     generate_wisdom = 0
     wisdom_occupied = [numpy.zeros((1,),    dtype=Int.numpy)]
     wisdom_det_idx  = [numpy.zeros((1,), dtype=BigInt.numpy)]
     if wisdom is not None:
-        if wisdom.initialized:
-            wisdom.check(configs, configs)
-        else:
-            wisdom.initialize(h.shape[0], 1, 1, configs, configs)
-            generate_wisdom = 1
-        wisdom_occupied = wisdom.occupied
-        wisdom_det_idx  = wisdom.det_indices 
+        wisdom_occupied, wisdom_det_idx, unpopulated = wisdom.check_initialization(h.shape[0], 1, 1, configs, configs)
+        if unpopulated:  generate_wisdom = 1
+        else:            generate_wisdom = 2
     field_op.op_Psi(1,                 # electron order of the operator
                     h,                 # tensor of matrix elements (integrals), assumed antisymmetrized
                     h.shape[0],        # edge dimension of the integrals tensor
@@ -114,13 +122,10 @@ def opPsi_2e(HPsi, Psi, V, configs, thresh, wisdom, n_threads):
     wisdom_occupied = [numpy.zeros((1,),    dtype=Int.numpy)]
     wisdom_det_idx  = [numpy.zeros((1,), dtype=BigInt.numpy)]
     if wisdom is not None:
-        if wisdom.initialized:
-            wisdom.check(configs, configs)
-        else:
-            wisdom.initialize(V.shape[0], 2, 2, configs, configs)
-            generate_wisdom = 1
-        wisdom_occupied = wisdom.occupied
-        wisdom_det_idx  = wisdom.det_indices 
+        wisdom_occupied, wisdom_det_idx, unpopulated = wisdom.check_initialization(V.shape[0], 2, 2, configs, configs)
+        if unpopulated:  generate_wisdom = 1
+        else:            generate_wisdom = 0
+    generate_wisdom = 0
     field_op.op_Psi(2,                 # electron order of the operator
                     V,                 # tensor of matrix elements (integrals), assumed antisymmetrized
                     V.shape[0],        # edge dimension of the integrals tensor
@@ -145,13 +150,10 @@ def build_densities(op_string, n_orbs, bras, kets, bra_configs, ket_configs, thr
     wisdom_occupied = [numpy.zeros((1,),    dtype=Int.numpy)]
     wisdom_det_idx  = [numpy.zeros((1,), dtype=BigInt.numpy)]
     if wisdom is not None:
-        if wisdom.initialized:
-            wisdom.check(bra_configs, ket_configs)
-        else:
-            wisdom.initialize(n_orbs, n_create, n_annihil, bra_configs, ket_configs)
-            generate_wisdom = 1
-        wisdom_occupied = wisdom.occupied
-        wisdom_det_idx  = wisdom.det_indices 
+        wisdom_occupied, wisdom_det_idx, unpopulated = wisdom.check_initialization(n_orbs, n_create, n_annihil, bra_configs, ket_configs)
+        if unpopulated:  generate_wisdom = 1
+        else:            generate_wisdom = 0
+    generate_wisdom = 0
     field_op.densities(n_create,              # number of creation operators
                        n_annihil,             # number of annihilation operators
                        rho,                   # array of storage for density tensors (for each bra-ket pair in linear list)
