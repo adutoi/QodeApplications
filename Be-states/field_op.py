@@ -105,8 +105,8 @@ def build_densities(op_string, n_orbs, bras, kets, bra_configs, ket_configs, thr
     print("####", op_string, "->", shape, "x", len(bras)*len(kets))
     if len(bras) > 200 and op_string == "ccaa":
         # only do this for ccaa -1 -1
-        tmp = tens_wrap(numpy.zeros(shape[0]))
-        print("this density was taken as zero tensor")
+        tmp = tens_wrap(numpy.ones(shape[0]) * 1e-10)  # choosing this as actual zeros, leads to numerical inconsistencies in the gradients
+        print("this density was taken as an almost zero tensor. Beware, that this is an approximation!")
         rho = [tmp(0) @ tmp(1) @ tmp(2) @ tmp(3) for _ in range(len(bras)*len(kets))]
         #rho = [numpy.zeros(shape, dtype=Double.numpy) for _ in range(len(bras)*len(kets))]
         #return {(i,j): rho[i*len(kets)+j] for i in range(len(bras)) for j in range(len(kets))}

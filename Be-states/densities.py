@@ -75,9 +75,8 @@ def build_tensors(states, n_orbs, n_elec_0, thresh=1e-10, n_threads=1, bra_det=F
                         indices = list(range(len(op_string)))
                         c_count = op_string.count("c")
                         try:
-                            #if op_string == "ccaa" and (bra_chg == -1 and ket_chg == -1):
                             if len(bra_coeffs) > 200 and op_string == "ccaa":
-                                #print("this density is not SVD'd, because it's a zero tensor")
+                                print("this density is not SVD'd, because it's already in a compressed form")
                                 #rho[i,j] = tens_wrap(rho[i,j])  # this density is already a tl_tensor object
                                 pass
                             else:

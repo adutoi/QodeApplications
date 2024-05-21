@@ -8973,3 +8973,879 @@ HF: Form D                          :      0.000u      0.000s      0.000w     10
 Libint2ERI::Libint2ERI              :      0.017u      0.000s      0.017w      9 calls
 
 **************************************************************************************
+
+Host: marcovm
+
+Timers On : Mon May 20 14:36:52 2024
+Timers Off: Mon May 20 23:38:16 2024
+
+Wall Time:    32483.32 seconds
+
+                                                       Time (seconds)
+Module                                       User      System        Wall        Calls
+Total PK formation time             :      0.017u      0.000s      0.015w      2 calls
+Libint2ERI::Libint2ERI              :      0.017u      0.000s      0.026w     13 calls
+HF: Form core H                     :      0.000u      0.000s      0.002w      2 calls
+HF: Form S/X                        :      0.000u      0.000s      0.001w      2 calls
+HF: Guess                           :      0.000u      0.000s      0.000w      2 calls
+HF: Form G                          :      0.000u      0.000s      0.001w     10 calls
+JK: D                               :      0.000u      0.000s      0.000w     10 calls
+JK: USO2AO                          :      0.000u      0.000s      0.000w     10 calls
+JK: JK                              :      0.000u      0.000s      0.000w     10 calls
+PK computes JK                      :      0.000u      0.000s      0.000w     10 calls
+JK: AO2USO                          :      0.000u      0.000s      0.000w     10 calls
+HF: Form F                          :      0.000u      0.000s      0.001w     10 calls
+HF: DIIS                            :      0.167u      0.000s      0.043w     10 calls
+HF: Form C                          :      0.000u      0.000s      0.003w     10 calls
+HF: Form D                          :      0.000u      0.000s      0.000w     10 calls
+
+--------------------------------------------------------------------------------------
+Total PK formation time             :      0.017u      0.000s      0.015w      2 calls
+| Libint2ERI::Libint2ERI            :      0.000u      0.000s      0.006w      4 calls
+HF: Form core H                     :      0.000u      0.000s      0.002w      2 calls
+HF: Form S/X                        :      0.000u      0.000s      0.001w      2 calls
+HF: Guess                           :      0.000u      0.000s      0.000w      2 calls
+HF: Form G                          :      0.000u      0.000s      0.001w     10 calls
+| JK: D                             :      0.000u      0.000s      0.000w     10 calls
+| JK: USO2AO                        :      0.000u      0.000s      0.000w     10 calls
+| JK: JK                            :      0.000u      0.000s      0.000w     10 calls
+| | PK computes JK                  :      0.000u      0.000s      0.000w     10 calls
+| JK: AO2USO                        :      0.000u      0.000s      0.000w     10 calls
+HF: Form F                          :      0.000u      0.000s      0.001w     10 calls
+HF: DIIS                            :      0.167u      0.000s      0.043w     10 calls
+HF: Form C                          :      0.000u      0.000s      0.003w     10 calls
+HF: Form D                          :      0.000u      0.000s      0.000w     10 calls
+Libint2ERI::Libint2ERI              :      0.017u      0.000s      0.020w      9 calls
+
+**************************************************************************************
+
+Host: marcovm
+
+Timers On : Mon May 20 23:48:52 2024
+Timers Off: Mon May 20 23:48:53 2024
+
+Wall Time:        0.92 seconds
+
+                                                       Time (seconds)
+Module                                       User      System        Wall        Calls
+
+--------------------------------------------------------------------------------------
+
+**************************************************************************************
+
+Host: marcovm
+
+Timers On : Mon May 20 23:49:16 2024
+Timers Off: Mon May 20 23:49:17 2024
+
+Wall Time:        0.56 seconds
+
+                                                       Time (seconds)
+Module                                       User      System        Wall        Calls
+
+--------------------------------------------------------------------------------------
+
+**************************************************************************************
+
+Host: marcovm
+
+Timers On : Mon May 20 23:55:12 2024
+Timers Off: Mon May 20 23:55:13 2024
+
+Wall Time:        0.85 seconds
+
+                                                       Time (seconds)
+Module                                       User      System        Wall        Calls
+
+--------------------------------------------------------------------------------------
+
+**************************************************************************************
+
+Host: marcovm
+
+Timers On : Mon May 20 23:55:25 2024
+Timers Off: Mon May 20 23:55:26 2024
+
+Wall Time:        0.59 seconds
+
+                                                       Time (seconds)
+Module                                       User      System        Wall        Calls
+
+--------------------------------------------------------------------------------------
+
+**************************************************************************************
+
+Host: marcovm
+
+Timers On : Mon May 20 23:55:42 2024
+Timers Off: Mon May 20 23:55:42 2024
+
+Wall Time:        0.82 seconds
+
+                                                       Time (seconds)
+Module                                       User      System        Wall        Calls
+
+--------------------------------------------------------------------------------------
+
+**************************************************************************************
+
+Host: marcovm
+
+Timers On : Mon May 20 23:57:10 2024
+Timers Off: Mon May 20 23:57:11 2024
+
+Wall Time:        0.58 seconds
+
+                                                       Time (seconds)
+Module                                       User      System        Wall        Calls
+
+--------------------------------------------------------------------------------------
+
+**************************************************************************************
+
+Host: marcovm
+
+Timers On : Tue May 21 00:08:57 2024
+Timers Off: Tue May 21 00:08:57 2024
+
+Wall Time:        0.85 seconds
+
+                                                       Time (seconds)
+Module                                       User      System        Wall        Calls
+
+--------------------------------------------------------------------------------------
+
+**************************************************************************************
+
+Host: marcovm
+
+Timers On : Tue May 21 00:10:27 2024
+Timers Off: Tue May 21 00:10:28 2024
+
+Wall Time:        0.60 seconds
+
+                                                       Time (seconds)
+Module                                       User      System        Wall        Calls
+
+--------------------------------------------------------------------------------------
+
+**************************************************************************************
+
+Host: marcovm
+
+Timers On : Tue May 21 00:17:10 2024
+Timers Off: Tue May 21 00:17:11 2024
+
+Wall Time:        0.90 seconds
+
+                                                       Time (seconds)
+Module                                       User      System        Wall        Calls
+
+--------------------------------------------------------------------------------------
+
+**************************************************************************************
+
+Host: marcovm
+
+Timers On : Tue May 21 00:36:12 2024
+Timers Off: Tue May 21 00:36:12 2024
+
+Wall Time:        0.62 seconds
+
+                                                       Time (seconds)
+Module                                       User      System        Wall        Calls
+
+--------------------------------------------------------------------------------------
+
+**************************************************************************************
+
+Host: marcovm
+
+Timers On : Tue May 21 00:36:24 2024
+Timers Off: Tue May 21 00:36:24 2024
+
+Wall Time:        0.60 seconds
+
+                                                       Time (seconds)
+Module                                       User      System        Wall        Calls
+
+--------------------------------------------------------------------------------------
+
+**************************************************************************************
+
+Host: marcovm
+
+Timers On : Tue May 21 00:37:13 2024
+Timers Off: Tue May 21 00:37:13 2024
+
+Wall Time:        0.55 seconds
+
+                                                       Time (seconds)
+Module                                       User      System        Wall        Calls
+
+--------------------------------------------------------------------------------------
+
+**************************************************************************************
+
+Host: marcovm
+
+Timers On : Tue May 21 00:39:53 2024
+Timers Off: Tue May 21 00:39:54 2024
+
+Wall Time:        0.85 seconds
+
+                                                       Time (seconds)
+Module                                       User      System        Wall        Calls
+
+--------------------------------------------------------------------------------------
+
+**************************************************************************************
+
+Host: marcovm
+
+Timers On : Tue May 21 01:12:15 2024
+Timers Off: Tue May 21 01:12:15 2024
+
+Wall Time:        0.54 seconds
+
+                                                       Time (seconds)
+Module                                       User      System        Wall        Calls
+
+--------------------------------------------------------------------------------------
+
+**************************************************************************************
+
+Host: marcovm
+
+Timers On : Tue May 21 01:12:40 2024
+Timers Off: Tue May 21 01:12:40 2024
+
+Wall Time:        0.56 seconds
+
+                                                       Time (seconds)
+Module                                       User      System        Wall        Calls
+
+--------------------------------------------------------------------------------------
+
+**************************************************************************************
+
+Host: marcovm
+
+Timers On : Tue May 21 01:13:47 2024
+Timers Off: Tue May 21 01:13:47 2024
+
+Wall Time:        0.58 seconds
+
+                                                       Time (seconds)
+Module                                       User      System        Wall        Calls
+
+--------------------------------------------------------------------------------------
+
+**************************************************************************************
+
+Host: marcovm
+
+Timers On : Tue May 21 01:14:30 2024
+Timers Off: Tue May 21 01:14:31 2024
+
+Wall Time:        0.53 seconds
+
+                                                       Time (seconds)
+Module                                       User      System        Wall        Calls
+
+--------------------------------------------------------------------------------------
+
+**************************************************************************************
+
+Host: marcovm
+
+Timers On : Tue May 21 01:14:44 2024
+Timers Off: Tue May 21 01:14:45 2024
+
+Wall Time:        0.58 seconds
+
+                                                       Time (seconds)
+Module                                       User      System        Wall        Calls
+
+--------------------------------------------------------------------------------------
+
+**************************************************************************************
+
+Host: marcovm
+
+Timers On : Tue May 21 01:15:10 2024
+Timers Off: Tue May 21 01:15:10 2024
+
+Wall Time:        0.55 seconds
+
+                                                       Time (seconds)
+Module                                       User      System        Wall        Calls
+
+--------------------------------------------------------------------------------------
+
+**************************************************************************************
+
+Host: marcovm
+
+Timers On : Tue May 21 01:16:50 2024
+Timers Off: Tue May 21 01:16:51 2024
+
+Wall Time:        0.55 seconds
+
+                                                       Time (seconds)
+Module                                       User      System        Wall        Calls
+
+--------------------------------------------------------------------------------------
+
+**************************************************************************************
+
+Host: marcovm
+
+Timers On : Tue May 21 01:18:27 2024
+Timers Off: Tue May 21 01:18:28 2024
+
+Wall Time:        0.55 seconds
+
+                                                       Time (seconds)
+Module                                       User      System        Wall        Calls
+
+--------------------------------------------------------------------------------------
+
+**************************************************************************************
+
+Host: marcovm
+
+Timers On : Tue May 21 01:18:41 2024
+Timers Off: Tue May 21 01:18:42 2024
+
+Wall Time:        0.56 seconds
+
+                                                       Time (seconds)
+Module                                       User      System        Wall        Calls
+
+--------------------------------------------------------------------------------------
+
+**************************************************************************************
+
+Host: marcovm
+
+Timers On : Tue May 21 01:19:24 2024
+Timers Off: Tue May 21 01:19:24 2024
+
+Wall Time:        0.57 seconds
+
+                                                       Time (seconds)
+Module                                       User      System        Wall        Calls
+
+--------------------------------------------------------------------------------------
+
+**************************************************************************************
+
+Host: marcovm
+
+Timers On : Tue May 21 01:29:46 2024
+Timers Off: Tue May 21 01:29:46 2024
+
+Wall Time:        0.55 seconds
+
+                                                       Time (seconds)
+Module                                       User      System        Wall        Calls
+
+--------------------------------------------------------------------------------------
+
+**************************************************************************************
+
+Host: marcovm
+
+Timers On : Tue May 21 01:29:54 2024
+Timers Off: Tue May 21 01:30:41 2024
+
+Wall Time:       46.91 seconds
+
+                                                       Time (seconds)
+Module                                       User      System        Wall        Calls
+Total PK formation time             :      0.033u      0.000s      0.020w      2 calls
+Libint2ERI::Libint2ERI              :      0.000u      0.017s      0.017w     13 calls
+HF: Form core H                     :      0.000u      0.000s      0.001w      2 calls
+HF: Form S/X                        :      0.000u      0.000s      0.000w      2 calls
+HF: Guess                           :      0.000u      0.000s      0.000w      2 calls
+HF: Form G                          :      0.000u      0.000s      0.001w     10 calls
+JK: D                               :      0.000u      0.000s      0.000w     10 calls
+JK: USO2AO                          :      0.000u      0.000s      0.000w     10 calls
+JK: JK                              :      0.000u      0.000s      0.000w     10 calls
+PK computes JK                      :      0.000u      0.000s      0.000w     10 calls
+JK: AO2USO                          :      0.000u      0.000s      0.000w     10 calls
+HF: Form F                          :      0.033u      0.000s      0.007w     10 calls
+HF: DIIS                            :      0.167u      0.000s      0.036w     10 calls
+HF: Form C                          :      0.000u      0.000s      0.003w     10 calls
+HF: Form D                          :      0.000u      0.000s      0.000w     10 calls
+
+--------------------------------------------------------------------------------------
+Total PK formation time             :      0.033u      0.000s      0.020w      2 calls
+| Libint2ERI::Libint2ERI            :      0.000u      0.000s      0.005w      4 calls
+HF: Form core H                     :      0.000u      0.000s      0.001w      2 calls
+HF: Form S/X                        :      0.000u      0.000s      0.000w      2 calls
+HF: Guess                           :      0.000u      0.000s      0.000w      2 calls
+HF: Form G                          :      0.000u      0.000s      0.001w     10 calls
+| JK: D                             :      0.000u      0.000s      0.000w     10 calls
+| JK: USO2AO                        :      0.000u      0.000s      0.000w     10 calls
+| JK: JK                            :      0.000u      0.000s      0.000w     10 calls
+| | PK computes JK                  :      0.000u      0.000s      0.000w     10 calls
+| JK: AO2USO                        :      0.000u      0.000s      0.000w     10 calls
+HF: Form F                          :      0.033u      0.000s      0.007w     10 calls
+HF: DIIS                            :      0.167u      0.000s      0.036w     10 calls
+HF: Form C                          :      0.000u      0.000s      0.003w     10 calls
+HF: Form D                          :      0.000u      0.000s      0.000w     10 calls
+Libint2ERI::Libint2ERI              :      0.000u      0.017s      0.012w      9 calls
+
+**************************************************************************************
+
+Host: marcovm
+
+Timers On : Tue May 21 01:31:26 2024
+Timers Off: Tue May 21 01:35:12 2024
+
+Wall Time:      226.10 seconds
+
+                                                       Time (seconds)
+Module                                       User      System        Wall        Calls
+Total PK formation time             :      0.017u      0.017s      0.014w      2 calls
+Libint2ERI::Libint2ERI              :      0.000u      0.000s      0.016w     13 calls
+HF: Form core H                     :      0.033u      0.000s      0.008w      2 calls
+HF: Form S/X                        :      0.000u      0.000s      0.001w      2 calls
+HF: Guess                           :      0.000u      0.000s      0.000w      2 calls
+HF: Form G                          :      0.017u      0.000s      0.001w     10 calls
+JK: D                               :      0.000u      0.000s      0.000w     10 calls
+JK: USO2AO                          :      0.017u      0.000s      0.000w     10 calls
+JK: JK                              :      0.000u      0.000s      0.000w     10 calls
+PK computes JK                      :      0.000u      0.000s      0.000w     10 calls
+JK: AO2USO                          :      0.000u      0.000s      0.000w     10 calls
+HF: Form F                          :      0.033u      0.000s      0.005w     10 calls
+HF: DIIS                            :      0.133u      0.017s      0.048w     10 calls
+HF: Form C                          :      0.000u      0.000s      0.003w     10 calls
+HF: Form D                          :      0.000u      0.000s      0.000w     10 calls
+
+--------------------------------------------------------------------------------------
+Total PK formation time             :      0.017u      0.017s      0.014w      2 calls
+| Libint2ERI::Libint2ERI            :      0.000u      0.000s      0.005w      4 calls
+HF: Form core H                     :      0.033u      0.000s      0.008w      2 calls
+HF: Form S/X                        :      0.000u      0.000s      0.001w      2 calls
+HF: Guess                           :      0.000u      0.000s      0.000w      2 calls
+HF: Form G                          :      0.017u      0.000s      0.001w     10 calls
+| JK: D                             :      0.000u      0.000s      0.000w     10 calls
+| JK: USO2AO                        :      0.017u      0.000s      0.000w     10 calls
+| JK: JK                            :      0.000u      0.000s      0.000w     10 calls
+| | PK computes JK                  :      0.000u      0.000s      0.000w     10 calls
+| JK: AO2USO                        :      0.000u      0.000s      0.000w     10 calls
+HF: Form F                          :      0.033u      0.000s      0.005w     10 calls
+HF: DIIS                            :      0.133u      0.017s      0.048w     10 calls
+HF: Form C                          :      0.000u      0.000s      0.003w     10 calls
+HF: Form D                          :      0.000u      0.000s      0.000w     10 calls
+Libint2ERI::Libint2ERI              :      0.000u      0.000s      0.011w      9 calls
+
+**************************************************************************************
+
+Host: marcovm
+
+Timers On : Tue May 21 01:38:33 2024
+Timers Off: Tue May 21 01:39:20 2024
+
+Wall Time:       47.16 seconds
+
+                                                       Time (seconds)
+Module                                       User      System        Wall        Calls
+Total PK formation time             :      0.017u      0.033s      0.015w      2 calls
+Libint2ERI::Libint2ERI              :      0.017u      0.017s      0.017w     13 calls
+HF: Form core H                     :      0.033u      0.000s      0.022w      2 calls
+HF: Form S/X                        :      0.000u      0.000s      0.001w      2 calls
+HF: Guess                           :      0.000u      0.000s      0.000w      2 calls
+HF: Form G                          :      0.017u      0.000s      0.001w     10 calls
+JK: D                               :      0.000u      0.000s      0.000w     10 calls
+JK: USO2AO                          :      0.000u      0.000s      0.000w     10 calls
+JK: JK                              :      0.000u      0.000s      0.000w     10 calls
+PK computes JK                      :      0.000u      0.000s      0.000w     10 calls
+JK: AO2USO                          :      0.000u      0.000s      0.000w     10 calls
+HF: Form F                          :      0.017u      0.000s      0.005w     10 calls
+HF: DIIS                            :      0.217u      0.000s      0.079w     10 calls
+HF: Form C                          :      0.000u      0.000s      0.003w     10 calls
+HF: Form D                          :      0.000u      0.000s      0.000w     10 calls
+
+--------------------------------------------------------------------------------------
+Total PK formation time             :      0.017u      0.033s      0.015w      2 calls
+| Libint2ERI::Libint2ERI            :      0.000u      0.017s      0.006w      4 calls
+HF: Form core H                     :      0.033u      0.000s      0.022w      2 calls
+HF: Form S/X                        :      0.000u      0.000s      0.001w      2 calls
+HF: Guess                           :      0.000u      0.000s      0.000w      2 calls
+HF: Form G                          :      0.017u      0.000s      0.001w     10 calls
+| JK: D                             :      0.000u      0.000s      0.000w     10 calls
+| JK: USO2AO                        :      0.000u      0.000s      0.000w     10 calls
+| JK: JK                            :      0.000u      0.000s      0.000w     10 calls
+| | PK computes JK                  :      0.000u      0.000s      0.000w     10 calls
+| JK: AO2USO                        :      0.000u      0.000s      0.000w     10 calls
+HF: Form F                          :      0.017u      0.000s      0.005w     10 calls
+HF: DIIS                            :      0.217u      0.000s      0.079w     10 calls
+HF: Form C                          :      0.000u      0.000s      0.003w     10 calls
+HF: Form D                          :      0.000u      0.000s      0.000w     10 calls
+Libint2ERI::Libint2ERI              :      0.017u      0.000s      0.011w      9 calls
+
+**************************************************************************************
+
+Host: marcovm
+
+Timers On : Tue May 21 01:40:04 2024
+Timers Off: Tue May 21 01:40:51 2024
+
+Wall Time:       46.72 seconds
+
+                                                       Time (seconds)
+Module                                       User      System        Wall        Calls
+Total PK formation time             :      0.017u      0.000s      0.014w      2 calls
+Libint2ERI::Libint2ERI              :      0.017u      0.000s      0.025w     13 calls
+HF: Form core H                     :      0.000u      0.000s      0.001w      2 calls
+HF: Form S/X                        :      0.000u      0.000s      0.000w      2 calls
+HF: Guess                           :      0.000u      0.000s      0.000w      2 calls
+HF: Form G                          :      0.017u      0.000s      0.001w     10 calls
+JK: D                               :      0.000u      0.000s      0.000w     10 calls
+JK: USO2AO                          :      0.000u      0.000s      0.000w     10 calls
+JK: JK                              :      0.017u      0.000s      0.000w     10 calls
+PK computes JK                      :      0.017u      0.000s      0.000w     10 calls
+JK: AO2USO                          :      0.000u      0.000s      0.000w     10 calls
+HF: Form F                          :      0.050u      0.000s      0.007w     10 calls
+HF: DIIS                            :      0.133u      0.017s      0.046w     10 calls
+HF: Form C                          :      0.000u      0.000s      0.003w     10 calls
+HF: Form D                          :      0.000u      0.000s      0.000w     10 calls
+
+--------------------------------------------------------------------------------------
+Total PK formation time             :      0.017u      0.000s      0.014w      2 calls
+| Libint2ERI::Libint2ERI            :      0.000u      0.000s      0.005w      4 calls
+HF: Form core H                     :      0.000u      0.000s      0.001w      2 calls
+HF: Form S/X                        :      0.000u      0.000s      0.000w      2 calls
+HF: Guess                           :      0.000u      0.000s      0.000w      2 calls
+HF: Form G                          :      0.017u      0.000s      0.001w     10 calls
+| JK: D                             :      0.000u      0.000s      0.000w     10 calls
+| JK: USO2AO                        :      0.000u      0.000s      0.000w     10 calls
+| JK: JK                            :      0.017u      0.000s      0.000w     10 calls
+| | PK computes JK                  :      0.017u      0.000s      0.000w     10 calls
+| JK: AO2USO                        :      0.000u      0.000s      0.000w     10 calls
+HF: Form F                          :      0.050u      0.000s      0.007w     10 calls
+HF: DIIS                            :      0.133u      0.017s      0.046w     10 calls
+HF: Form C                          :      0.000u      0.000s      0.003w     10 calls
+HF: Form D                          :      0.000u      0.000s      0.000w     10 calls
+Libint2ERI::Libint2ERI              :      0.017u      0.000s      0.020w      9 calls
+
+**************************************************************************************
+
+Host: marcovm
+
+Timers On : Tue May 21 01:40:55 2024
+Timers Off: Tue May 21 01:44:36 2024
+
+Wall Time:      221.78 seconds
+
+                                                       Time (seconds)
+Module                                       User      System        Wall        Calls
+Total PK formation time             :      0.000u      0.000s      0.015w      2 calls
+Libint2ERI::Libint2ERI              :      0.017u      0.000s      0.017w     13 calls
+HF: Form core H                     :      0.000u      0.000s      0.002w      2 calls
+HF: Form S/X                        :      0.000u      0.000s      0.000w      2 calls
+HF: Guess                           :      0.000u      0.000s      0.000w      2 calls
+HF: Form G                          :      0.000u      0.000s      0.001w     10 calls
+JK: D                               :      0.000u      0.000s      0.000w     10 calls
+JK: USO2AO                          :      0.000u      0.000s      0.000w     10 calls
+JK: JK                              :      0.000u      0.000s      0.000w     10 calls
+PK computes JK                      :      0.000u      0.000s      0.000w     10 calls
+JK: AO2USO                          :      0.000u      0.000s      0.000w     10 calls
+HF: Form F                          :      0.033u      0.000s      0.008w     10 calls
+HF: DIIS                            :      0.200u      0.000s      0.054w     10 calls
+HF: Form C                          :      0.000u      0.000s      0.002w     10 calls
+HF: Form D                          :      0.000u      0.000s      0.000w     10 calls
+
+--------------------------------------------------------------------------------------
+Total PK formation time             :      0.000u      0.000s      0.015w      2 calls
+| Libint2ERI::Libint2ERI            :      0.000u      0.000s      0.005w      4 calls
+HF: Form core H                     :      0.000u      0.000s      0.002w      2 calls
+HF: Form S/X                        :      0.000u      0.000s      0.000w      2 calls
+HF: Guess                           :      0.000u      0.000s      0.000w      2 calls
+HF: Form G                          :      0.000u      0.000s      0.001w     10 calls
+| JK: D                             :      0.000u      0.000s      0.000w     10 calls
+| JK: USO2AO                        :      0.000u      0.000s      0.000w     10 calls
+| JK: JK                            :      0.000u      0.000s      0.000w     10 calls
+| | PK computes JK                  :      0.000u      0.000s      0.000w     10 calls
+| JK: AO2USO                        :      0.000u      0.000s      0.000w     10 calls
+HF: Form F                          :      0.033u      0.000s      0.008w     10 calls
+HF: DIIS                            :      0.200u      0.000s      0.054w     10 calls
+HF: Form C                          :      0.000u      0.000s      0.002w     10 calls
+HF: Form D                          :      0.000u      0.000s      0.000w     10 calls
+Libint2ERI::Libint2ERI              :      0.017u      0.000s      0.012w      9 calls
+
+**************************************************************************************
+
+Host: marcovm
+
+Timers On : Tue May 21 01:47:14 2024
+Timers Off: Tue May 21 01:50:54 2024
+
+Wall Time:      219.80 seconds
+
+                                                       Time (seconds)
+Module                                       User      System        Wall        Calls
+Total PK formation time             :      0.033u      0.000s      0.014w      2 calls
+Libint2ERI::Libint2ERI              :      0.083u      0.000s      0.017w     13 calls
+HF: Form core H                     :      0.000u      0.000s      0.002w      2 calls
+HF: Form S/X                        :      0.000u      0.000s      0.000w      2 calls
+HF: Guess                           :      0.000u      0.000s      0.000w      2 calls
+HF: Form G                          :      0.000u      0.000s      0.001w     10 calls
+JK: D                               :      0.000u      0.000s      0.000w     10 calls
+JK: USO2AO                          :      0.000u      0.000s      0.000w     10 calls
+JK: JK                              :      0.000u      0.000s      0.000w     10 calls
+PK computes JK                      :      0.000u      0.000s      0.000w     10 calls
+JK: AO2USO                          :      0.000u      0.000s      0.000w     10 calls
+HF: Form F                          :      0.000u      0.000s      0.000w     10 calls
+HF: DIIS                            :      0.117u      0.000s      0.030w     10 calls
+HF: Form C                          :      0.017u      0.000s      0.003w     10 calls
+HF: Form D                          :      0.000u      0.000s      0.000w     10 calls
+
+--------------------------------------------------------------------------------------
+Total PK formation time             :      0.033u      0.000s      0.014w      2 calls
+| Libint2ERI::Libint2ERI            :      0.033u      0.000s      0.005w      4 calls
+HF: Form core H                     :      0.000u      0.000s      0.002w      2 calls
+HF: Form S/X                        :      0.000u      0.000s      0.000w      2 calls
+HF: Guess                           :      0.000u      0.000s      0.000w      2 calls
+HF: Form G                          :      0.000u      0.000s      0.001w     10 calls
+| JK: D                             :      0.000u      0.000s      0.000w     10 calls
+| JK: USO2AO                        :      0.000u      0.000s      0.000w     10 calls
+| JK: JK                            :      0.000u      0.000s      0.000w     10 calls
+| | PK computes JK                  :      0.000u      0.000s      0.000w     10 calls
+| JK: AO2USO                        :      0.000u      0.000s      0.000w     10 calls
+HF: Form F                          :      0.000u      0.000s      0.000w     10 calls
+HF: DIIS                            :      0.117u      0.000s      0.030w     10 calls
+HF: Form C                          :      0.017u      0.000s      0.003w     10 calls
+HF: Form D                          :      0.000u      0.000s      0.000w     10 calls
+Libint2ERI::Libint2ERI              :      0.050u      0.000s      0.012w      9 calls
+
+**************************************************************************************
+
+Host: marcovm
+
+Timers On : Tue May 21 01:53:26 2024
+Timers Off: Tue May 21 01:54:12 2024
+
+Wall Time:       46.19 seconds
+
+                                                       Time (seconds)
+Module                                       User      System        Wall        Calls
+Total PK formation time             :      0.017u      0.000s      0.013w      2 calls
+Libint2ERI::Libint2ERI              :      0.017u      0.000s      0.015w     13 calls
+HF: Form core H                     :      0.033u      0.000s      0.007w      2 calls
+HF: Form S/X                        :      0.000u      0.000s      0.001w      2 calls
+HF: Guess                           :      0.000u      0.000s      0.000w      2 calls
+HF: Form G                          :      0.000u      0.000s      0.001w     10 calls
+JK: D                               :      0.000u      0.000s      0.000w     10 calls
+JK: USO2AO                          :      0.000u      0.000s      0.000w     10 calls
+JK: JK                              :      0.000u      0.000s      0.000w     10 calls
+PK computes JK                      :      0.000u      0.000s      0.000w     10 calls
+JK: AO2USO                          :      0.000u      0.000s      0.000w     10 calls
+HF: Form F                          :      0.050u      0.000s      0.016w     10 calls
+HF: DIIS                            :      0.217u      0.000s      0.042w     10 calls
+HF: Form C                          :      0.000u      0.000s      0.003w     10 calls
+HF: Form D                          :      0.000u      0.000s      0.000w     10 calls
+
+--------------------------------------------------------------------------------------
+Total PK formation time             :      0.017u      0.000s      0.013w      2 calls
+| Libint2ERI::Libint2ERI            :      0.000u      0.000s      0.005w      4 calls
+HF: Form core H                     :      0.033u      0.000s      0.007w      2 calls
+HF: Form S/X                        :      0.000u      0.000s      0.001w      2 calls
+HF: Guess                           :      0.000u      0.000s      0.000w      2 calls
+HF: Form G                          :      0.000u      0.000s      0.001w     10 calls
+| JK: D                             :      0.000u      0.000s      0.000w     10 calls
+| JK: USO2AO                        :      0.000u      0.000s      0.000w     10 calls
+| JK: JK                            :      0.000u      0.000s      0.000w     10 calls
+| | PK computes JK                  :      0.000u      0.000s      0.000w     10 calls
+| JK: AO2USO                        :      0.000u      0.000s      0.000w     10 calls
+HF: Form F                          :      0.050u      0.000s      0.016w     10 calls
+HF: DIIS                            :      0.217u      0.000s      0.042w     10 calls
+HF: Form C                          :      0.000u      0.000s      0.003w     10 calls
+HF: Form D                          :      0.000u      0.000s      0.000w     10 calls
+Libint2ERI::Libint2ERI              :      0.017u      0.000s      0.010w      9 calls
+
+**************************************************************************************
+
+Host: marcovm
+
+Timers On : Tue May 21 01:54:18 2024
+Timers Off: Tue May 21 01:55:02 2024
+
+Wall Time:       44.77 seconds
+
+                                                       Time (seconds)
+Module                                       User      System        Wall        Calls
+Total PK formation time             :      0.000u      0.017s      0.014w      2 calls
+Libint2ERI::Libint2ERI              :      0.017u      0.000s      0.016w     13 calls
+HF: Form core H                     :      0.033u      0.000s      0.013w      2 calls
+HF: Form S/X                        :      0.033u      0.000s      0.005w      2 calls
+HF: Guess                           :      0.000u      0.000s      0.000w      2 calls
+HF: Form G                          :      0.000u      0.000s      0.001w     10 calls
+JK: D                               :      0.000u      0.000s      0.000w     10 calls
+JK: USO2AO                          :      0.000u      0.000s      0.000w     10 calls
+JK: JK                              :      0.000u      0.000s      0.000w     10 calls
+PK computes JK                      :      0.000u      0.000s      0.000w     10 calls
+JK: AO2USO                          :      0.000u      0.000s      0.000w     10 calls
+HF: Form F                          :      0.000u      0.000s      0.000w     10 calls
+HF: DIIS                            :      0.100u      0.000s      0.030w     10 calls
+HF: Form C                          :      0.000u      0.000s      0.003w     10 calls
+HF: Form D                          :      0.000u      0.000s      0.000w     10 calls
+
+--------------------------------------------------------------------------------------
+Total PK formation time             :      0.000u      0.017s      0.014w      2 calls
+| Libint2ERI::Libint2ERI            :      0.000u      0.000s      0.005w      4 calls
+HF: Form core H                     :      0.033u      0.000s      0.013w      2 calls
+HF: Form S/X                        :      0.033u      0.000s      0.005w      2 calls
+HF: Guess                           :      0.000u      0.000s      0.000w      2 calls
+HF: Form G                          :      0.000u      0.000s      0.001w     10 calls
+| JK: D                             :      0.000u      0.000s      0.000w     10 calls
+| JK: USO2AO                        :      0.000u      0.000s      0.000w     10 calls
+| JK: JK                            :      0.000u      0.000s      0.000w     10 calls
+| | PK computes JK                  :      0.000u      0.000s      0.000w     10 calls
+| JK: AO2USO                        :      0.000u      0.000s      0.000w     10 calls
+HF: Form F                          :      0.000u      0.000s      0.000w     10 calls
+HF: DIIS                            :      0.100u      0.000s      0.030w     10 calls
+HF: Form C                          :      0.000u      0.000s      0.003w     10 calls
+HF: Form D                          :      0.000u      0.000s      0.000w     10 calls
+Libint2ERI::Libint2ERI              :      0.017u      0.000s      0.011w      9 calls
+
+**************************************************************************************
+
+Host: marcovm
+
+Timers On : Tue May 21 02:06:36 2024
+Timers Off: Tue May 21 02:07:27 2024
+
+Wall Time:       50.58 seconds
+
+                                                       Time (seconds)
+Module                                       User      System        Wall        Calls
+Total PK formation time             :      0.017u      0.000s      0.019w      2 calls
+Libint2ERI::Libint2ERI              :      0.033u      0.000s      0.022w     13 calls
+HF: Form core H                     :      0.000u      0.000s      0.002w      2 calls
+HF: Form S/X                        :      0.000u      0.017s      0.000w      2 calls
+HF: Guess                           :      0.000u      0.000s      0.000w      2 calls
+HF: Form G                          :      0.000u      0.000s      0.001w     10 calls
+JK: D                               :      0.000u      0.000s      0.000w     10 calls
+JK: USO2AO                          :      0.000u      0.000s      0.000w     10 calls
+JK: JK                              :      0.000u      0.000s      0.000w     10 calls
+PK computes JK                      :      0.000u      0.000s      0.000w     10 calls
+JK: AO2USO                          :      0.000u      0.000s      0.000w     10 calls
+HF: Form F                          :      0.000u      0.000s      0.000w     10 calls
+HF: DIIS                            :      0.117u      0.000s      0.122w     10 calls
+HF: Form C                          :      0.017u      0.000s      0.003w     10 calls
+HF: Form D                          :      0.000u      0.000s      0.000w     10 calls
+
+--------------------------------------------------------------------------------------
+Total PK formation time             :      0.017u      0.000s      0.019w      2 calls
+| Libint2ERI::Libint2ERI            :      0.000u      0.000s      0.009w      4 calls
+HF: Form core H                     :      0.000u      0.000s      0.002w      2 calls
+HF: Form S/X                        :      0.000u      0.017s      0.000w      2 calls
+HF: Guess                           :      0.000u      0.000s      0.000w      2 calls
+HF: Form G                          :      0.000u      0.000s      0.001w     10 calls
+| JK: D                             :      0.000u      0.000s      0.000w     10 calls
+| JK: USO2AO                        :      0.000u      0.000s      0.000w     10 calls
+| JK: JK                            :      0.000u      0.000s      0.000w     10 calls
+| | PK computes JK                  :      0.000u      0.000s      0.000w     10 calls
+| JK: AO2USO                        :      0.000u      0.000s      0.000w     10 calls
+HF: Form F                          :      0.000u      0.000s      0.000w     10 calls
+HF: DIIS                            :      0.117u      0.000s      0.122w     10 calls
+HF: Form C                          :      0.017u      0.000s      0.003w     10 calls
+HF: Form D                          :      0.000u      0.000s      0.000w     10 calls
+Libint2ERI::Libint2ERI              :      0.033u      0.000s      0.013w      9 calls
+
+**************************************************************************************
+
+Host: marcovm
+
+Timers On : Tue May 21 03:04:03 2024
+Timers Off: Tue May 21 03:07:51 2024
+
+Wall Time:      228.22 seconds
+
+                                                       Time (seconds)
+Module                                       User      System        Wall        Calls
+Total PK formation time             :      0.033u      0.000s      0.013w      2 calls
+Libint2ERI::Libint2ERI              :      0.017u      0.000s      0.016w     13 calls
+HF: Form core H                     :      0.000u      0.000s      0.027w      2 calls
+HF: Form S/X                        :      0.000u      0.000s      0.000w      2 calls
+HF: Guess                           :      0.000u      0.000s      0.000w      2 calls
+HF: Form G                          :      0.000u      0.000s      0.000w     10 calls
+JK: D                               :      0.000u      0.000s      0.000w     10 calls
+JK: USO2AO                          :      0.000u      0.000s      0.000w     10 calls
+JK: JK                              :      0.000u      0.000s      0.000w     10 calls
+PK computes JK                      :      0.000u      0.000s      0.000w     10 calls
+JK: AO2USO                          :      0.000u      0.000s      0.000w     10 calls
+HF: Form F                          :      0.000u      0.000s      0.000w     10 calls
+HF: DIIS                            :      0.117u      0.000s      0.027w     10 calls
+HF: Form C                          :      0.017u      0.000s      0.002w     10 calls
+HF: Form D                          :      0.000u      0.000s      0.000w     10 calls
+
+--------------------------------------------------------------------------------------
+Total PK formation time             :      0.033u      0.000s      0.013w      2 calls
+| Libint2ERI::Libint2ERI            :      0.017u      0.000s      0.005w      4 calls
+HF: Form core H                     :      0.000u      0.000s      0.027w      2 calls
+HF: Form S/X                        :      0.000u      0.000s      0.000w      2 calls
+HF: Guess                           :      0.000u      0.000s      0.000w      2 calls
+HF: Form G                          :      0.000u      0.000s      0.000w     10 calls
+| JK: D                             :      0.000u      0.000s      0.000w     10 calls
+| JK: USO2AO                        :      0.000u      0.000s      0.000w     10 calls
+| JK: JK                            :      0.000u      0.000s      0.000w     10 calls
+| | PK computes JK                  :      0.000u      0.000s      0.000w     10 calls
+| JK: AO2USO                        :      0.000u      0.000s      0.000w     10 calls
+HF: Form F                          :      0.000u      0.000s      0.000w     10 calls
+HF: DIIS                            :      0.117u      0.000s      0.027w     10 calls
+HF: Form C                          :      0.017u      0.000s      0.002w     10 calls
+HF: Form D                          :      0.000u      0.000s      0.000w     10 calls
+Libint2ERI::Libint2ERI              :      0.000u      0.000s      0.011w      9 calls
+
+**************************************************************************************
+
+Host: marcovm
+
+Timers On : Tue May 21 03:11:09 2024
+Timers Off: Mon May 20 18:15:06 2024
+
+Wall Time:   -32162.81 seconds
+
+                                                       Time (seconds)
+Module                                       User      System        Wall        Calls
+Total PK formation time             :      0.017u      0.000s      0.014w      2 calls
+Libint2ERI::Libint2ERI              :      0.017u      0.000s      0.015w     13 calls
+HF: Form core H                     :      0.000u      0.000s      0.002w      2 calls
+HF: Form S/X                        :      0.017u      0.000s      0.001w      2 calls
+HF: Guess                           :      0.000u      0.000s      0.000w      2 calls
+HF: Form G                          :      0.000u      0.000s      0.000w     10 calls
+JK: D                               :      0.000u      0.000s      0.000w     10 calls
+JK: USO2AO                          :      0.000u      0.000s      0.000w     10 calls
+JK: JK                              :      0.000u      0.000s      0.000w     10 calls
+PK computes JK                      :      0.000u      0.000s      0.000w     10 calls
+JK: AO2USO                          :      0.000u      0.000s      0.000w     10 calls
+HF: Form F                          :      0.000u      0.000s      0.000w     10 calls
+HF: DIIS                            :      0.083u      0.000s      0.027w     10 calls
+HF: Form C                          :      0.017u      0.000s      0.002w     10 calls
+HF: Form D                          :      0.000u      0.000s      0.000w     10 calls
+
+--------------------------------------------------------------------------------------
+Total PK formation time             :      0.017u      0.000s      0.014w      2 calls
+| Libint2ERI::Libint2ERI            :      0.000u      0.000s      0.005w      4 calls
+HF: Form core H                     :      0.000u      0.000s      0.002w      2 calls
+HF: Form S/X                        :      0.017u      0.000s      0.001w      2 calls
+HF: Guess                           :      0.000u      0.000s      0.000w      2 calls
+HF: Form G                          :      0.000u      0.000s      0.000w     10 calls
+| JK: D                             :      0.000u      0.000s      0.000w     10 calls
+| JK: USO2AO                        :      0.000u      0.000s      0.000w     10 calls
+| JK: JK                            :      0.000u      0.000s      0.000w     10 calls
+| | PK computes JK                  :      0.000u      0.000s      0.000w     10 calls
+| JK: AO2USO                        :      0.000u      0.000s      0.000w     10 calls
+HF: Form F                          :      0.000u      0.000s      0.000w     10 calls
+HF: DIIS                            :      0.083u      0.000s      0.027w     10 calls
+HF: Form C                          :      0.017u      0.000s      0.002w     10 calls
+HF: Form D                          :      0.000u      0.000s      0.000w     10 calls
+Libint2ERI::Libint2ERI              :      0.017u      0.000s      0.010w      9 calls
+
+**************************************************************************************

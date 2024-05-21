@@ -329,7 +329,10 @@ def optimize_states(displacement, max_iter, xr_order):
             #pickle.dump(coeffs_grads, open("coeffs_grads.pkl", mode="wb"))
             #self.rho = pickle.load(open("dumped_densities.pkl", mode="rb"))
 
-        gs_energy, gradient_states = state_gradients(1, ints, dens_builder_stuff, dens, monomer_charges, n_threads=n_threads, xr_order=xr_order)
+        gs_energy, gradient_states = state_gradients(0, ints, dens_builder_stuff, dens, monomer_charges, n_threads=n_threads, xr_order=xr_order)
+
+        #coeffs_grads = [state_coeffs, gradient_states]
+        #pickle.dump(coeffs_grads, open("coeffs_grads.pkl", mode="wb"))
 
         ################################
         # Application of the derivatives
@@ -353,24 +356,26 @@ def optimize_states(displacement, max_iter, xr_order):
 
         # for now apply all the gradients to the subset of states and diagonalize
         # frag A
-        #for chg in monomer_charges[0]:
-        #    tmp = np.array(state_coeffs[0][chg])
-        #    tmp[-1] -= 0.2 * gradient_states[chg][-1]
-        #    dens_builder_stuff[0][0][chg].coeffs = [i for i in orthogonalize(tmp)]
-        #    dens_builder_stuff[1][0][chg].coeffs = state_coeffs[1][chg]
+        for chg in monomer_charges[0]:
+            tmp = np.array(state_coeffs[0][chg])
+            tmp[-1] -= 0.2 * gradient_states[chg][-1]
+            dens_builder_stuff[0][0][chg].coeffs = [i for i in orthogonalize(tmp)]
+            dens_builder_stuff[1][0][chg].coeffs = state_coeffs[1][chg]
 
         # frag B
-        for chg in monomer_charges[1]:
-            tmp = np.array(state_coeffs[1][chg])
-            tmp[-1] -= 0.2 * gradient_states[chg][-1]
-            dens_builder_stuff[1][0][chg].coeffs = [i for i in orthogonalize(tmp)]
-            dens_builder_stuff[0][0][chg].coeffs = state_coeffs[0][chg]
+        #for chg in monomer_charges[1]:
+        #    tmp = np.array(state_coeffs[1][chg])
+        #    tmp[-1] -= 0.2 * gradient_states[chg][-1]
+        #    dens_builder_stuff[1][0][chg].coeffs = [i for i in orthogonalize(tmp)]
+        #    dens_builder_stuff[0][0][chg].coeffs = state_coeffs[0][chg]
 
         dens[0] = densities.build_tensors(*dens_builder_stuff[0], n_threads=n_threads)
         dens[1] = densities.build_tensors(*dens_builder_stuff[1], n_threads=n_threads)    
         gs_energy_new, gs_state_new = get_xr_states(ints, dens, xr_order)
 
         print(gs_energy, gs_energy_new)
+
+        print(gradient_states[-1][0])
 
 
 

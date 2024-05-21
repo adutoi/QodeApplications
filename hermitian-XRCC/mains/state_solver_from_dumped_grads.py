@@ -39,6 +39,7 @@ def optimize_states(displacement, max_iter):
     BeN = []
     dens = []
     dens_builder_stuff = []
+    """
     for m in range(int(n_frag)):
         state_obj, dens_var_1, dens_var_2, n_threads, Be = get_fci_states(displacement)
         for elem,coords in Be.atoms:  coords[2] += m * displacement    # displace along z
@@ -49,7 +50,7 @@ def optimize_states(displacement, max_iter):
         dens_builder_stuff.append([state_obj, dens_var_1, dens_var_2])
 
     ints = get_ints(BeN, project_core)
-
+    """
     def orthogonalize(U, eps=1e-15):  # with the transpose commented out, it orthogonalizes rows instead of columns
         n = len(U)
         V = U#.T
@@ -64,6 +65,7 @@ def optimize_states(displacement, max_iter):
                 V[i] /= np.linalg.norm(V[i])
         return V#.T
 
+    """
     gs_energy, gs_state = get_xr_states(ints, dens, 0)
 
     for chg in monomer_charges[0]:
@@ -78,10 +80,36 @@ def optimize_states(displacement, max_iter):
     gs_energy_new, gs_state_new = get_xr_states(ints, dens, 0)
 
     print(gs_energy, gs_energy_new)
+    """
+    #print(type(state_coeffs[0][0]), type(gradient_states[0]))
+    a_coeffs = {chg: np.array(tens) for chg, tens in state_coeffs[0].items()}
+    #grad_coeffs = {chg: val / np.linalg.norm(val) for chg, val in gradient_states.items()}
+    grad_coeffs = {chg: val for chg, val in gradient_states.items()}
 
+    print([[a_coeffs[chg][i].T @ grad_coeffs[chg][i] for i in range(len(a_coeffs[chg]))] for chg in a_coeffs.keys()])
+    #print(a_coeffs[0][0].T @ grad_coeffs[0][0])
+    print(a_coeffs[1][0].T)
+    print(grad_coeffs[1][0])
 
+    # for Hamiltonian evaluation in extended state basis, i.e. states + gradients, an orthonormal set for each fragment
+    # is required, but this choice is not unique. One could e.g. normalize, orthogonalize and then again normalize,
+    # or orthogonalize and normalize without previous normalization.
 
+    tot_a_coeffs = {chg: orthogonalize(np.vstack((a_coeffs[chg], grad_coeffs[chg]))) for chg in monomer_charges[0]}
+    #tot_a_coeffs = orthogonalize(tot_a_coeffs)
 
+    dummy_ind = 0
+    for chg in monomer_charges[0]:
+        print("chg = ", chg)
+        dummy_ind = 0
+        for i in range(len(tot_a_coeffs[chg])):
+            print(np.linalg.norm(tot_a_coeffs[chg][i]), dummy_ind)
+            dummy_ind += 1
+
+    for i in grad_coeffs[-1]:
+        print(np.linalg.norm(i))
+
+    print(grad_coeffs[-1][0])
 
 
 

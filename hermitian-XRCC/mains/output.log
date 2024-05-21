@@ -1,0 +1,6 @@
+2024-05-21:03:11:17,361 INFO     [psi4.driver.task_planner:266] PLANNING Atomic:  keywords={'PRINT_MOS': 1, 'SCF_TYPE': 'PK', 'function_kwargs': {}}
+2024-05-21:03:11:17,364 INFO     [psi4.driver.driver:499] Compute energy(): method=scf, basis=6-31g, molecule=default, nre=0.0
+2024-05-21:03:11:17,446 INFO     [psi4.driver.driver:502] Return energy(): -14.566764033508324
+24-05-21:03:11:17,361 INFO     [psi4.driver.task_planner:266] PLANNING Atomic:  keywords={'PRINT_MOS': 1, 'SCF_TYPE': 'PK', 'function_kwargs': {}}
+2024-05-21:03:11:17,364 INFO     [psi4.driver.driver:499] Compute energy(): method=scf, basis=6-31g, molecule=default, nre=0.0
+2024-05-21:03:11:17,446 INFO     [psi4.driver.driver:502] Return energy(): -14.566764033508324
