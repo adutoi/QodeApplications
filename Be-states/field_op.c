@@ -793,18 +793,18 @@ void densities(PyInt    n_create,           // number of creation operators
 // phase argument above is to make sure that the population of this is valid as wisdom in other
 // functions, while still allowing for convention adjustments with the outside world.
 //
-void determinant_densities(PyInt    n_create,           // number of creation operators
-                           PyInt    n_annihil,          // number of annihilation operators
-                           PyInt    n_orbs,             // edge dimension of each density tensor
-                           BigInt*  configs_bra,        // configuration strings representing the basis for the bras (see global comments above about format)
-                           PyInt    n_configs_bra,      // number of configurations in the basis configs_bra (call signature ok if PyInt not longer than BigInt)
-                           PyInt    n_configint_bra,    // number of BigInts needed to store a single configuration in configs_bra
-                           BigInt*  configs_ket,        // configuration strings representing the basis for the kets (see global comments above about format)
-                           PyInt    n_configs_ket,      // number of configurations in the basis configs_ket (call signature ok if PyInt not longer than BigInt)
-                           PyInt    n_configint_ket,    // number of BigInts needed to store a single configuration in configs_ket
-                           Int**    wisdom_occupied,    // for each ket config, a list (in ascending order) of the orbitals occupied in that ket
-                           BigInt** wisdom_det_idx,     // for each ket config, a list of the (possibly negated) index that each respective field-operator string gives projection onto
-                           PyInt    n_threads)          // number of threads to spread the work over
+void generate_wisdom(PyInt    n_create,           // number of creation operators
+                     PyInt    n_annihil,          // number of annihilation operators
+                     PyInt    n_orbs,             // edge dimension of each density tensor
+                     BigInt*  configs_bra,        // configuration strings representing the basis for the bras (see global comments above about format)
+                     PyInt    n_configs_bra,      // number of configurations in the basis configs_bra (call signature ok if PyInt not longer than BigInt)
+                     PyInt    n_configint_bra,    // number of BigInts needed to store a single configuration in configs_bra
+                     BigInt*  configs_ket,        // configuration strings representing the basis for the kets (see global comments above about format)
+                     PyInt    n_configs_ket,      // number of configurations in the basis configs_ket (call signature ok if PyInt not longer than BigInt)
+                     PyInt    n_configint_ket,    // number of BigInts needed to store a single configuration in configs_ket
+                     Int**    wisdom_occupied,    // for each ket config, a list (in ascending order) of the orbitals occupied in that ket
+                     BigInt** wisdom_det_idx,     // for each ket config, a list of the (possibly negated) index that each respective field-operator string gives projection onto
+                     PyInt    n_threads)          // number of threads to spread the work over
     {
     // call the generic driver in compute-densities mode
     resolve(WISDOM_ONLY, n_create, n_annihil, (Double**)NULL, 0, configs_bra, n_configs_bra, n_configint_bra, (Double**)NULL, 0, configs_ket, n_configs_ket, n_configint_ket, (Double**)NULL, n_orbs, 1, 0., GENERATE, wisdom_occupied, wisdom_det_idx, n_threads);

@@ -179,8 +179,8 @@ for p in orbs:
                 if (q in core) and (q!=r) and (q!=s):  V[p,q,r,s] = 0
 
 CI_space_dimer = qode.math.linear_inner_product_space(CI_space_traits(configs_dimer))
-H     = CI_space_dimer.lin_op(field_op_ham.Hamiltonian(h,V, n_elec=num_elec_dimer, n_threads=n_threads))    # slower than not using wisdom on many cores (probably bus traffic load)
-#H     = CI_space_dimer.lin_op(field_op_ham.Hamiltonian(h,V, n_threads=n_threads))
+#H     = CI_space_dimer.lin_op(field_op_ham.Hamiltonian(h,V, n_elec=num_elec_dimer, n_threads=n_threads))    # slower than not using wisdom on many cores (probably bus traffic load)
+H     = CI_space_dimer.lin_op(field_op_ham.Hamiltonian(h,V, n_threads=n_threads))
 guess = CI_space_dimer.member(CI_space_dimer.aux.basis_vec([0, 1, n_spatial_orb+0, n_spatial_orb+1, 2*n_spatial_orb+0, 2*n_spatial_orb+1, 3*n_spatial_orb+0, 3*n_spatial_orb+1]))
 
 print((guess|H|guess) + N)
@@ -264,4 +264,4 @@ for chg in states:
 
 #pickle.dump(frag0, open("/scratch/adutoi/Be631g.pkl", "wb"))    # Medusa
 #pickle.dump(frag0, open("Be631g.pkl", "wb"))                    # Tengri
-pickle.dump(frag0, open("rho/Be631g-{}.pkl".format(label), "wb"))    # very specific to a certain workflow, maybe useful again
+#pickle.dump(frag0, open("rho/Be631g-{}.pkl".format(label), "wb"))    # very specific to a certain workflow, maybe useful again

@@ -65,57 +65,62 @@ def find_index_by_occ(occupied, configs):
     return find_index(config, configs)
 
 
-def combinatoric(dim, n):
-    result = 1
-    for i in range(n):
-        result *= (dim - i)
-    return result // math.factorial(n)
 
+# The job of this class is to manage the "wisdom" object which (theoretically, and practically on one
+# thread) speeds up subsequent function calls mapping the same spaces.  It's central task is to manage
+# the allocations and flag whether they have yet been populated.
 class det_densities(object):
-    ignore = 0
+    ignore   = 0
     generate = 1
-    apply = 2
-    def __init__(self, n_elec_right):
-        self._n_elec_right  = n_elec_right    # this is only needed for allocating the right amount of space, but could generalize and get rid of this (and then move instantiation down a layer)
+    apply    = 2
+    @staticmethod
+    def _combinatoric(d, n):    # = d! / ((d-n)! n!)
+        result = 1
+        for i in range(n):  result *= (d - i)
+        return result // math.factorial(n)
+    def __init__(self, n_elec_ket):
+        # n_elec_ket is only needed for allocating the right amount of space, but could generalize
+        # and get rid of this (and then move instantiation down a layer).  Would need to run a function
+        # that looks through ket configs to get range of number of electrons (use int.bit_count on
+        # non-packed versions.  Then compute allocations for each number of electrons and take the max.
+        # Finally, the occupieds allocation will need to be of lengths max_n_elec+1, so that a -1 in the
+        # last position tells how many electrons in that config (will need to modify C code to put that in)
+        self._n_elec_ket    = n_elec_ket
+        self._initialized   = False
+        self._scalar_params = None
+        self._configs_bra   = None
+        self._configs_ket   = None
         self._occupied      = None
         self._det_indices   = None
-        self._configs_left  = None
-        self._configs_right = None
-        self._scal_params   = None
-        self._initialized    = False
-    def _initialize(self, n_orbs, n_create, n_annihil, configs_left, configs_right):
-        self._configs_left, self._configs_right = configs_left, configs_right
-        self._scal_params = (n_orbs, n_create, n_annihil)
-        #size = (n_orbs - self._n_elec_right + n_annihil)**n_create * self._n_elec_right**n_annihil
-        size = combinatoric(n_orbs - self._n_elec_right + n_annihil, n_create) * combinatoric(self._n_elec_right, n_annihil)
-        self._occupied    = [numpy.zeros((self._n_elec_right,), dtype=Int.numpy)    for _ in range(len(configs_right))]
-        self._det_indices = [numpy.zeros((size,),               dtype=BigInt.numpy) for _ in range(len(configs_right))]
+    def _initialize(self, n_orbs, n_create, n_annihil, configs_bra, configs_ket):
+        alloc_size = self._combinatoric(n_orbs - self._n_elec_ket + n_annihil, n_create) * self._combinatoric(self._n_elec_ket, n_annihil)
+        self._scalar_params, self._configs_bra, self._configs_ket = (n_orbs, n_create, n_annihil), configs_bra, configs_ket
+        self._occupied    = [numpy.zeros((self._n_elec_ket,), dtype=Int.numpy) for _ in range(len(configs_ket))]
+        self._det_indices = [numpy.zeros((alloc_size,),    dtype=BigInt.numpy) for _ in range(len(configs_ket))]
         self._initialized = True
-    def check_initialization(self, n_orbs, n_create, n_annihil, configs_left, configs_right):
-        unpopulated = False
-        if not self._initialized:
-            self._initialize(n_orbs, n_create, n_annihil, configs_left, configs_right)
-            unpopulated = True
-        if ((configs_left is not self._configs_left) or (configs_right is not self._configs_right)):
-            raise ValueError("inapplicable wisdom given to field_op engine")
-        if ((n_orbs, n_create, n_annihil) != self._scal_params):
+    def check_initialization(self, n_orbs, n_create, n_annihil, configs_bra, configs_ket):
+        unpopulated = not self._initialized
+        if unpopulated:
+            self._initialize(n_orbs, n_create, n_annihil, configs_bra, configs_ket)
+        if ( ((n_orbs, n_create, n_annihil) != self._scalar_params)
+             or (configs_bra is not self._configs_bra)
+             or (configs_ket is not self._configs_ket)):
             raise ValueError("inapplicable wisdom given to field_op engine")
         return self._occupied, self._det_indices, unpopulated
+    def data(self):
+        if not self._initialized:
+            raise RuntimeError("requesting uninitialized determinant density data")
+        return self._occupied, self._det_indices
+
+
 
 def opPsi_1e(HPsi, Psi, h, configs, thresh, wisdom, n_threads):
     if wisdom is None:
+        wisdom_occupied, wisdom_det_idx = [numpy.zeros((1,), dtype=Int.numpy)], [numpy.zeros((1,), dtype=BigInt.numpy)]    # dummy arrays
         wisdom_mode = det_densities.ignore
-        wisdom_occupied = [numpy.zeros((1,),    dtype=Int.numpy)]
-        wisdom_det_idx  = [numpy.zeros((1,), dtype=BigInt.numpy)]
     else:
         wisdom_occupied, wisdom_det_idx, unpopulated = wisdom.check_initialization(h.shape[0], 1, 1, configs, configs)
-        if unpopulated:
-            determinant_densities("ca", h.shape[0], configs, configs, wisdom, n_threads)
-        wisdom_mode = det_densities.apply
-    #else:
-    #    wisdom_occupied, wisdom_det_idx, unpopulated = wisdom.check_initialization(h.shape[0], 1, 1, configs, configs)
-    #    if unpopulated:  wisdom_mode = det_densities.generate
-    #    else:            wisdom_mode = det_densities.apply
+        wisdom_mode = det_densities.generate if unpopulated else det_densities.apply
     field_op.op_Psi(1,                  # electron order of the operator
                     h,                  # tensor of matrix elements (integrals), assumed antisymmetrized
                     h.shape[0],         # edge dimension of the integrals tensor
@@ -134,18 +139,11 @@ def opPsi_1e(HPsi, Psi, h, configs, thresh, wisdom, n_threads):
 
 def opPsi_2e(HPsi, Psi, V, configs, thresh, wisdom, n_threads):
     if wisdom is None:
+        wisdom_occupied, wisdom_det_idx = [numpy.zeros((1,), dtype=Int.numpy)], [numpy.zeros((1,), dtype=BigInt.numpy)]    # dummy arrays
         wisdom_mode = det_densities.ignore
-        wisdom_occupied = [numpy.zeros((1,),    dtype=Int.numpy)]
-        wisdom_det_idx  = [numpy.zeros((1,), dtype=BigInt.numpy)]
     else:
         wisdom_occupied, wisdom_det_idx, unpopulated = wisdom.check_initialization(V.shape[0], 2, 2, configs, configs)
-        if unpopulated:
-            determinant_densities("ccaa", V.shape[0], configs, configs, wisdom, n_threads)
-        wisdom_mode = det_densities.apply
-    #else:
-    #    wisdom_occupied, wisdom_det_idx, unpopulated = wisdom.check_initialization(V.shape[0], 2, 2, configs, configs)
-    #    if unpopulated:  wisdom_mode = det_densities.generate
-    #    else:            wisdom_mode = det_densities.apply
+        wisdom_mode = det_densities.generate if unpopulated else det_densities.apply
     field_op.op_Psi(2,                  # electron order of the operator
                     V,                  # tensor of matrix elements (integrals), assumed antisymmetrized
                     V.shape[0],         # edge dimension of the integrals tensor
@@ -170,18 +168,11 @@ def build_densities(op_string, n_orbs, bras, kets, bra_configs, ket_configs, thr
     print("####", op_string, "->", shape, "x", len(bras)*len(kets))
     rho = [numpy.zeros(shape, dtype=Double.numpy) for _ in range(len(bras)*len(kets))]
     if wisdom is None:
+        wisdom_occupied, wisdom_det_idx = [numpy.zeros((1,), dtype=Int.numpy)], [numpy.zeros((1,), dtype=BigInt.numpy)]    # dummy arrays
         wisdom_mode = det_densities.ignore
-        wisdom_occupied = [numpy.zeros((1,),    dtype=Int.numpy)]
-        wisdom_det_idx  = [numpy.zeros((1,), dtype=BigInt.numpy)]
     else:
         wisdom_occupied, wisdom_det_idx, unpopulated = wisdom.check_initialization(n_orbs, n_create, n_annihil, bra_configs, ket_configs)
-        if unpopulated:
-            determinant_densities(op_string, n_orbs, bra_configs, ket_configs, wisdom, n_threads)
-        wisdom_mode = det_densities.apply
-    #else:
-    #    wisdom_occupied, wisdom_det_idx, unpopulated = wisdom.check_initialization(n_orbs, n_create, n_annihil, bra_configs, ket_configs)
-    #    if unpopulated:  wisdom_mode = det_densities.generate
-    #    else:            wisdom_mode = det_densities.apply
+        wisdom_mode = det_densities.generate if unpopulated else det_densities.apply
     field_op.densities(n_create,              # number of creation operators
                        n_annihil,             # number of annihilation operators
                        rho,                   # array of storage for density tensors (for each bra-ket pair in linear list)
@@ -209,23 +200,27 @@ def build_densities(op_string, n_orbs, bras, kets, bra_configs, ket_configs, thr
                             n_annihil)    # number of annihilation operators
     return {(i,j):rho[i*len(kets)+j] for i in range(len(bras)) for j in range(len(kets))}
 
-# describe the format of wisdom_det_idx at this location in the C code
-def determinant_densities(op_string, n_orbs, bra_configs, ket_configs, wisdom, n_threads):
+def generate_wisdom(op_string, n_orbs, bra_configs, ket_configs, wisdom, n_threads):
     n_create  = op_string.count("c")
     n_annihil = op_string.count("a")
     if (op_string != "c"*n_create + "a"*n_annihil):  raise ValueError("density operator string is not vacuum normal ordered")
     wisdom_occupied, wisdom_det_idx, unpopulated = wisdom.check_initialization(n_orbs, n_create, n_annihil, bra_configs, ket_configs)
-    #if not unpopulated:
-    #    raise ValueError("determinant_densities() should only be given a fresh det_densities object to populate")
-    field_op.determinant_densities(n_create,              # number of creation operators
-                                   n_annihil,             # number of annihilation operators
-                                   n_orbs,                # edge dimension of each density tensor
-                                   bra_configs.packed,    # configuration strings representing the basis for the bras (see packed_configs above)
-                                   len(bra_configs),      # number of configurations in the basis configs_bra (call signature ok if PyInt not longer than BigInt)
-                                   bra_configs.size,      # number of BigInts needed to store a single configuration in configs_bra
-                                   ket_configs.packed,    # configuration strings representing the basis for the kets (see packed_configs above)
-                                   len(ket_configs),      # number of configurations in the basis configs_ket (call signature ok if PyInt not longer than BigInt)
-                                   ket_configs.size,      # number of BigInts needed to store a single configuration in configs_ket
-                                   wisdom_occupied,       # for each ket config, a list (in ascending order) of the orbitals occupied in that ket
-                                   wisdom_det_idx,        # for each ket config, a list of the (possibly negated) index that each respective field-operator string gives projection onto
-                                   n_threads)             # number of threads to spread the work over
+    if not unpopulated:
+        raise ValueError("generate_wisdom() should only be given a fresh det_densities object to populate")
+    field_op.generate_wisdom(n_create,              # number of creation operators
+                             n_annihil,             # number of annihilation operators
+                             n_orbs,                # edge dimension of each density tensor
+                             bra_configs.packed,    # configuration strings representing the basis for the bras (see packed_configs above)
+                             len(bra_configs),      # number of configurations in the basis configs_bra (call signature ok if PyInt not longer than BigInt)
+                             bra_configs.size,      # number of BigInts needed to store a single configuration in configs_bra
+                             ket_configs.packed,    # configuration strings representing the basis for the kets (see packed_configs above)
+                             len(ket_configs),      # number of configurations in the basis configs_ket (call signature ok if PyInt not longer than BigInt)
+                             ket_configs.size,      # number of BigInts needed to store a single configuration in configs_ket
+                             wisdom_occupied,       # for each ket config, a list (in ascending order) of the orbitals occupied in that ket
+                             wisdom_det_idx,        # for each ket config, a list of the (possibly negated) index that each respective field-operator string gives projection onto
+                             n_threads)             # number of threads to spread the work over
+
+def determinant_densities(op_string, n_orbs, n_elec, bra_configs, ket_configs, n_threads=1):
+    wisdom = det_densities(n_elec)
+    generate_wisdom(op_string, n_orbs, bra_configs, ket_configs, wisdom, n_threads)
+    return wisdom.data()
