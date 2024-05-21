@@ -119,6 +119,7 @@ def opPsi_1e(HPsi, Psi, h, configs, thresh, wisdom, n_threads):
     field_op.op_Psi(1,                  # electron order of the operator
                     h,                  # tensor of matrix elements (integrals), assumed antisymmetrized
                     h.shape[0],         # edge dimension of the integrals tensor
+                    1,                  # a global phase to be applied to the operator action
                     [HPsi],             # array of row vectors: incremented by output
                     [Psi],              # array of row vectors: input vectors to act on
                     1,                  # how many vectors we are acting on and producing simultaneously in Psi and opPsi
@@ -126,10 +127,10 @@ def opPsi_1e(HPsi, Psi, h, configs, thresh, wisdom, n_threads):
                     len(configs),       # number of configurations in the configs basis (call signature ok if PyInt not longer than BigInt)
                     configs.size,       # number of BigInts needed to store a single configuration in configs
                     thresh,             # perform no further work if result will be smaller than this
-                    n_threads,          # number of threads to spread the work over
                     wisdom_mode,        # whether to ignore, generate, or apply wisdom (lookup tables that *should* make things faster - but not always)
-                    wisdom_occupied,    # list of occupied orbitals for each configuration (needed to easily interpret wisdom tables from the outside)
-                    wisdom_det_idx)     # wisdom tables:  the overlapping bra configurations, per orbital indices, for each ket configuration (see determinant_densities below)
+                    wisdom_occupied,    # for each ket config, a list (in ascending order) of the orbitals occupied in that ket
+                    wisdom_det_idx,     # for each ket config, a list of the (possibly negated) index that each respective field-operator string gives projection onto
+                    n_threads)          # number of threads to spread the work over
 
 def opPsi_2e(HPsi, Psi, V, configs, thresh, wisdom, n_threads):
     if wisdom is None:
@@ -139,7 +140,7 @@ def opPsi_2e(HPsi, Psi, V, configs, thresh, wisdom, n_threads):
     else:
         wisdom_occupied, wisdom_det_idx, unpopulated = wisdom.check_initialization(V.shape[0], 2, 2, configs, configs)
         if unpopulated:
-            determinant_densities("ccaa", V.shape[0], configs, configs, wisdom, n_threads, hack=1)
+            determinant_densities("ccaa", V.shape[0], configs, configs, wisdom, n_threads)
         wisdom_mode = det_densities.apply
     #else:
     #    wisdom_occupied, wisdom_det_idx, unpopulated = wisdom.check_initialization(V.shape[0], 2, 2, configs, configs)
@@ -148,6 +149,7 @@ def opPsi_2e(HPsi, Psi, V, configs, thresh, wisdom, n_threads):
     field_op.op_Psi(2,                  # electron order of the operator
                     V,                  # tensor of matrix elements (integrals), assumed antisymmetrized
                     V.shape[0],         # edge dimension of the integrals tensor
+                    -1,                 # a global phase to be applied to the operator action (to associate Vpqrs with pqsr field-op string)
                     [HPsi],             # array of row vectors: incremented by output
                     [Psi],              # array of row vectors: input vectors to act on
                     1,                  # how many vectors we are acting on and producing simultaneously in Psi and opPsi
@@ -155,10 +157,10 @@ def opPsi_2e(HPsi, Psi, V, configs, thresh, wisdom, n_threads):
                     len(configs),       # number of configurations in the configs basis (call signature ok if PyInt not longer than BigInt)
                     configs.size,       # number of BigInts needed to store a single configuration in configs
                     thresh,             # perform no further work if result will be smaller than this
-                    n_threads,          # number of threads to spread the work over
                     wisdom_mode,        # whether to ignore, generate, or apply wisdom (lookup tables that *should* make things faster - but not always)
-                    wisdom_occupied,    # list of occupied orbitals for each configuration (needed to easily interpret wisdom tables from the outside)
-                    wisdom_det_idx)     # wisdom tables:  the overlapping bra configurations, per orbital indices, for each ket configuration (see determinant_densities below)
+                    wisdom_occupied,    # for each ket config, a list (in ascending order) of the orbitals occupied in that ket
+                    wisdom_det_idx,     # for each ket config, a list of the (possibly negated) index that each respective field-operator string gives projection onto
+                    n_threads)          # number of threads to spread the work over
 
 def build_densities(op_string, n_orbs, bras, kets, bra_configs, ket_configs, thresh, wisdom, n_threads):
     n_create  = op_string.count("c")
@@ -184,6 +186,7 @@ def build_densities(op_string, n_orbs, bras, kets, bra_configs, ket_configs, thr
                        n_annihil,             # number of annihilation operators
                        rho,                   # array of storage for density tensors (for each bra-ket pair in linear list)
                        n_orbs,                # edge dimension of each density tensor
+                       1,                     # a global phase to be applied to the operator action
                        bras,                  # array of row vectors: bras for transition-density tensors
                        len(bras),             # number of bras
                        bra_configs.packed,    # configuration strings representing the basis for the bras (see packed_configs above)
@@ -195,10 +198,10 @@ def build_densities(op_string, n_orbs, bras, kets, bra_configs, ket_configs, thr
                        len(ket_configs),      # number of configurations in the ket basis (call signature ok if PyInt not longer than BigInt)
                        ket_configs.size,      # number of BigInts needed to store a single configuration in the ket basis
                        thresh,                # perform no further work if result will be smaller than this
-                       n_threads,             # number of threads to spread the work over
                        wisdom_mode,           # whether to ignore, generate, or apply wisdom (lookup tables that *should* make things faster - but not always)
-                       wisdom_occupied,       # list of occupied orbitals for each configuration (needed to easily interpret wisdom tables from the outside)
-                       wisdom_det_idx)        # wisdom tables:  the overlapping bra configurations, per orbital indices, for each ket configuration (see determinant_densities below)
+                       wisdom_occupied,       # for each ket config, a list (in ascending order) of the orbitals occupied in that ket
+                       wisdom_det_idx,        # for each ket config, a list of the (possibly negated) index that each respective field-operator string gives projection onto
+                       n_threads)             # number of threads to spread the work over
     antisymm.antisymmetrize(rho,          # linear array of density tensors to antisymmetrize
                             len(rho),     # number of density tensors to antisymmetrize
                             n_orbs,       # number of orbitals
@@ -207,7 +210,7 @@ def build_densities(op_string, n_orbs, bras, kets, bra_configs, ket_configs, thr
     return {(i,j):rho[i*len(kets)+j] for i in range(len(bras)) for j in range(len(kets))}
 
 # describe the format of wisdom_det_idx at this location in the C code
-def determinant_densities(op_string, n_orbs, bra_configs, ket_configs, wisdom, n_threads, hack=0):
+def determinant_densities(op_string, n_orbs, bra_configs, ket_configs, wisdom, n_threads):
     n_create  = op_string.count("c")
     n_annihil = op_string.count("a")
     if (op_string != "c"*n_create + "a"*n_annihil):  raise ValueError("density operator string is not vacuum normal ordered")
@@ -223,6 +226,6 @@ def determinant_densities(op_string, n_orbs, bra_configs, ket_configs, wisdom, n
                                    ket_configs.packed,    # configuration strings representing the basis for the kets (see packed_configs above)
                                    len(ket_configs),      # number of configurations in the basis configs_ket (call signature ok if PyInt not longer than BigInt)
                                    ket_configs.size,      # number of BigInts needed to store a single configuration in configs_ket
-                                   n_threads,             # number of threads to spread the work over
-                                   wisdom_occupied,       # list of occupied orbitals for each configuration (needed to easily interpret wisdom tables from the outside)
-                                   wisdom_det_idx, hack)        # wisdom tables:  the overlapping bra configurations, per orbital indices, for each ket configuration (see above)
+                                   wisdom_occupied,       # for each ket config, a list (in ascending order) of the orbitals occupied in that ket
+                                   wisdom_det_idx,        # for each ket config, a list of the (possibly negated) index that each respective field-operator string gives projection onto
+                                   n_threads)             # number of threads to spread the work over
