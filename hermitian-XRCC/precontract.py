@@ -15,8 +15,9 @@
 #    You should have received a copy of the GNU General Public License
 #    along with QodeApplications.  If not, see <http://www.gnu.org/licenses/>.
 #
+import tensorly
 from qode.util.dynamic_array import dynamic_array, cached
-from qode.math.tensornet     import evaluate
+from qode.math.tensornet     import evaluate, raw, tl_tensor
 
 
 
@@ -74,7 +75,16 @@ def precontract(densities, integrals, timings):
                     timings.record("  precontract {}".format(label))
                     return result
                 if chg_i-chg_j==Dchg:
-                    return dynamic_array(cached(contract_rho_int_m_chgs), [range(n_states[chg_i]), range(n_states[chg_j])])
+                    #return dynamic_array(cached(contract_rho_int_m_chgs), [range(n_states[chg_i]), range(n_states[chg_j])])
+                    temp = contract_rho_int_m_chgs(0,0)
+                    shape = [n_states[chg_i], n_states[chg_j]] + list(temp.shape)
+                    value = tensorly.zeros(shape, dtype=tensorly.float64)
+                    value[0,0,...] = raw(temp)
+                    for i in range(n_states[chg_i]):
+                        for j in range(n_states[chg_j]):
+                            if i!=0 or j!=0:
+                                value[i,j,...] = raw(contract_rho_int_m_chgs(i,j))
+                    return tl_tensor(value)
                 else:
                     return None
             return dynamic_array(cached(contract_rho_int_m), [n_states.keys()]*2)

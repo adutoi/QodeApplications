@@ -36,8 +36,8 @@ def combo(X, i0s,i1s,j0s,j1s):
         for i1 in range(i1s):
             for j0 in range(j0s):
                 for j1 in range(j1s):
-                    temp = evaluate(2 * X.ccaa0qXsr_V1qrs[i0,j0] - X.ca0Xq_T1q[i0,j0] - X.ca0Xq_U01q[i0,j0] - X.ca0Xq_U11q[i0,j0] )
-                    result[i0,i1,j0,j1] = scalar_value( X.ca1Xu_S0u[i1,j1](p,t) @ temp(t,p) )
+                    temp = evaluate(2 * X.ccaa0qXsr_V1qrs[i0,j0,:,:] - X.ca0Xq_T1q[i0,j0,:,:] - X.ca0Xq_U01q[i0,j0,:,:] - X.ca0Xq_U11q[i0,j0,:,:] )
+                    result[i0,i1,j0,j1] = scalar_value( X.ca1Xu_S0u[i1,j1,:,:](p,t) @ temp(t,p) )
     return result
     ##temp = evaluate(2 * X.ccaa0qXsr_V1qrs[i0,j0] - X.ca0Xq_T1q[i0,j0] - X.ca0Xq_U01q[i0,j0] - X.ca0Xq_U11q[i0,j0] )
     ##return scalar_value( X.ca1Xu_S0u[i1,j1](p,t) @ temp(t,p) )
