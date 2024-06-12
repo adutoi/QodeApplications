@@ -38,7 +38,7 @@ def precontract(densities, integrals, timings):
             int_indices = []
             int_blocks  = []
             block_idx = 0
-            free_idx  = 0
+            free_idx  = 2
             if int_type=="U":
                 block_idx += 1
                 int_blocks += [indices[block_idx]]
@@ -67,24 +67,9 @@ def precontract(densities, integrals, timings):
             Dchg = rho_type.count("a") - rho_type.count("c")    # get rid of this and allow the exception
 
             def contract_rho_int_m(chg_i,chg_j):
-                def contract_rho_int_m_chgs(i,j):
-                    timings.start()
-                    idx = [i,j] + [slice(None)] * (len(densities_m[rho_type][chg_i,chg_j].shape) - 2)
-                    rho = densities_m[rho_type][chg_i,chg_j][tuple(idx)]
-                    result = evaluate(rho(*rho_indices) @ ints(*int_indices))
-                    timings.record("  precontract {}".format(label))
-                    return result
                 if chg_i-chg_j==Dchg:
-                    #return dynamic_array(cached(contract_rho_int_m_chgs), [range(n_states[chg_i]), range(n_states[chg_j])])
-                    temp = contract_rho_int_m_chgs(0,0)
-                    shape = [n_states[chg_i], n_states[chg_j]] + list(temp.shape)
-                    value = tensorly.zeros(shape, dtype=tensorly.float64)
-                    value[0,0,...] = raw(temp)
-                    for i in range(n_states[chg_i]):
-                        for j in range(n_states[chg_j]):
-                            if i!=0 or j!=0:
-                                value[i,j,...] = raw(contract_rho_int_m_chgs(i,j))
-                    return tl_tensor(value)
+                    rho = densities_m[rho_type][chg_i,chg_j]
+                    return evaluate(rho(*([0,1]+rho_indices)) @ ints(*int_indices))
                 else:
                     return None
             return dynamic_array(cached(contract_rho_int_m), [n_states.keys()]*2)
