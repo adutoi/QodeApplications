@@ -16,29 +16,20 @@
 #    along with QodeApplications.  If not, see <http://www.gnu.org/licenses/>.
 #
 import numpy
-from qode.math.tensornet import scalar_value, evaluate
+from qode.math.tensornet import scalar_value, evaluate, raw
 from build_diagram       import build_diagram
 
 p, q, r, s, t, u, v, w = "pqrstuvw"    # some contraction indices for easier reading
 
+i0, i1, j0, j1 = 0, 1, 2, 3
 
 # tq,pu,tu,pq-> :        ca0  ca1  s01    t10
 # tq,pu,tu,pq-> :        ca0  ca1  s01  u0_10
 # tq,pu,tu,pq-> :        ca0  ca1  s01  u1_10
 # qtsr,pu,tu,pqrs-> :  ccaa0  ca1  s01  v1000
 def combo(X, i0s,i1s,j0s,j1s):
-    i0m,i0s = i0s
-    i1m,i1s = i1s
-    j0m,j0s = j0s
-    j1m,j1s = j1s
-    result = numpy.zeros((i0s,i1s,j0s,j1s))
-    for i0 in range(i0s):
-        for i1 in range(i1s):
-            for j0 in range(j0s):
-                for j1 in range(j1s):
-                    temp = evaluate(2 * X.ccaa0qXsr_V1qrs[i0,j0,:,:] - X.ca0Xq_T1q[i0,j0,:,:] - X.ca0Xq_U01q[i0,j0,:,:] - X.ca0Xq_U11q[i0,j0,:,:] )
-                    result[i0,i1,j0,j1] = scalar_value( X.ca1Xu_S0u[i1,j1,:,:](p,t) @ temp(t,p) )
-    return result
+    temp = evaluate(2 * X.ccaa0qXsr_V1qrs - X.ca0Xq_T1q - X.ca0Xq_U01q - X.ca0Xq_U11q )
+    return raw( X.ca1Xu_S0u(i1,j1,p,t) @ temp(i0,j0,t,p) )
     ##temp = evaluate(2 * X.ccaa0qXsr_V1qrs[i0,j0] - X.ca0Xq_T1q[i0,j0] - X.ca0Xq_U01q[i0,j0] - X.ca0Xq_U11q[i0,j0] )
     ##return scalar_value( X.ca1Xu_S0u[i1,j1](p,t) @ temp(t,p) )
     #value  =  2 * scalar_value( X.ca1Xu_S0u[i1,j1](p,t) @ X.ccaa0qXsr_V1qrs[i0,j0](t,p) )

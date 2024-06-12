@@ -16,7 +16,7 @@
 #    along with QodeApplications.  If not, see <http://www.gnu.org/licenses/>.
 #
 import numpy
-from qode.math.tensornet import scalar_value
+from qode.math.tensornet import scalar_value, raw
 from build_diagram       import build_diagram
 
 p, q, r, s, t, u, v, w = "pqrstuvw"    # some contraction indices for easier reading
@@ -38,19 +38,11 @@ def identity(X):
 
 # dimer diagrams
 
+i0, i1, j0, j1 = 0, 1, 2, 3
+
 # p,q,pq-> :  c0  a1  s01
 def s01(X, i0s,i1s,j0s,j1s):
-    i0m,i0s = i0s
-    i1m,i1s = i1s
-    j0m,j0s = j0s
-    j1m,j1s = j1s
-    result = numpy.zeros((i0s,i1s,j0s,j1s))
-    for i0 in range(i0s):
-        for i1 in range(i1s):
-            for j0 in range(j0s):
-                for j1 in range(j1s):
-                    result[i0,i1,j0,j1] = (-1)**(X.n_i1 + X.P) * scalar_value( X.c0[i0,j0,:](p) @ X.a1q_S0q[i1,j1,:](p) )
-    return result
+    return (-1)**(X.n_i1 + X.P) * raw( X.c0(i0,j0,p) @ X.a1q_S0q(i1,j1,p) )
     #return (-1)**(X.n_i1 + X.P) * scalar_value( X.c0[i0,j0](p) @ X.a1q_S0q[i1,j1](p) )
     #return (-1)**(X.n_i1 + X.P) * scalar_value( X.c0[i0,j0](p) @ X.a1[i1,j1](q) @ X.s01(p,q))
 
