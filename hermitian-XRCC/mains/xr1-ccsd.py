@@ -62,7 +62,7 @@ global_timings.start()
 # Information about the Be2 supersystem
 n_frag       = 2
 displacement = float(sys.argv[1])
-states       = "atomic_states/rho/{}.pkl".format(sys.argv[2])
+states       = "rho/{}.pkl".format(sys.argv[2])
 project_core = True
 if len(sys.argv)==4:
     if sys.argv[3]=="no-proj":
