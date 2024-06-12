@@ -78,7 +78,7 @@ def u001(X, i0s,i1s,j0s,j1s):
         for i1 in range(i1s):
             for j0 in range(j0s):
                 for j1 in range(j1s):
-                    result[i0,i1,j0,j1] = (-1)**(X.n_i1 + X.P) * scalar_value( X.c0[i0,j0](p) @ X.a1q_U00q[i1,j1](p) )
+                    result[i0,i1,j0,j1] = (-1)**(X.n_i1 + X.P) * scalar_value( X.c0[i0,j0,:](p) @ X.a1q_U00q[i1,j1](p) )
     return result
     #return (-1)**(X.n_i1 + X.P) * scalar_value( X.c0[i0,j0](p) @ X.a1q_U00q[i1,j1](p) )
     #return (-1)**(X.n_i1 + X.P) * scalar_value( X.c0[i0,j0](p) @ X.a1[i1,j1](q) @ X.u0_01(p,q) )
@@ -94,7 +94,7 @@ def u101(X, i0s,i1s,j0s,j1s):
         for i1 in range(i1s):
             for j0 in range(j0s):
                 for j1 in range(j1s):
-                    result[i0,i1,j0,j1] = (-1)**(X.n_i1 + X.P) * scalar_value( X.c0[i0,j0](p) @ X.a1q_U10q[i1,j1](p) )
+                    result[i0,i1,j0,j1] = (-1)**(X.n_i1 + X.P) * scalar_value( X.c0[i0,j0,:](p) @ X.a1q_U10q[i1,j1](p) )
     return result
     #return (-1)**(X.n_i1 + X.P) * scalar_value( X.c0[i0,j0](p) @ X.a1q_U10q[i1,j1](p) )
     #return (-1)**(X.n_i1 + X.P) * scalar_value( X.c0[i0,j0](p) @ X.a1[i1,j1](q) @ X.u1_01(p,q) )

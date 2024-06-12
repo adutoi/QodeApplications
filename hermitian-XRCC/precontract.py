@@ -68,7 +68,8 @@ def precontract(densities, integrals, timings):
             def contract_rho_int_m(chg_i,chg_j):
                 def contract_rho_int_m_chgs(i,j):
                     timings.start()
-                    rho = densities_m[rho_type][chg_i,chg_j][i,j]
+                    idx = [i,j] + [slice(None)] * (len(densities_m[rho_type][chg_i,chg_j].shape) - 2)
+                    rho = densities_m[rho_type][chg_i,chg_j][tuple(idx)]
                     result = evaluate(rho(*rho_indices) @ ints(*int_indices))
                     timings.record("  precontract {}".format(label))
                     return result

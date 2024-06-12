@@ -49,7 +49,7 @@ def s01(X, i0s,i1s,j0s,j1s):
         for i1 in range(i1s):
             for j0 in range(j0s):
                 for j1 in range(j1s):
-                    result[i0,i1,j0,j1] = (-1)**(X.n_i1 + X.P) * scalar_value( X.c0[i0,j0](p) @ X.a1q_S0q[i1,j1](p) )
+                    result[i0,i1,j0,j1] = (-1)**(X.n_i1 + X.P) * scalar_value( X.c0[i0,j0,:](p) @ X.a1q_S0q[i1,j1](p) )
     return result
     #return (-1)**(X.n_i1 + X.P) * scalar_value( X.c0[i0,j0](p) @ X.a1q_S0q[i1,j1](p) )
     #return (-1)**(X.n_i1 + X.P) * scalar_value( X.c0[i0,j0](p) @ X.a1[i1,j1](q) @ X.s01(p,q))

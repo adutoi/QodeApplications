@@ -57,7 +57,7 @@ def v0101(X, i0s,i1s,j0s,j1s):
         for i1 in range(i1s):
             for j0 in range(j0s):
                 for j1 in range(j1s):
-                    result[i0,i1,j0,j1] = 4 * scalar_value( X.ca1[i1,j1](q,s) @ X.ca0pr_Vp1r1[i0,j0](q,s) )
+                    result[i0,i1,j0,j1] = 4 * scalar_value( X.ca1[i1,j1,:,:](q,s) @ X.ca0pr_Vp1r1[i0,j0](q,s) )
     return result
     #return 4 * scalar_value( X.ca1[i1,j1](q,s) @ X.ca0pr_Vp1r1[i0,j0](q,s) )
     #return 4 * scalar_value( X.ca0[i0,j0](p,r) @ X.ca1[i1,j1](q,s) @ X.v0101(p,q,r,s) )
@@ -73,7 +73,7 @@ def v0010(X, i0s,i1s,j0s,j1s):
         for i1 in range(i1s):
             for j0 in range(j0s):
                 for j1 in range(j1s):
-                    result[i0,i1,j0,j1] = 2 * (-1)**(X.n_i1 + X.P) * scalar_value( X.a1[i1,j1](r) @ X.cca0pqs_Vpq1s[i0,j0](r) )
+                    result[i0,i1,j0,j1] = 2 * (-1)**(X.n_i1 + X.P) * scalar_value( X.a1[i1,j1,:](r) @ X.cca0pqs_Vpq1s[i0,j0](r) )
     return result
     #return 2 * (-1)**(X.n_i1 + X.P) * scalar_value( X.a1[i1,j1](r) @ X.cca0pqs_Vpq1s[i0,j0](r) )
     #return 2 * (-1)**(X.n_i1 + X.P) * scalar_value( X.cca0[i0,j0](p,q,s) @ X.a1[i1,j1](r) @ X.v0010(p,q,r,s) )
@@ -89,7 +89,7 @@ def v0111(X, i0s,i1s,j0s,j1s):
         for i1 in range(i1s):
             for j0 in range(j0s):
                 for j1 in range(j1s):
-                    result[i0,i1,j0,j1] = 2 * (-1)**(X.n_i1 + X.P) * scalar_value( X.c0[i0,j0](p) @ X.caa1qsr_V0qrs[i1,j1](p) )
+                    result[i0,i1,j0,j1] = 2 * (-1)**(X.n_i1 + X.P) * scalar_value( X.c0[i0,j0,:](p) @ X.caa1qsr_V0qrs[i1,j1](p) )
     return result
     #return 2 * (-1)**(X.n_i1 + X.P) * scalar_value( X.c0[i0,j0](p) @ X.caa1qsr_V0qrs[i1,j1](p) )
     #return 2 * (-1)**(X.n_i1 + X.P) * scalar_value( X.c0[i0,j0](p) @ X.caa1[i1,j1](q,s,r) @ X.v0111(p,q,r,s) )
@@ -105,7 +105,7 @@ def v0011(X, i0s,i1s,j0s,j1s):
         for i1 in range(i1s):
             for j0 in range(j0s):
                 for j1 in range(j1s):
-                    result[i0,i1,j0,j1] = 1 * scalar_value( X.aa1[i1,j1](s,r) @ X.cc0pq_Vpq11[i0,j0](r,s) )
+                    result[i0,i1,j0,j1] = 1 * scalar_value( X.aa1[i1,j1,:,:](s,r) @ X.cc0pq_Vpq11[i0,j0](r,s) )
     return result
     #return 1 * scalar_value( X.aa1[i1,j1](s,r) @ X.cc0pq_Vpq11[i0,j0](r,s) )
     #return 1 * scalar_value( X.cc0[i0,j0](p,q) @ X.aa1[i1,j1](s,r) @ X.v0011(p,q,r,s) )
@@ -257,7 +257,7 @@ def s01v0011(X, i0s,i1s,j0s,j1s):
         for i1 in range(i1s):
             for j0 in range(j0s):
                 for j1 in range(j1s):
-                    result[i0,i1,j0,j1] = (-1)**(X.n_i1 + X.P) * scalar_value( X.ccc0[i0,j0](p,q,t) @ X.aaa1[i1,j1](u,s,r) @ X.s01(t,u) @ X.v0011(p,q,r,s) )
+                    result[i0,i1,j0,j1] = (-1)**(X.n_i1 + X.P) * scalar_value( X.ccc0[i0,j0,:,:,:](p,q,t) @ X.aaa1[i1,j1,:,:,:](u,s,r) @ X.s01(t,u) @ X.v0011(p,q,r,s) )
     return result
     #return (-1)**(X.n_i1 + X.P) * scalar_value( X.ccc0[i0,j0](p,q,t) @ X.aaa1[i1,j1](u,s,r) @ X.s01(t,u) @ X.v0011(p,q,r,s) )
 
