@@ -15,6 +15,7 @@
 #    You should have received a copy of the GNU General Public License
 #    along with QodeApplications.  If not, see <http://www.gnu.org/licenses/>.
 #
+import numpy
 from qode.math.tensornet import scalar_value
 from build_diagram       import build_diagram
 
@@ -38,29 +39,40 @@ def identity(X):
 # dimer diagrams
 
 # p,q,pq-> :  c0  a1  s01
-def s01(X, i0,i1,j0,j1):
-        return (-1)**(X.n_i1 + X.P) * scalar_value( X.c0[i0,j0](p) @ X.a1q_S0q[i1,j1](p) )
-        #return (-1)**(X.n_i1 + X.P) * scalar_value( X.c0[i0,j0](p) @ X.a1[i1,j1](q) @ X.s01(p,q))
+def s01(X, i0s,i1s,j0s,j1s):
+    i0m,i0s = i0s
+    i1m,i1s = i1s
+    j0m,j0s = j0s
+    j1m,j1s = j1s
+    result = numpy.zeros((i0s,i1s,j0s,j1s))
+    for i0 in range(i0s):
+        for i1 in range(i1s):
+            for j0 in range(j0s):
+                for j1 in range(j1s):
+                    result[i0,i1,j0,j1] = (-1)**(X.n_i1 + X.P) * scalar_value( X.c0[i0,j0](p) @ X.a1q_S0q[i1,j1](p) )
+    return result
+    #return (-1)**(X.n_i1 + X.P) * scalar_value( X.c0[i0,j0](p) @ X.a1q_S0q[i1,j1](p) )
+    #return (-1)**(X.n_i1 + X.P) * scalar_value( X.c0[i0,j0](p) @ X.a1[i1,j1](q) @ X.s01(p,q))
 
 # ps,rq,pq,rs-> :  ca0  ca1  s01  s10
 def s01s10(X, i0,i1,j0,j1):
-        return -1 * scalar_value( X.ca0[i0,j0](p,s) @ X.ca1[i1,j1](r,q) @ X.s01(p,q) @ X.s10(r,s))
+    return -1 * scalar_value( X.ca0[i0,j0](p,s) @ X.ca1[i1,j1](r,q) @ X.s01(p,q) @ X.s10(r,s))
 
 # pr,sq,pq,rs-> :  cc0  aa1  s01  s01
 def s01s01(X, i0,i1,j0,j1):
-        return (1/2.) * scalar_value( X.cc0[i0,j0](p,r) @ X.aa1[i1,j1](s,q) @ X.s01(p,q) @ X.s01(r,s))
+    return (1/2.) * scalar_value( X.cc0[i0,j0](p,r) @ X.aa1[i1,j1](s,q) @ X.s01(p,q) @ X.s01(r,s))
 
 # pru,tsq,pq,rs,tu-> :  cca0  caa1  s01  s01  s10
 def s01s01s10(X, i0,i1,j0,j1):
-        return (1/2.) * (-1)**(X.n_i1 + X.P + 1) * scalar_value( X.cca0[i0,j0](p,r,u) @ X.caa1[i1,j1](t,s,q) @ X.s01(p,q) @ X.s01(r,s) @ X.s10(t,u))
+    return (1/2.) * (-1)**(X.n_i1 + X.P + 1) * scalar_value( X.cca0[i0,j0](p,r,u) @ X.caa1[i1,j1](t,s,q) @ X.s01(p,q) @ X.s01(r,s) @ X.s10(t,u))
 
 # prwu,tvsq,pq,rs,tu,vw-> :  ccaa0  ccaa1  s01  s01  s10  s10
 def s01s01s10s10(X, i0,i1,j0,j1):
-        return (1/4.) * scalar_value( X.ccaa0[i0,j0](p,r,w,u) @ X.ccaa1[i1,j1](t,v,s,q) @ X.s01(p,q) @ X.s01(r,s) @ X.s10(t,u) @ X.s10(v,w))
+    return (1/4.) * scalar_value( X.ccaa0[i0,j0](p,r,w,u) @ X.ccaa1[i1,j1](t,v,s,q) @ X.s01(p,q) @ X.s01(r,s) @ X.s10(t,u) @ X.s10(v,w))
 
 # prtw,vusq,pq,rs,tu,vw-> :  ccca0  caaa1  s01  s01  s01  s10
 def s01s01s01s10(X, i0,i1,j0,j1):
-        return (-1/6.) * scalar_value( X.ccca0[i0,j0](p,r,t,w) @ X.caaa1[i1,j1](v,u,s,q) @ X.s01(p,q) @ X.s01(r,s) @ X.s01(t,u) @ X.s10(v,w))
+    return (-1/6.) * scalar_value( X.ccca0[i0,j0](p,r,t,w) @ X.caaa1[i1,j1](v,u,s,q) @ X.s01(p,q) @ X.s01(r,s) @ X.s01(t,u) @ X.s10(v,w))
 
 
 

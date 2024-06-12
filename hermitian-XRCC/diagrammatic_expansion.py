@@ -31,15 +31,9 @@ def _build_block(diagram_term, n_states, permutation):
     else:
         n_states_i, n_states_j = n_states
         dims = [(m,n_states_i[m]) for m in permutation] + [(frag_order+m,n_states_j[m]) for m in permutation]
-        loops = [(m,range(r)) for m,r in dims]
-        result = numpy.zeros([r for m,r in dims])
-        def kernel(*states):
-            ordering, states = list(zip(*states))
-            indices = [None]*len(states)
-            for i,o in enumerate(ordering):
-                indices[o] = states[i]
-            result[tuple(indices)] = diagram_term(*states)    # This is where the actual evaluation of the diagram happens
-        recursive_looper(loops, kernel, order_aware=True)
+        reorder = [m for m,r in dims]
+        dims = sorted(dims)    # tuples sorted into lexicographical order (so, but first element of tuple here)
+        result = diagram_term(*dims).transpose(reorder)
     return result
 
 ##########
