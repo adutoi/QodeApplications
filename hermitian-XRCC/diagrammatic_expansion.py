@@ -88,8 +88,8 @@ class _subsystem(object):
         return self._items[charges]
 
 class blocks(object):
-    def __init__(self, densities, integrals, diagrams, contract_cache, timings):
-        contract_cache = struct(rho_S=contract_cache, general=precontract(densities, integrals, timings))
+    def __init__(self, densities, integrals, diagrams, contract_cache, timings, precon_timings):
+        contract_cache = struct(rho_S=contract_cache, general=precontract(densities, integrals, precon_timings))
         self._supersys_info = struct(densities=densities, integrals=integrals, contract_cache=contract_cache, timings=timings)
         self._diagrams = diagrams
         self._items = {}

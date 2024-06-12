@@ -19,7 +19,7 @@
 import numpy
 from qode.util import recursive_looper, compound_range
 
-def _evaluate_block(result, op_blocks, frag_order, active_diagrams, subsys_indices, subsys_charges):
+def _evaluate_block(result, op_blocks, frag_order, active_diagrams, subsys_indices, subsys_charges, timings):
     # Can handle (sub)systems with any number of fragments using diagrams of any fragment order.
     # So can use for trimer_matrix, etc.
     # !!! Phases for some fragment_order < subsystem_size have not yet been coded in (easy)!
@@ -53,8 +53,9 @@ def _evaluate_block(result, op_blocks, frag_order, active_diagrams, subsys_indic
             if other_charges_match and frags_chgs_i==frags_chgs_j:
                 block = None
                 for diagram in active_diagrams:
-                    #print(subsys_charges, diagram)
+                    timings.start()
                     diagram_block = op_blocks[tuple(m[x] for x in frags)][tuple(subsys_charges[x] for x in frags)][diagram]
+                    timings.record("block evaluation")
                     if diagram_block is not None:
                         if block is None:
                             block = numpy.zeros(n_states_i+n_states_j)    # concatenate lists and make ndarray
@@ -68,7 +69,7 @@ def _evaluate_block(result, op_blocks, frag_order, active_diagrams, subsys_indic
                     result += block
     recursive_looper(loops, kernel)
 
-def monomer_matrix(op_blocks, active_diagrams, subsys_index, charge_blocks):
+def monomer_matrix(op_blocks, active_diagrams, subsys_index, charge_blocks, timings):
     # This code is restricted specifically to monomer (sub)systems
     rho = op_blocks.densities[subsys_index]
     dim = sum(rho['n_states'][chg] for chg in charge_blocks)
@@ -83,12 +84,12 @@ def monomer_matrix(op_blocks, active_diagrams, subsys_index, charge_blocks):
             result = Matrix[Ibeg:Iend,Jbeg:Jend]
             subsys_charges = [(chg_i,chg_j)]
             for frag_order in active_diagrams:
-                _evaluate_block(result, op_blocks, frag_order, active_diagrams[frag_order], (subsys_index,), subsys_charges)
+                _evaluate_block(result, op_blocks, frag_order, active_diagrams[frag_order], (subsys_index,), subsys_charges, timings)
             Jbeg = Jend
         Ibeg = Iend
     return Matrix
 
-def dimer_matrix(op_blocks, active_diagrams, subsys_indices, charge_blocks):
+def dimer_matrix(op_blocks, active_diagrams, subsys_indices, charge_blocks, timings):
     # This code is restricted specifically to dimer (sub)systems
     rho1, rho2 = (op_blocks.densities[m] for m in subsys_indices)
     dim = sum(rho1['n_states'][chg1]*rho2['n_states'][chg2] for chg1,chg2 in charge_blocks)
@@ -103,7 +104,7 @@ def dimer_matrix(op_blocks, active_diagrams, subsys_indices, charge_blocks):
             result = Matrix[Ibeg:Iend,Jbeg:Jend]
             subsys_charges = [(chg_i1,chg_j1),(chg_i2,chg_j2)]
             for frag_order in active_diagrams:
-                _evaluate_block(result, op_blocks, frag_order, active_diagrams[frag_order], subsys_indices, subsys_charges)
+                _evaluate_block(result, op_blocks, frag_order, active_diagrams[frag_order], subsys_indices, subsys_charges, timings)
             Jbeg = Jend
         Ibeg = Iend
     return Matrix
