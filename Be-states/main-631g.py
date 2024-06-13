@@ -218,10 +218,10 @@ for n in range(num_elec_dimer+1):
         evals_evecs[n] = (evals, evecs)
         all_evals += list(evals)
 
-label = "svd-"
-if not svd:  label = "new-"
+label = "-svd"
+if not svd:  label = ""
 criterion, crit_val = compression.split("=")
-label += crit_val
+label = crit_val + label
 if criterion=="thresh":
     thresh = float(crit_val)
 elif criterion=="nstates":
@@ -262,6 +262,4 @@ for i in range(len(states[ref_chg].coeffs)):
 for chg in states:
     if chg!=ref_chg:  frag0.state_indices += [(chg,i) for i in range(len(states[chg].coeffs))]
 
-#pickle.dump(frag0, open("/scratch/adutoi/Be631g.pkl", "wb"))    # Medusa
-#pickle.dump(frag0, open("Be631g.pkl", "wb"))                    # Tengri
-#pickle.dump(frag0, open("rho/Be631g-{}.pkl".format(label), "wb"))    # very specific to a certain workflow, maybe useful again
+pickle.dump(frag0, open("rho/Be631g-{}.pkl".format(label), "wb"))    # users responsibility to softlink rho/ to different volume if desired

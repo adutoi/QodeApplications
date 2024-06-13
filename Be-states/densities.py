@@ -17,19 +17,22 @@
 #
 import numpy
 import tensorly
-from qode.math.tensornet import tl_tensor
+from qode.math.tensornet import tl_tensor, tensor_sum
 from qode.math           import svd_decomposition
 import field_op
 
-
-
-def tens_wrap(tensor):
-    return tl_tensor(tensorly.tensor(tensor, dtype=tensorly.float64))
-
-
-
 # states[n].coeffs  = [numpy.array, numpy.array, . . .]   One (effectively 1D) array of coefficients per n-electron state
 # states[n].configs = [int, int, . . . ]                  Each int represents a configuration (has the same length as arrays in list above)
+
+
+
+def _tens_wrap(tensor):
+    return tl_tensor(tensorly.tensor(tensor, dtype=tensorly.float64))
+
+def _vec(i, length):
+    v = numpy.zeros((length,))
+    v[i] = 1
+    return _tens_wrap(v)
 
 def build_tensors(states, n_orbs, n_elec_0, thresh=1e-10, compress=True, n_threads=1):
     densities = {}
@@ -51,20 +54,15 @@ def build_tensors(states, n_orbs, n_elec_0, thresh=1e-10, compress=True, n_threa
                     if op_string not in densities:  densities[op_string] = {}
                     print(op_string, bra_chg, ket_chg)
                     rho = field_op.build_densities(op_string, n_orbs, bra_coeffs, ket_coeffs, bra_configs, ket_configs, thresh, wisdom=None, n_threads=n_threads)
-                    temp_shape = [len(bra_coeffs), len(ket_coeffs)] + list(rho[0,0].shape)
-                    temp = numpy.zeros(temp_shape)
+                    temp = tensor_sum()
                     for i in range(len(bra_coeffs)):
                         for j in range(len(ket_coeffs)):
-                            temp[i,j,...] = rho[i,j]
-                    densities[op_string][bra_chg,ket_chg] = tens_wrap(temp)
-                    #for i in range(len(bra_coeffs)):
-                    #    for j in range(len(ket_coeffs)):
-                    #        if compress:
-                    #            indices = list(range(len(op_string)))
-                    #            c_count = op_string.count("c")
-                    #            rho[i,j] = svd_decomposition(rho[i,j], indices[:c_count], indices[c_count:], wrapper=tens_wrap)
-                    #        else:
-                    #            rho[i,j] = tens_wrap(rho[i,j])
-                    #densities[op_string][bra_chg,ket_chg] = rho
-
+                            indices = list(range(len(op_string)))
+                            if compress:
+                                c_count = op_string.count("c")
+                                rho_ij = svd_decomposition(rho[i,j], indices[:c_count], indices[c_count:], wrapper=_tens_wrap)
+                            else:
+                                rho_ij = _tens_wrap(rho[i,j])
+                            temp +=  _vec(i,len(bra_coeffs))(0) @ _vec(j,len(ket_coeffs))(1) @ rho_ij(*(p+2 for p in indices))
+                    densities[op_string][bra_chg,ket_chg] = temp
     return densities
