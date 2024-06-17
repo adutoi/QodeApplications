@@ -16,7 +16,7 @@
 #    along with QodeApplications.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-# python [-u] main-631g.py <distance> <compression> <nthreads> [no-svd]
+# python [-u] main-631g.py <distance> <compression> <nthreads> [nosvd] [antisymm=numerical|abstract]
 
 import sys
 import numpy
@@ -45,10 +45,7 @@ n_spatial_orb = 9
 dist        = float(sys.argv[1])
 compression =       sys.argv[2]
 n_threads   =   int(sys.argv[3])
-svd = True
-if len(sys.argv)==5:
-    if sys.argv[4]=="no-svd":  svd = False
-    else:                      raise RuntimeError()
+options     =       sys.argv[4:]
 
 frag0 = empty()
 frag0.atoms = [("Be",[0,0,0])]
@@ -218,10 +215,8 @@ for n in range(num_elec_dimer+1):
         evals_evecs[n] = (evals, evecs)
         all_evals += list(evals)
 
-label = "-svd"
-if not svd:  label = ""
 criterion, crit_val = compression.split("=")
-label = crit_val + label
+label = "-".join([crit_val]+options)
 if criterion=="thresh":
     thresh = float(crit_val)
 elif criterion=="nstates":
@@ -253,7 +248,7 @@ for chg,states_chg in states.items():
         #for config in states_chg.configs:
         #    print("  {:018b}".format(config))
 
-frag0.rho = densities.build_tensors(states, 2*frag0.basis.n_spatial_orb, frag0.n_elec_ref, thresh=1e-30, compress=svd, n_threads=n_threads)
+frag0.rho = densities.build_tensors(states, 2*frag0.basis.n_spatial_orb, frag0.n_elec_ref, thresh=1e-30, options=options, n_threads=n_threads)
 
 ref_chg, ref_idx = 0, 0
 frag0.state_indices = [(ref_chg,ref_idx)]                # List of all charge and state indices, reference state needs to be first, but otherwise irrelevant order

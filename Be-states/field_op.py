@@ -160,7 +160,7 @@ def opPsi_2e(HPsi, Psi, V, configs, thresh, wisdom, n_threads):
                     wisdom_det_idx,     # for each ket config, a list of the (possibly negated) index that each respective field-operator string gives projection onto
                     n_threads)          # number of threads to spread the work over
 
-def build_densities(op_string, n_orbs, bras, kets, bra_configs, ket_configs, thresh, wisdom, n_threads):
+def build_densities(op_string, n_orbs, bras, kets, bra_configs, ket_configs, thresh, wisdom, antisymmetrize, n_threads):
     n_create  = op_string.count("c")
     n_annihil = op_string.count("a")
     if (op_string != "c"*n_create + "a"*n_annihil):  raise ValueError("density operator string is not vacuum normal ordered")
@@ -193,12 +193,16 @@ def build_densities(op_string, n_orbs, bras, kets, bra_configs, ket_configs, thr
                        wisdom_occupied,       # for each ket config, a list (in ascending order) of the orbitals occupied in that ket
                        wisdom_det_idx,        # for each ket config, a list of the (possibly negated) index that each respective field-operator string gives projection onto
                        n_threads)             # number of threads to spread the work over
-    antisymm.antisymmetrize(rho,          # linear array of density tensors to antisymmetrize
-                            len(rho),     # number of density tensors to antisymmetrize
-                            n_orbs,       # number of orbitals
-                            n_create,     # number of creation operators
-                            n_annihil)    # number of annihilation operators
-    return {(i,j):rho[i*len(kets)+j] for i in range(len(bras)) for j in range(len(kets))}
+    if antisymmetrize:
+        print("antisymmetrizing ... ", end="")
+        antisymm.antisymmetrize(rho,          # linear array of density tensors to antisymmetrize
+                                len(rho),     # number of density tensors to antisymmetrize
+                                n_orbs,       # number of orbitals
+                                n_create,     # number of creation operators
+                                n_annihil)    # number of annihilation operators
+        print("done")
+    return [[rho[i*len(kets)+j] for j in range(len(kets))] for i in range(len(bras))]
+    #return {(i,j):rho[i*len(kets)+j] for i in range(len(bras)) for j in range(len(kets))}
 
 def generate_wisdom(op_string, n_orbs, bra_configs, ket_configs, wisdom, n_threads):
     n_create  = op_string.count("c")
