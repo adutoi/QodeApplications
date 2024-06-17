@@ -47,6 +47,7 @@ class empty(object):  pass     # Basically just a dictionary class
 
 global_timings = timer()
 matrix_timings = timer()
+integral_timings = timer()
 diagram_timings = timer()
 precontract_timings = timer()
 qode.math.tensornet.initialize_timer()
@@ -75,7 +76,7 @@ for m in range(int(n_frag)):
     for elem,coords in Be.atoms:  coords[2] += m * displacement    # displace along z
     BeN += [Be]
 print("get_ints ...")
-symm_ints, bior_ints, nuc_rep = get_ints(BeN, project_core)
+symm_ints, bior_ints, nuc_rep = get_ints(BeN, project_core, integral_timings)
 print("done")
 
 # The engines that build the terms
@@ -213,6 +214,7 @@ global_timings.record("apply")
 
 global_timings.print("GLOBAL")
 matrix_timings.print("MATRIX")
+integral_timings.print("INTEGRALS")
 diagram_timings.print("DIAGRAMS")
 precontract_timings.print("PRECONTRACTIONS")
 qode.math.tensornet.print_timings("TENSORNET COMPONENTS")

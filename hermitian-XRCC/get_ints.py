@@ -29,22 +29,32 @@ from qode.atoms.integrals.fragments import AO_integrals, fragMO_integrals, bra_t
 def tens_wrap(tensor):
     return tl_tensor(tensorly.tensor(tensor, dtype=tensorly.float64))
 
-def tensorly_wrapper(rule):
-    def wrap_it(*indices):
-        return svd_decomposition(rule(*indices), (0,1), wrapper=tens_wrap)
-    return wrap_it
+def tensorly_wrapper(timings):
+    def wrapper(rule):
+        def wrap_it(*indices):
+            timings.start()
+            Z = svd_decomposition(rule(*indices), [0,1], wrapper=tens_wrap)
+            timings.record("1e integrals SVD")
+            return Z
+        return wrap_it
+    return wrapper
 
-def tensorly_wrapper2(rule):
-    def wrap_it(*indices):
-        print(indices)
-        free_indices = [[],[]]
-        for i,m in enumerate(indices):
-            free_indices[m] += [i]
-        if False and len(free_indices[0])>0 and len(free_indices[1])>0:
-            return svd_decomposition(rule(*indices), free_indices[0], free_indices[1], wrapper=tens_wrap)
-        else:
-            return svd_decomposition(rule(*indices), (0,1,2,3), wrapper=tens_wrap)
-    return wrap_it
+def tensorly_wrapper2(timings):
+    def wrapper(rule):
+        def wrap_it(*indices):
+            print(indices)
+            free_indices = [[],[]]
+            for i,m in enumerate(indices):
+                free_indices[m] += [i]
+            timings.start()
+            if False and len(free_indices[0])>0 and len(free_indices[1])>0:
+                Z = svd_decomposition(rule(*indices), free_indices[0], free_indices[1], wrapper=tens_wrap)
+            else:
+                Z = svd_decomposition(rule(*indices), [0,1,2,3], wrapper=tens_wrap)
+            timings.record("2e integrals SVD")
+            return Z
+        return wrap_it
+    return wrapper
 
 def tens_diff(A, B):
     def rule(*indices):
@@ -109,7 +119,7 @@ def direct_CoreProj(fragments, S):
 
 class _empty(object):  pass
 
-def get_ints(fragments, project_core=True):
+def get_ints(fragments, project_core=True, timings=None):
     # More needs to be done regarding the basis to prevent mismatches with the fragment states
     AO_ints     = AO_integrals(fragments)
     FragMO_ints = fragMO_integrals(AO_ints, [frag.basis.MOcoeffs for frag in fragments], cache=True)     # Cache because multiple calls to each block during biorthogonalization
@@ -130,15 +140,15 @@ def get_ints(fragments, project_core=True):
     BiFragMO_spin_ints_raw = spin_orb_integrals(BiFragMO_ints, "blocked")     # no need to cache? because each block only called once by contraction code
     FragMO_spin_ints   = _empty()
     BiFragMO_spin_ints = _empty()
-    FragMO_spin_ints.S   = wrap(FragMO_spin_ints_raw.S,   [cached, tensorly_wrapper])
-    FragMO_spin_ints.T   = wrap(FragMO_spin_ints_raw.T,   [cached, tensorly_wrapper])
-    FragMO_spin_ints.U   = wrap(FragMO_spin_ints_raw.U,   [cached, tensorly_wrapper])
-    FragMO_spin_ints.V   = wrap(FragMO_spin_ints_raw.V,   [cached, tensorly_wrapper2])
-    BiFragMO_spin_ints.S = wrap(BiFragMO_spin_ints_raw.S, [cached, tensorly_wrapper])
-    BiFragMO_spin_ints.T = wrap(BiFragMO_spin_ints_raw.T, [cached, tensorly_wrapper])
-    BiFragMO_spin_ints.U = wrap(BiFragMO_spin_ints_raw.U, [cached, tensorly_wrapper])
-    BiFragMO_spin_ints.V = wrap(BiFragMO_spin_ints_raw.V, [cached, tensorly_wrapper2])
-    BiFragMO_spin_ints.V_half = wrap(BiFragMO_spin_ints_raw.V_half, [cached, tensorly_wrapper2])
-    BiFragMO_spin_ints.V_diff = dynamic_array([cached, tensorly_wrapper2, tens_diff(BiFragMO_spin_ints_raw.V_half, BiFragMO_spin_ints_raw.V)], BiFragMO_spin_ints_raw.V.ranges)
+    FragMO_spin_ints.S   = wrap(FragMO_spin_ints_raw.S,   [cached, tensorly_wrapper(timings)])
+    FragMO_spin_ints.T   = wrap(FragMO_spin_ints_raw.T,   [cached, tensorly_wrapper(timings)])
+    FragMO_spin_ints.U   = wrap(FragMO_spin_ints_raw.U,   [cached, tensorly_wrapper(timings)])
+    FragMO_spin_ints.V   = wrap(FragMO_spin_ints_raw.V,   [cached, tensorly_wrapper2(timings)])
+    BiFragMO_spin_ints.S = wrap(BiFragMO_spin_ints_raw.S, [cached, tensorly_wrapper(timings)])
+    BiFragMO_spin_ints.T = wrap(BiFragMO_spin_ints_raw.T, [cached, tensorly_wrapper(timings)])
+    BiFragMO_spin_ints.U = wrap(BiFragMO_spin_ints_raw.U, [cached, tensorly_wrapper(timings)])
+    BiFragMO_spin_ints.V = wrap(BiFragMO_spin_ints_raw.V, [cached, tensorly_wrapper2(timings)])
+    BiFragMO_spin_ints.V_half = wrap(BiFragMO_spin_ints_raw.V_half, [cached, tensorly_wrapper2(timings)])
+    BiFragMO_spin_ints.V_diff = dynamic_array([cached, tensorly_wrapper2(timings), tens_diff(BiFragMO_spin_ints_raw.V_half, BiFragMO_spin_ints_raw.V)], BiFragMO_spin_ints_raw.V.ranges)
 
     return FragMO_spin_ints, BiFragMO_spin_ints, Nuc_repulsion(fragments).matrix
