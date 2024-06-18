@@ -16,7 +16,7 @@
 #    along with QodeApplications.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-# python [-u] main-631g.py <distance> <compression> <nthreads> [nosvd] [natorbs] [absanti]
+# python [-u] main-631g.py <nthreads> <distance> thresh|nstates=<value> [compress=cc-aa-svd|ca-ca-svd] [nat-orbs] [abs-anti]
 
 import sys
 import numpy
@@ -42,10 +42,15 @@ class empty(object):  pass
 basis_label = "6-31G"
 n_spatial_orb = 9
 
-dist        = float(sys.argv[1])
-compression =       sys.argv[2]
-n_threads   =   int(sys.argv[3])
-options     =       sys.argv[4:]
+n_threads    =   int(sys.argv[1])
+dist         = float(sys.argv[2])
+statesthresh =       sys.argv[3]
+options      =       sys.argv[4:]
+
+def abbrev(token):
+    tokens = token.split("=")
+    return tokens[1] if len(tokens)==2 else tokens[0]
+label = "_".join(abbrev(arg) for arg in sys.argv[2:])
 
 frag0 = empty()
 frag0.atoms = [("Be",[0,0,0])]
@@ -215,8 +220,7 @@ for n in range(num_elec_dimer+1):
         evals_evecs[n] = (evals, evecs)
         all_evals += list(evals)
 
-criterion, crit_val = compression.split("=")
-label = "-".join([crit_val]+options)
+criterion, crit_val = statesthresh.split("=")
 if criterion=="thresh":
     thresh = float(crit_val)
 elif criterion=="nstates":
@@ -257,4 +261,4 @@ for i in range(len(states[ref_chg].coeffs)):
 for chg in states:
     if chg!=ref_chg:  frag0.state_indices += [(chg,i) for i in range(len(states[chg].coeffs))]
 
-pickle.dump(frag0, open("rho/Be631g-{}.pkl".format(label), "wb"))    # users responsibility to softlink rho/ to different volume if desired
+pickle.dump(frag0, open("rho/Be631g_{}.pkl".format(label), "wb"))    # users responsibility to softlink rho/ to different volume if desired

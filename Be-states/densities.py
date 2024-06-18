@@ -74,10 +74,9 @@ def build_tensors(states, n_orbs, n_elec_0, thresh=1e-10, options=None, n_thread
     densities = {}
 
     options = _token_parser(options)
-    svd                = not options("nosvd")                  # SVD-compress the densities? (default: yes)
-    natorbs            = options("natorbs")                    # do compression in natural orbital rep? (default: no)
-    antisymm_abstract  = options("absanti")                    # antisymmetry abstract in final rep, which might be original? (default: no)
-    antisymm_numerical = (not antisymm_abstract) or natorbs    # numerically antisymmetrize in original rep? (default: yes)
+    use_natural_orbs   = options("nat-orbs")                            # do compression in natural orbital rep? (default: no)
+    antisymm_abstract  = options("abs-anti")                            # antisymmetry abstract in final rep, which might be original? (default: no)
+    antisymm_numerical = (not antisymm_abstract) or use_natural_orbs    # numerically antisymmetrize in original rep? (default: yes)
 
     print("Computing densities ...")
 
@@ -97,7 +96,7 @@ def build_tensors(states, n_orbs, n_elec_0, thresh=1e-10, options=None, n_thread
 
     print("Postprocessing ...")
 
-    if natorbs:
+    if use_natural_orbs:
         natural_orbs = {}
         for chg,_ in densities["ca"]:
             rho = densities["ca"][chg,chg]              # bra/ket charges must be the same for this string ...
@@ -123,7 +122,7 @@ def build_tensors(states, n_orbs, n_elec_0, thresh=1e-10, options=None, n_thread
                 n_kets = len(rho_i)
                 for j,rho_ij in enumerate(rho_i):
                     #
-                    if natorbs:
+                    if use_natural_orbs:
                         p = 0
                         for _ in range(c_count):
                             indices_p = list(indices)
@@ -139,9 +138,9 @@ def build_tensors(states, n_orbs, n_elec_0, thresh=1e-10, options=None, n_thread
                         if antisymm_abstract:
                             field_op.asymmetrize(op_string, rho_ij)
                         rho_ij = _tens_wrap(rho_ij)
-                    if svd:
+                    if options("compress", "cc-aa-svd"):    # SVD-compress the densities, separating creation from annihilation indices
                         rho_ij = svd_decomposition(numpy.array(raw(rho_ij), dtype=Double.numpy, order="C"), indices[:c_count], indices[c_count:], wrapper=_tens_wrap)
-                    if natorbs:
+                    if use_natural_orbs:
                         p = 0
                         for _ in range(c_count):
                             indices_p = list(indices)
