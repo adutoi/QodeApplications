@@ -220,7 +220,7 @@ for n in range(num_elec_dimer+1):
                     states[chg] = empty()
                     states[chg].configs = sorted_configs_0[n]  # relies on fragments being the same
                     states[chg].coeffs  = []
-                tmp = numpy.zeros(n_config_n, dtype=Double.numpy)
+                tmp = numpy.zeros(n_config_n, dtype=Double.numpy, order="C")
                 tmp[:] = evecs[:,i]
                 states[chg].coeffs += [tmp]
 

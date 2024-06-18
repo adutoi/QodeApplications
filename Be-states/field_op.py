@@ -39,7 +39,7 @@ class packed_configs(object):
         self.length = len(configs)
         max_orbs  = math.floor(1 + math.log(configs[-1],2))
         self.size = 1 + int(max_orbs)//orbs_per_configint
-        self.packed = numpy.zeros(self.length * self.size, dtype=BigInt.numpy)
+        self.packed = numpy.zeros(self.length * self.size, dtype=BigInt.numpy, order="C")
         reduction = 2**orbs_per_configint
         for i,config in enumerate(configs):
             reduced = config
@@ -51,7 +51,7 @@ class packed_configs(object):
 
 def find_index(config, configs):
     reduction = 2**orbs_per_configint
-    packed_config = numpy.zeros(configs.size, dtype=BigInt.numpy)
+    packed_config = numpy.zeros(configs.size, dtype=BigInt.numpy, order="C")
     reduced = config
     for n in range(configs.size):
         packed_config[n] = reduced % reduction
@@ -95,8 +95,8 @@ class det_densities(object):
     def _initialize(self, n_orbs, n_create, n_annihil, configs_bra, configs_ket):
         alloc_size = self._combinatoric(n_orbs - self._n_elec_ket + n_annihil, n_create) * self._combinatoric(self._n_elec_ket, n_annihil)
         self._scalar_params, self._configs_bra, self._configs_ket = (n_orbs, n_create, n_annihil), configs_bra, configs_ket
-        self._occupied    = [numpy.zeros((self._n_elec_ket,), dtype=Int.numpy) for _ in range(len(configs_ket))]
-        self._det_indices = [numpy.zeros((alloc_size,),    dtype=BigInt.numpy) for _ in range(len(configs_ket))]
+        self._occupied    = [numpy.zeros((self._n_elec_ket,), dtype=Int.numpy, order="C") for _ in range(len(configs_ket))]
+        self._det_indices = [numpy.zeros((alloc_size,),    dtype=BigInt.numpy, order="C") for _ in range(len(configs_ket))]
         self._initialized = True
     def check_initialization(self, n_orbs, n_create, n_annihil, configs_bra, configs_ket):
         unpopulated = not self._initialized
@@ -116,7 +116,7 @@ class det_densities(object):
 
 def opPsi_1e(HPsi, Psi, h, configs, thresh, wisdom, n_threads):
     if wisdom is None:
-        wisdom_occupied, wisdom_det_idx = [numpy.zeros((1,), dtype=Int.numpy)], [numpy.zeros((1,), dtype=BigInt.numpy)]    # dummy arrays
+        wisdom_occupied, wisdom_det_idx = [numpy.zeros((1,), dtype=Int.numpy, order="C")], [numpy.zeros((1,), dtype=BigInt.numpy, order="C")]    # dummy arrays
         wisdom_mode = det_densities.ignore
     else:
         wisdom_occupied, wisdom_det_idx, unpopulated = wisdom.check_initialization(h.shape[0], 1, 1, configs, configs)
@@ -139,7 +139,7 @@ def opPsi_1e(HPsi, Psi, h, configs, thresh, wisdom, n_threads):
 
 def opPsi_2e(HPsi, Psi, V, configs, thresh, wisdom, n_threads):
     if wisdom is None:
-        wisdom_occupied, wisdom_det_idx = [numpy.zeros((1,), dtype=Int.numpy)], [numpy.zeros((1,), dtype=BigInt.numpy)]    # dummy arrays
+        wisdom_occupied, wisdom_det_idx = [numpy.zeros((1,), dtype=Int.numpy, order="C")], [numpy.zeros((1,), dtype=BigInt.numpy, order="C")]    # dummy arrays
         wisdom_mode = det_densities.ignore
     else:
         wisdom_occupied, wisdom_det_idx, unpopulated = wisdom.check_initialization(V.shape[0], 2, 2, configs, configs)
@@ -166,9 +166,9 @@ def build_densities(op_string, n_orbs, bras, kets, bra_configs, ket_configs, thr
     if (op_string != "c"*n_create + "a"*n_annihil):  raise ValueError("density operator string is not vacuum normal ordered")
     shape = [n_orbs] * (n_create + n_annihil)
     print("####", op_string, "->", shape, "x", len(bras)*len(kets))
-    rho = [numpy.zeros(shape, dtype=Double.numpy) for _ in range(len(bras)*len(kets))]
+    rho = [numpy.zeros(shape, dtype=Double.numpy, order="C") for _ in range(len(bras)*len(kets))]
     if wisdom is None:
-        wisdom_occupied, wisdom_det_idx = [numpy.zeros((1,), dtype=Int.numpy)], [numpy.zeros((1,), dtype=BigInt.numpy)]    # dummy arrays
+        wisdom_occupied, wisdom_det_idx = [numpy.zeros((1,), dtype=Int.numpy, order="C")], [numpy.zeros((1,), dtype=BigInt.numpy, order="C")]    # dummy arrays
         wisdom_mode = det_densities.ignore
     else:
         wisdom_occupied, wisdom_det_idx, unpopulated = wisdom.check_initialization(n_orbs, n_create, n_annihil, bra_configs, ket_configs)
@@ -195,14 +195,20 @@ def build_densities(op_string, n_orbs, bras, kets, bra_configs, ket_configs, thr
                        n_threads)             # number of threads to spread the work over
     if antisymmetrize:
         print("antisymmetrizing ... ", end="")
-        antisymm.antisymmetrize(rho,          # linear array of density tensors to antisymmetrize
-                                len(rho),     # number of density tensors to antisymmetrize
-                                n_orbs,       # number of orbitals
-                                n_create,     # number of creation operators
-                                n_annihil)    # number of annihilation operators
+        antisymm.antisymmetry(rho,          # linear array of density tensors to antisymmetrize
+                              len(rho),     # number of density tensors to antisymmetrize
+                              n_orbs,       # number of orbitals
+                              n_create,     # number of creation operators
+                              n_annihil,    # number of annihilation operators
+                              0)            # ie, False.  Do not undo the antisymmetry
         print("done")
     return [[rho[i*len(kets)+j] for j in range(len(kets))] for i in range(len(bras))]
     #return {(i,j):rho[i*len(kets)+j] for i in range(len(bras)) for j in range(len(kets))}
+
+def asymmetrize(op_string, rho):
+    antisymm.antisymmetry([rho], 1, rho.shape[0], op_string.count("c"), op_string.count("a"), 1)
+def antisymmetrize(op_string, rho):
+    antisymm.antisymmetry([rho], 1, rho.shape[0], op_string.count("c"), op_string.count("a"), 0)
 
 def generate_wisdom(op_string, n_orbs, bra_configs, ket_configs, wisdom, n_threads):
     n_create  = op_string.count("c")

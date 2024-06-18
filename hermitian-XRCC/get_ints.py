@@ -27,7 +27,7 @@ from qode.atoms.integrals.fragments import AO_integrals, fragMO_integrals, bra_t
 
 
 def tens_wrap(tensor):
-    return tl_tensor(tensorly.tensor(tensor, dtype=tensorly.float64))
+    return tl_tensor(tensorly.tensor(tensor, dtype=Double.tensorly))
 
 def tensorly_wrapper(timings):
     def wrapper(rule):

@@ -159,7 +159,7 @@ states[chg].configs = configs_atom    # there are 29 configs
 states[chg].coeffs  = []
 evecs = numpy.identity(29)
 for i in range(29):
-    tmp = numpy.zeros(29, dtype=Double.numpy)
+    tmp = numpy.zeros(29, dtype=Double.numpy, order="C")
     tmp[:] = evecs[:,i]
     states[chg].coeffs += [tmp]
 

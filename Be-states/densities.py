@@ -19,6 +19,7 @@
 import numpy
 import tensorly
 from qode.util           import sort_eigen
+from qode.util.PyC       import Double
 from qode.math.tensornet import tl_tensor, tensor_sum, raw, evaluate
 from qode.math           import svd_decomposition
 import field_op
@@ -48,17 +49,16 @@ def _token_parser(options):
     return check
 
 def _tens_wrap(tensor):
-    return tl_tensor(tensorly.tensor(tensor, dtype=tensorly.float64))
+    return tl_tensor(tensorly.tensor(tensor, dtype=Double.tensorly))
 
 def _vec(i, length):
-    v = numpy.zeros((length,))
+    v = numpy.zeros((length,), dtype=Double.numpy, order="C")
     v[i] = 1
     return _tens_wrap(v)
 
 
 
 def build_tensors(states, n_orbs, n_elec_0, thresh=1e-10, options=None, n_threads=1):
-    options = _token_parser(options)
     op_strings = {2:["aa", "caaa"], 1:["a", "caa", "ccaaa"], 0:["ca", "ccaa"], -1:["c", "cca", "cccaa"], -2:["cc", "ccca"]}
     permutations = {
         "aa":    {+1:[(0,1)], -1:[(1,0)]},
@@ -73,9 +73,13 @@ def build_tensors(states, n_orbs, n_elec_0, thresh=1e-10, options=None, n_thread
     }
     densities = {}
 
-    print("Computing densities ...")
+    options = _token_parser(options)
+    svd                = not options("nosvd")                  # SVD-compress the densities? (default: yes)
+    natorbs            = options("natorbs")                    # do compression in natural orbital rep? (default: no)
+    antisymm_abstract  = options("absanti")                    # antisymmetry abstract in final rep, which might be original? (default: no)
+    antisymm_numerical = (not antisymm_abstract) or natorbs    # numerically antisymmetrize in original rep? (default: yes)
 
-    antisymm_numerical = not options("antisymm", "abstract")
+    print("Computing densities ...")
 
     for bra_chg in states:
         bra_coeffs  = states[bra_chg].coeffs
@@ -93,21 +97,17 @@ def build_tensors(states, n_orbs, n_elec_0, thresh=1e-10, options=None, n_thread
 
     print("Postprocessing ...")
 
-    natorbs = options("natorbs")
-
     if natorbs:
         natural_orbs = {}
         for chg,_ in densities["ca"]:
             rho = densities["ca"][chg,chg]              # bra/ket charges must be the same for this string ...
             natural_orbs_chg = []
             for i in range(len(rho)):                   # ... which means the number of bras and kets are the same
-                rho_ii = numpy.array(raw(rho[i][i]))
+                rho_ii = numpy.array(raw(rho[i][i]), dtype=Double.numpy, order="C")
                 #print(chg, i, "deviation from symmetric:", numpy.linalg.norm(rho_ii - rho_ii.T))
                 evals, evecs = sort_eigen(numpy.linalg.eigh(rho_ii), order="descending")
                 natural_orbs_chg += [_tens_wrap(evecs)]
             natural_orbs[chg] = natural_orbs_chg
-
-    svd = not options("nosvd")
 
     for op_string in densities:
         c_count = op_string.count("c")
@@ -135,8 +135,12 @@ def build_tensors(states, n_orbs, n_elec_0, thresh=1e-10, options=None, n_thread
                             indices_p[p] = "p"
                             rho_ij = rho_ij(*indices_p) @ natural_orbs[ket_chg][j]("p",p)
                             p += 1
+                        rho_ij = numpy.array(raw(rho_ij), dtype=Double.numpy, order="C")
+                        if antisymm_abstract:
+                            field_op.asymmetrize(op_string, rho_ij)
+                        rho_ij = _tens_wrap(rho_ij)
                     if svd:
-                        rho_ij = svd_decomposition(numpy.array(raw(rho_ij)), indices[:c_count], indices[c_count:], wrapper=_tens_wrap)
+                        rho_ij = svd_decomposition(numpy.array(raw(rho_ij), dtype=Double.numpy, order="C"), indices[:c_count], indices[c_count:], wrapper=_tens_wrap)
                     if natorbs:
                         p = 0
                         for _ in range(c_count):
@@ -149,7 +153,7 @@ def build_tensors(states, n_orbs, n_elec_0, thresh=1e-10, options=None, n_thread
                             indices_p[p] = "p"
                             rho_ij = rho_ij(*indices_p) @ natural_orbs[ket_chg][j](p,"p")
                             p += 1
-                    if not antisymm_numerical:
+                    if antisymm_abstract:
                         if op_string in permutations:
                             temp_ij = tensor_sum()
                             for permutation in permutations[op_string][+1]:

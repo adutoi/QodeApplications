@@ -16,7 +16,7 @@
 #    along with QodeApplications.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-# python [-u] main-631g.py <distance> <compression> <nthreads> [nosvd] [antisymm=numerical|abstract]
+# python [-u] main-631g.py <distance> <compression> <nthreads> [nosvd] [natorbs] [absanti]
 
 import sys
 import numpy
@@ -237,7 +237,7 @@ for n, (evals, evecs) in evals_evecs.items():
                 states[chg] = empty()
                 states[chg].configs = sorted_configs_0[n]  # relies on fragments being the same
                 states[chg].coeffs  = []
-            tmp = numpy.zeros(n_config_n, dtype=Double.numpy)
+            tmp = numpy.zeros(n_config_n, dtype=Double.numpy, order="C")
             tmp[:] = evecs[:,i]
             states[chg].coeffs += [tmp]
 

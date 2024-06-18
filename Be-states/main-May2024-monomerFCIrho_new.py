@@ -93,7 +93,7 @@ for charge, n_subset in [(+1, 5), (0, 5), (-1, 5)]:
     H = CI_space_atom.lin_op(field_op_ham.Hamiltonian(h,V, n_threads=n_threads))
     CI_basis = [CI_space_atom.member(v) for v in CI_space_atom.aux.complete_basis()]
 
-    Hmat = numpy.zeros((n_config,n_config), dtype=Double.numpy)
+    Hmat = numpy.zeros((n_config,n_config), dtype=Double.numpy, order="C")
     for j,w in enumerate(CI_basis):
         Hmat[j,j] = N
         Hw = H|w

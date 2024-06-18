@@ -158,11 +158,11 @@ states[chg] = empty()
 states[chg].configs = configs_atom    # there are 29 configs
 states[chg].coeffs  = []
 evecs = numpy.identity(29)
-tmp = numpy.zeros(29, dtype=Double.numpy)
+tmp = numpy.zeros(29, dtype=Double.numpy, order="C")
 tmp[:] = evecs[:,0]
 states[chg].coeffs += [tmp]
 for i in range(1,15):
-    tmp = numpy.zeros(29, dtype=Double.numpy)
+    tmp = numpy.zeros(29, dtype=Double.numpy, order="C")
     tmp[:] = irt2 * (evecs[:,i] + evecs[:,i+14])
     states[chg].coeffs += [tmp]
 
