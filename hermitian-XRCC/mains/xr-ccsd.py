@@ -39,8 +39,7 @@ import Sv_diagrams              # contains definitions of actual diagrams needed
 from   get_ints import get_ints
 from precontract import precontract
 
-# needed for unpickling?!
-class empty(object):  pass     # Basically just a dictionary class
+class empty(object):  pass     # needed for unpickling - remove when all Be-states drivers updated to use struct instead
 
 #torch.set_num_threads(4)
 #tensorly.set_backend("pytorch")
