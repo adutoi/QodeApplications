@@ -15,8 +15,9 @@
 #    You should have received a copy of the GNU General Public License
 #    along with QodeApplications.  If not, see <http://www.gnu.org/licenses/>.
 #
+import tensorly
 from qode.util.dynamic_array import dynamic_array, cached
-from qode.math.tensornet     import evaluate
+from qode.math.tensornet     import evaluate, raw, tl_tensor
 
 
 
@@ -37,7 +38,7 @@ def precontract(densities, integrals, timings):
             int_indices = []
             int_blocks  = []
             block_idx = 0
-            free_idx  = 0
+            free_idx  = 2
             if int_type=="U":
                 block_idx += 1
                 int_blocks += [indices[block_idx]]
@@ -66,14 +67,12 @@ def precontract(densities, integrals, timings):
             Dchg = rho_type.count("a") - rho_type.count("c")    # get rid of this and allow the exception
 
             def contract_rho_int_m(chg_i,chg_j):
-                def contract_rho_int_m_chgs(i,j):
-                    timings.start()
-                    rho = densities_m[rho_type][chg_i,chg_j][i,j]
-                    result = evaluate(rho(*rho_indices) @ ints(*int_indices))
-                    timings.record("  precontract {}".format(label))
-                    return result
                 if chg_i-chg_j==Dchg:
-                    return dynamic_array(cached(contract_rho_int_m_chgs), [range(n_states[chg_i]), range(n_states[chg_j])])
+                    rho = densities_m[rho_type][chg_i,chg_j]
+                    timings.start()
+                    result = evaluate(rho(*([0,1]+rho_indices)) @ ints(*int_indices))
+                    timings.record(label)
+                    return result
                 else:
                     return None
             return dynamic_array(cached(contract_rho_int_m), [n_states.keys()]*2)

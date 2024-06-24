@@ -25,7 +25,7 @@ class _auxilliary(object):
     def __init__(self, parent):
         self.parent = parent
     def basis_vec(self, occupied):
-        v = numpy.zeros(len(self.parent.configs), dtype=Double.numpy)
+        v = numpy.zeros(len(self.parent.configs), dtype=Double.numpy, order="C")
         i = field_op.find_index_by_occ(occupied, self.parent.configs)
         v[i] = 1
         return v
@@ -33,7 +33,7 @@ class _auxilliary(object):
         n_config = len(self.parent.configs)
         basis = []
         for i in range(n_config):
-            v = numpy.zeros(n_config, dtype=Double.numpy)
+            v = numpy.zeros(n_config, dtype=Double.numpy, order="C")
             v[i] = 1
             basis += [v]
         return basis

@@ -15,53 +15,156 @@
 #    You should have received a copy of the GNU General Public License
 #    along with QodeApplications.  If not, see <http://www.gnu.org/licenses/>.
 #
+
+import numpy
 import tensorly
-from qode.math.tensornet import tl_tensor
-from qode.math           import svd_decomposition
+#import multiprocessing
+from qode.util           import sort_eigen
+from qode.util.PyC       import Double
+from qode.math.tensornet import tl_tensor, tensor_sum, raw
 import field_op
-
-
-
-def tens_wrap(tensor):
-    return tl_tensor(tensorly.tensor(tensor, dtype=tensorly.float64))
-
-
+import compress
 
 # states[n].coeffs  = [numpy.array, numpy.array, . . .]   One (effectively 1D) array of coefficients per n-electron state
 # states[n].configs = [int, int, . . . ]                  Each int represents a configuration (has the same length as arrays in list above)
 
-def build_tensors(states, n_orbs, n_elec_0, thresh=1e-10, compress=True, n_threads=1):
-    densities = {}
-    densities["n_elec"]   = {chg:(n_elec_0-chg)          for chg in states}
-    densities["n_states"] = {chg:len(states[chg].coeffs) for chg in states}
 
-    op_strings = {2:["aa", "caaa"], 1:["a", "caa", "ccaaa"], 0:["ca", "ccaa"], -1:["c", "cca", "cccaa"], -2:["cc", "ccca"]}
+
+def _token_parser(options):
+    parsed_options = {}
+    if options is None:  options = []
+    for option in options:
+        if "=" in option:
+            key, value = option.split("=")
+            values = value.split(",")
+            for i in range(len(values)):
+                if values[i]=="True":
+                    values[i] = True
+                elif values[i]=="False":
+                    values[i] = False
+                else:
+                    try:
+                        temp = int(values[i])
+                    except:
+                        try:
+                            temp = float(values[i])
+                        except:
+                            pass
+                        else:
+                            values[i] = temp
+                    else:
+                        values[i] = temp
+            if len(values)==1 and (values[0] is True or values[0] is False):
+                parsed_options[key] = values[0]
+            else:
+                parsed_options[key] = tuple(values)    # tuple bc equality might be checked
+        else:
+            parsed_options[option] = True
+    def value(option):
+        answer = None
+        if option in parsed_options:
+            answer = parsed_options[option]
+        return answer
+    return value
+
+def _tens_wrap(tensor):
+    return tl_tensor(tensorly.tensor(tensor, dtype=Double.tensorly))
+
+def _vec(i, length):
+    v = numpy.zeros((length,), dtype=Double.numpy, order="C")
+    v[i] = 1
+    return _tens_wrap(v)
+
+def _compress(args):
+    rho_ij, op_string, bra_chg, ket_chg, i, j, n_bras, n_kets, compress_args, natural_orbs, antisymm_abstract = args
+    return i, n_bras, j, n_kets, compress.compress(rho_ij, op_string, bra_chg, ket_chg, i, j, compress_args, natural_orbs, antisymm_abstract, _tens_wrap)
+
+
+
+def build_tensors(states, n_orbs, n_elec_0, thresh=1e-10, options=None, n_threads=1):
+    #pool = multiprocessing.Pool(n_threads)
+
+    op_strings = {2:["aa", "caaa"], 1:["a", "caa", "ccaaa"], 0:["ca", "ccaa"]}
+    densities = {}
+    conj_densities = {}
+
+    options = _token_parser(options)
+    use_natural_orbs   = options("nat-orbs") is True                    # do compression in natural orbital rep? (default: no)
+    antisymm_abstract  = options("abs-anti") is True                    # antisymmetry abstract in final rep, which might be original? (default: no)
+    antisymm_numerical = (not antisymm_abstract) or use_natural_orbs    # numerically antisymmetrize in original rep? (default: yes)
+    compress_args = options("compress")
+
+    print("Computing densities ...")
+
     for bra_chg in states:
-        print(bra_chg)
-        #print(states[bra_chg].coeffs)
-        #print(states[bra_chg].configs)
         bra_coeffs  = states[bra_chg].coeffs
         bra_configs = field_op.packed_configs(states[bra_chg].configs)
         for ket_chg in states:
-            print("  ", ket_chg)
-            #print("  ", states[ket_chg].coeffs)
-            #print("  ", states[ket_chg].configs)
             ket_coeffs  = states[ket_chg].coeffs
             ket_configs = field_op.packed_configs(states[ket_chg].configs)
             chg_diff = bra_chg - ket_chg
             if chg_diff in op_strings:
                 for op_string in op_strings[chg_diff]:
                     if op_string not in densities:  densities[op_string] = {}
-                    print(op_string, bra_chg, ket_chg)
-                    rho = field_op.build_densities(op_string, n_orbs, bra_coeffs, ket_coeffs, bra_configs, ket_configs, thresh, wisdom=None, n_threads=n_threads)
-                    for i in range(len(bra_coeffs)):
-                        for j in range(len(ket_coeffs)):
-                            if compress:
-                                indices = list(range(len(op_string)))
-                                c_count = op_string.count("c")
-                                rho[i,j] = svd_decomposition(rho[i,j], indices[:c_count], indices[c_count:], wrapper=tens_wrap)
-                            else:
-                                rho[i,j] = tens_wrap(rho[i,j])
-                    densities[op_string][bra_chg,ket_chg] = rho
+                    print(bra_chg, ket_chg, op_string)
+                    # bit of a waste here ... computes i<j and i>j for chg_diff=0
+                    rho = field_op.build_densities(op_string, n_orbs, bra_coeffs, ket_coeffs, bra_configs, ket_configs, thresh, wisdom=None, antisymmetrize=antisymm_numerical, n_threads=n_threads)
+                    densities[op_string][bra_chg,ket_chg] = [[_tens_wrap(rho_ij) for rho_ij in rho_i] for rho_i in rho]
 
+    print("Postprocessing ...")
+
+    natural_orbs = None
+    if use_natural_orbs:
+        natural_orbs = {}
+        for chg,_ in densities["ca"]:
+            rho = densities["ca"][chg,chg]              # bra/ket charges must be the same for this string ...
+            natural_orbs_chg = []
+            for i in range(len(rho)):                   # ... which means the number of bras and kets are the same
+                rho_ii = numpy.array(raw(rho[i][i]), dtype=Double.numpy, order="C")
+                #print(chg, i, "deviation from symmetric:", numpy.linalg.norm(rho_ii - rho_ii.T))
+                evals, evecs = sort_eigen(numpy.linalg.eigh(rho_ii), order="descending")
+                natural_orbs_chg += [_tens_wrap(evecs)]
+            natural_orbs[chg] = natural_orbs_chg
+
+    for op_string in densities:
+        for bra_chg,ket_chg in densities[op_string]:
+            print(op_string, bra_chg, ket_chg)
+            rho = densities[op_string][bra_chg,ket_chg]
+            temp_ij = tensor_sum()
+            temp_ji = tensor_sum()
+            #
+            arguments = []
+            n_bras = len(rho)
+            for i,rho_i in enumerate(rho):
+                n_kets = len(rho_i)
+                for j,rho_ij in enumerate(rho_i):
+                    if bra_chg!=ket_chg or i>=j:
+                        #rho_ij = compress.compress(rho_ij, op_string, bra_chg, ket_chg, i, j, compress_args, natural_orbs, antisymm_abstract, _tens_wrap)
+                        arguments += [(rho_ij, op_string, bra_chg, ket_chg, i, j, n_bras, n_kets, compress_args, natural_orbs, antisymm_abstract)]
+            values = [_compress(args) for args in arguments]
+            #values = pool.map(_compress, arguments)
+            for i, n_bras, j, n_kets, rho_ij in values:
+                if True:
+                    if True:
+                        indices = tuple(p+2 for p in range(len(op_string)))
+                        temp_ij += _vec(i,n_bras)(0) @ _vec(j,n_kets)(1) @ rho_ij(*indices)
+                        rev_indices = tuple(reversed(indices))
+                        if bra_chg==ket_chg:
+                            if i!=j:
+                                temp_ij += _vec(j,n_kets)(0) @ _vec(i,n_bras)(1) @ rho_ij(*rev_indices)
+                        else:
+                            temp_ji += _vec(j,n_kets)(0) @ _vec(i,n_bras)(1) @ rho_ij(*rev_indices)
+            #
+            densities[op_string][bra_chg,ket_chg] = temp_ij
+            if bra_chg!=ket_chg:
+                rev_op_string = op_string[::-1].replace("c","x").replace("a","c").replace("x","a")
+                if rev_op_string not in conj_densities:  conj_densities[rev_op_string] = {}
+                conj_densities[rev_op_string][ket_chg,bra_chg] = temp_ji
+
+    for k,v in conj_densities.items():  densities[k] = v
+
+    densities["n_elec"]   = {chg:(n_elec_0-chg)          for chg in states}
+    densities["n_states"] = {chg:len(states[chg].coeffs) for chg in states}
+
+    print("Writing to hard drive ...")
     return densities
