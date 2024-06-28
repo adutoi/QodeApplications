@@ -17,8 +17,11 @@
 #
 
 import sys
+from copy import deepcopy
 from itertools import chain
 from qode.util import struct, as_tuple
+
+_letters = "pqrstuvwxyzabcdefghijklmno"
 
 
 
@@ -26,7 +29,7 @@ class index(struct):
     def __init__(self, letter, fragment):
         struct.__init__(self, letter=letter, fragment=fragment)
     def __eq__(self, other):
-        return as_tuple(self("letter fragment"))==as_tuple(other("letter fragment"))
+        return as_tuple(self("letter fragment")) == as_tuple(other("letter fragment"))
     def __str__(self):
         return f"{self.letter}_{self.fragment}"
 
@@ -47,6 +50,8 @@ class integral_type(object):
         else:
             self.c_indices = list(c_indices)
             self.a_indices = list(a_indices)
+    def __eq__(self, other):
+        return (self._symbol, self.c_indices, self.a_indices) == (other._symbol, other.c_indices, other.a_indices)
     def __str__(self):
         labels = {
             "bra":  ",".join(str(p) for p in self.c_indices),
@@ -101,6 +106,8 @@ class integral_list(object):
         return chain.from_iterable([reversed(integral.a_indices) for integral in self._integrals])
     def fragments(self):
         return {p.fragment for p in self.c_indices()} | {p.fragment for p in self.a_indices()}
+    def __eq__(self, other):
+        return set(self._integrals) == set(other._integrals)    # should be ok because lists should not contain duplicates
     def __str__(self):
         return "".join(str(integral) for integral in self._integrals)
 
@@ -120,6 +127,8 @@ def frag_simplified(obj):            # this syntax because ...
 class field_op(object):
     def __init__(self, index):
         self.index = index   # should protect this from being changed
+    def __eq__(self, other):
+        return (self.kind, self.index) == (other.kind, other.index)
     def __str__(self):
         return self._symbol.format(p=self.index)
 
@@ -153,23 +162,19 @@ class operator_string(object):
                 self._dens_op = d_int(ops._dens_op)
             if frags is not None:
                 raise ValueError("not allowed to reset fragments in copy initialization of operator_string")
+    def fragments(self):
+        return set(self._frags)
+    def c_indices(self):
+        return [op.index for op in self._flatten_ops() if op.kind=="c"]
+    def a_indices(self):
+        return [op.index for op in self._flatten_ops() if op.kind=="a"]
     def as_dens_op(self):
-        try:
-            ops = self._ops[list(self._frags)[0]]
-        except KeyError:
+        if len(self._frags)!=1 or list(self._frags)[0] not in self._ops:
             raise RuntimeError("operator string cannot be put in single-fragment density form")
-        if len(self._frags)!=1:
-            raise RuntimeError("operator string cannot be put in single-fragment density form")
-        c_indices, a_indices = [], []
-        for op in ops:
-            if op.kind=="c":  c_indices += [op.index]
-            if op.kind=="a":  a_indices += [op.index]
-        self._dens_op = d_int(c_indices, a_indices)
+        self._dens_op = d_int(self.c_indices(), self.a_indices())
         return self    # could this convenience be mistaken for not having done an in-place modification?
     def _flatten_ops(self):
         return chain.from_iterable([self._ops[key] for key in sorted(self._ops.keys())])
-    def fragments(self):
-        return set(self._frags)
     def _frag_sorted(self):
         perm = 0
         sorted_ops = {frag:[] for frag in self._frags}
@@ -193,6 +198,8 @@ class operator_string(object):
                 phase.frags += [frag]
             phases += [struct(n_ops=len(raw_string), frags=[])]
         return phases, op_strings
+    def __eq__(self, other):
+        return (self._ops, self._frags) == (other._ops, other._frags) 
     def __str__(self):
         if self._dens_op:
             return str(self._dens_op)    # i and j indices suppressed
@@ -217,6 +224,11 @@ class diagram_term(object):
         self._phase = _phase
         self._integrals = integral_list(integrals)
         self._op_strings = [operator_string(op_string) for op_string in op_strings]
+        self._simplify_phase()    # otherwise equality could fail unpredictabley (and simplifies printing)
+    def _simplify_phase(self):
+        const = self._phase.const%2
+        frags = [frag for frag in sorted(set(self._phase.frags)) if self._phase.frags.count(frag)%2]
+        self._phase = struct(const=const, frags=frags)
     def _frag_sorted(self):
         permute = 0
         op_strings = []
@@ -242,15 +254,23 @@ class diagram_term(object):
     def _frag_simplified(self):
         dens_ops = [operator_string(op_string).as_dens_op() for op_string in self._op_strings]
         return diagram_term(self._integrals, dens_ops, self._phase)
+    def __eq__(self):
+        return (self._phase, self._integrals, set(self._op_strings)) == (other._phase, other._integrals, set(other._op_strings))
     def __str__(self):
-        sign = "-" if self._phase.const%2 else "+"
-        string = f"{sign}~{self._integrals}"
+        lett_idx = 0
+        sign = "-" if self._phase.const else "+"    # this and the below assume a "simplified" phase
+        string = ""
         for op_string in self._op_strings:
+            for p in op_string.c_indices():
+                p.letter = _letters[lett_idx]
+                lett_idx += 1
+            for p in op_string.a_indices():
+                p.letter = _letters[lett_idx]
+                lett_idx += 1
             string += f"~{op_string}"
-        frag_pows = self._phase.frags
-        pows = {frag: frag_pows.count(frag)%2 for frag in sorted(set(frag_pows))}
-        if sum(count for frag,count in pows.items())>0:
-            power = "".join(f"n_{{i_{frag}}}" for frag,count in pows.items() if count)
+        string = f"{sign}~{self._integrals}" + string
+        if len(self._phase.frags)>0:
+            power = "+".join(f"n_{{i_{frag}}}" for frag in self._phase.frags)
             string += f"\\times (-1)^{{{power}}}"
         return string
     @staticmethod
@@ -307,7 +327,6 @@ def gen_diagram(S_order, n_frags, prototerms, letters):
         letter_idx += 2
     return term_list([diagram_term.from_integrals(prototerm) for prototerm in prototerms])
 
-_letters = "pqrstuvwxyzabcdefghijklmno"
 
 def s_diagram(S_order, n_frags):
     return gen_diagram(S_order, n_frags, prototerms=[None], letters=_letters)
@@ -338,18 +357,14 @@ def v_diagram(S_order, n_frags):
 
 if __name__ == "__main__":
     S_order = int(sys.argv[1])
-    #print()
-    #print(s_diagram(S_order,   n_frags=2))
-    #print()
-    #print(h_diagram(S_order-1, n_frags=2))
-    #print()
-    #print(v_diagram(S_order-1, n_frags=2))
-    #print()
     terms = s_diagram(S_order, n_frags=2)
+    sorted_terms = frag_sorted(terms)
+    factored_terms = frag_factorized(sorted_terms)
+    simplified_terms = frag_simplified(factored_terms)
+    test = deepcopy(simplified_terms)
+    test._terms[0]._integrals._integrals[0].c_indices[0].letter="a"
     print(terms, "\n")
-    terms = frag_sorted(terms)
-    print(terms, "\n")
-    terms = frag_factorized(terms)
-    print(terms, "\n")
-    terms = frag_simplified(terms)
-    print(terms, "\n")
+    print(sorted_terms, "\n")
+    print(factored_terms, "\n")
+    print(simplified_terms, "\n")
+    print(test, "\n")
