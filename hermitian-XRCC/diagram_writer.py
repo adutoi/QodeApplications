@@ -105,6 +105,14 @@ class integral_list(object):
     def fragments(self):
         return {p.fragment for p in self.c_indices()} | {p.fragment for p in self.a_indices()}
     def __eq__(self, other):
+        # This will eventually need to be generalized in the following way:
+        # We should not just test if one integral is equal to another but also if it is equal and opposite.
+        # A more general function on v_int and d_int should return +1, 0, -1 for this, taking into account permutations.
+        # A similar function should be implemented for integral_list, and __eq__ for both should be deprecated.
+        # Then, assuming again that lists are the same length with no duplicates, we run over one list and ask
+        # for its comparison to each member of the other.  If any integral fails to find a match, then the integral_list
+        # function also returns 0, otherwise, it returns the product of all the +1/-1 match values.
+        # The __eq__ function here is only used in the diagram_term equality, which should be similarly generalized.
         result = True
         if len(self._integrals)==len(other._integrals):
             for integral in self._integrals:            # works because lists should not contain duplicates ...
@@ -118,14 +126,11 @@ class integral_list(object):
 
 
 
-def frag_sorted(obj):                # this syntax because ...
-    return obj._frag_sorted()        # ... not sorted in place
-
-def frag_factorized(obj):            # this syntax because ...
-    return obj._frag_factorized()    # ... not factorized in place
-
-def frag_simplified(obj):            # this syntax because ...
-    return obj._frag_simplified()    # ... not simplified in place
+# this syntax because operations not performed in place
+def frag_sorted(obj):      return obj._frag_sorted()
+def frag_factorized(obj):  return obj._frag_factorized()
+def rho_notation(obj):     return obj._rho_notation()
+def simplified(obj):       return obj._simplified()
 
 
 
@@ -157,14 +162,14 @@ class operator_string(object):
             except TypeError:
                 self._ops = {None: list(ops)}
             self._frags = set(frags)
-            self._dens_op = None
+            self._dens_tens = None
         else:
             self._ops   = dict(new_ops)
             self._frags = set(ops._frags)
-            if ops._dens_op is None:
-                self._dens_op = None
+            if ops._dens_tens is None:
+                self._dens_tens = None
             else:
-                self._dens_op = d_int(ops._dens_op)
+                self._dens_tens = d_int(ops._dens_tens)
             if frags is not None:
                 raise ValueError("not allowed to reset fragments in copy initialization of operator_string")
     def fragments(self):
@@ -173,10 +178,10 @@ class operator_string(object):
         return [op.idx for op in self._flatten_ops() if op.kind=="c"]
     def a_indices(self):
         return [op.idx for op in self._flatten_ops() if op.kind=="a"]
-    def as_dens_op(self):
+    def rho_notation(self):
         if len(self._frags)!=1 or list(self._frags)[0] not in self._ops:
             raise RuntimeError("operator string cannot be put in single-fragment density form")
-        self._dens_op = d_int(self.c_indices(), self.a_indices())
+        self._dens_tens = d_int(self.c_indices(), self.a_indices())
         return self    # could this convenience be mistaken for not having done an in-place modification?
     def _flatten_ops(self):
         return chain.from_iterable([self._ops[key] for key in sorted(self._ops.keys())])
@@ -206,8 +211,8 @@ class operator_string(object):
     def __eq__(self, other):
         return (self._ops, self._frags) == (other._ops, other._frags) 
     def __str__(self):
-        if self._dens_op:
-            return str(self._dens_op)    # i and j indices suppressed
+        if self._dens_tens:
+            return str(self._dens_tens)    # i and j indices suppressed
         else:
             bra = " ".join(f"i_{{{n}}}" for n in self._frags)
             ket = " ".join(f"j_{{{n}}}" for n in self._frags)
@@ -218,22 +223,26 @@ class operator_string(object):
 
 
 class diagram_term(object):
-    def __init__(self, integrals, op_strings, _phase=None):
+    def __init__(self, integrals, op_strings, scalars=None):
         frags = set()
         for op_string in op_strings:
             frags |= op_string.fragments()
         if integrals.fragments()!=frags:
             raise ValueError("integrals and operators do not refer to same fragment set")
-        if _phase is None:
-            _phase = struct(const=0, frags=[])    # -1 should be raised to the power of the constant plus the number of electrons in the ket for each fragment listed
-        self._phase = diagram_term._simplify_phase(_phase)    # otherwise equality could fail unpredictabley (and simplifies __str__ function, and deep-copy-making side-effect is good)
+        def simplify_scalars(scalars):    # just an encapsulation of some sublogic
+            new_scalars = []
+            for scalar in scalars:
+                const_pow = scalar.const_pow % 2
+                frag_pows = tuple(frag for frag in sorted(set(scalar.frag_pows)) if scalar.frag_pows.count(frag)%2)    # need to sort for later equality checks
+                new_scalars += [struct(const_pow=const_pow, frag_pows=frag_pows, scale=scalar.scale)]
+            return new_scalars
+        if scalars is None:
+            scalars = [struct(const_pow=0, frag_pows=tuple(), scale=1)]    # -1 should be raised to the power of the constant plus the number of electrons in the ket for each fragment listed, all times the scale
+        self._scalars = simplify_scalars(scalars)               # simplifies __str__ function, and deep-copy-making side-effect is desired
         self._integrals = integral_list(integrals)
         self._op_strings = [operator_string(op_string) for op_string in op_strings]
-    @staticmethod
-    def _simplify_phase(phase):
-        const = phase.const % 2
-        frags = [frag for frag in sorted(set(phase.frags)) if phase.frags.count(frag)%2]
-        return struct(const=const, frags=frags)
+    def scalars(self):
+        return [struct(scalar) for scalar in self._scalars]    # do not return mutalbe original
     def _frag_sorted(self):
         permute = 0
         op_strings = []
@@ -241,32 +250,35 @@ class diagram_term(object):
             perm, op_sorted = frag_sorted(op_string)
             permute += perm
             op_strings += [op_sorted]
-        phase = struct(self._phase)
-        phase.const += permute
-        return diagram_term(self._integrals, op_strings, phase)
+        scalars = [struct(scalar) for scalar in self._scalars]
+        for scalar in scalars:
+            scalar.const_pow += permute
+        return diagram_term(self._integrals, op_strings, scalars)
     def _frag_factorized(self):
-        all_phases = []
+        all_frag_phases = []
         op_strings = []
         for op_string in self._op_strings:
-            phases, op_factorized = frag_factorized(op_string)
-            all_phases += [phases]
+            frag_phases, op_factorized = frag_factorized(op_string)
+            all_frag_phases += [frag_phases]
             op_strings += op_factorized    # assuming for now that there is no need to sort this (ie, recursion depth is 1)
-        phase_tot = struct(self._phase)            # this copy is shallow
-        phase_tot.frags = list(phase_tot.frags)    # copy list for modification
-        for phases in all_phases:
-            for phase in phases:
-                if phase.n_ops%2:
-                    phase_tot.frags += phase.frags
-        return diagram_term(self._integrals, op_strings, phase_tot)
-    def _frag_simplified(self):
-        dens_ops = [operator_string(op_string).as_dens_op() for op_string in self._op_strings]
-        return diagram_term(self._integrals, dens_ops, self._phase)
+        scalars = [struct(scalar) for scalar in self._scalars]    # these copies are shallow ...
+        for scalar in scalars:
+            scalar.frag_pows = list(scalar.frag_pows)                   # ... so copy lists for modification
+            for frag_phases in all_frag_phases:
+                for frag_phase in frag_phases:
+                    if frag_phase.n_ops%2:
+                        scalar.frag_pows = scalar.frag_pows + frag_phase.frags    # cannot use += because tuples immutable
+        return diagram_term(self._integrals, op_strings, scalars)
+    def _rho_notation(self):
+        dens_ops = [operator_string(op_string).rho_notation() for op_string in self._op_strings]
+        return diagram_term(self._integrals, dens_ops, self._scalars)
     def __eq__(self, other):
         # Since Einstein summation implied, can rearrange letters for indices to see equality.
         # Since integrals and operators both point to same indices (ie, same object id) can just change letters therein,
-        # and fortunately deepcopy preserves the "connectivity".
+        #  and fortunately deepcopy preserves the "connectivity".
         # Assumes operator strings having been sorted and factorized (otherwise could get false negatives),
-        # but test on integrals equality allows for permutations of scalar factors
+        #  but test on integrals equality allows for permutations of scalar factors
+        # Only tests integrals and operators; scale and phase handled upon combination
         self_copy, other_copy = deepcopy(self), deepcopy(other)
         for term in self_copy, other_copy:
             letter_idx = 0
@@ -277,15 +289,34 @@ class diagram_term(object):
                 for p in op_string.a_indices():
                     p.letter = _letters[letter_idx]
                     letter_idx += 1
-        return (self_copy._phase, self_copy._integrals, self_copy._op_strings) == (other_copy._phase, other_copy._integrals, other_copy._op_strings)
+        return (self_copy._integrals, self_copy._op_strings) == (other_copy._integrals, other_copy._op_strings)
     def __str__(self):
-        sign = "-" if self._phase.const else "+"    # this and the below assume a "simplified" phase
-        string = f"{sign}~{self._integrals}"
+        def scalars_str(scalars):    # just an encapsulation of some sublogic
+            substrings = []
+            for scalar in scalars:
+                subsubstrings = []
+                if scalar.scale!=1:
+                    subsubstrings += [f"{scalar.scale}"]
+                if scalar.const_pow or len(scalar.frag_pows)>0:
+                    powers = [f"n_{{i_{frag}}}" for frag in scalar.frag_pows]
+                    if scalar.const_pow:  powers += ["1"]
+                    power = "+".join(powers)
+                    subsubstrings += [f"(-1)^{{{power}}}"]
+                substring = "\\cdot".join(subsubstrings)
+                if not substring:  substring = "1"
+                substrings += [substring]
+            string = "+".join(substrings)
+            if len(substrings)>1:
+                string = f"\\big[{string}\\big]"
+            if string=="1":
+                string = ""
+            else:
+                string = f"\\times {string}"
+            return string
+        string = f"{self._integrals}"
         for op_string in self._op_strings:
             string += f"~{op_string}"
-        if len(self._phase.frags)>0:
-            power = "+".join(f"n_{{i_{frag}}}" for frag in self._phase.frags)
-            string += f"\\times (-1)^{{{power}}}"
+        string += scalars_str(self._scalars)
         return string
     @staticmethod
     def from_integrals(integrals):
@@ -308,13 +339,45 @@ class term_list(object):
         return term_list([frag_sorted(term) for term in self._terms])
     def _frag_factorized(self):
         return term_list([frag_factorized(term) for term in self._terms])
-    def _frag_simplified(self):
-        return term_list([frag_simplified(term) for term in self._terms])
+    def _rho_notation(self):
+        return term_list([rho_notation(term) for term in self._terms])
+    def _simplified(self):
+        # This digs too much into the innards of diagram_term but whatever, it is the top layer and we are almost done with what we want
+        # fix abuse
+        same = []
+        for term_1 in self._terms:
+            same_1 = []    # everything that is the same as the current term_1, including itself
+            for i,term_2 in enumerate(self._terms):
+                if term_1==term_2:    # abuse of ==  (ok for now)
+                    same_1 += [i]
+            same += [tuple(sorted(same_1))]    # eventually contains all groups of equivalent terms (ordered and hashable), but with duplicate groups
+        same = set(same)    # remove duplicates
+        new_terms = []
+        for group in sorted(same):    # sorting just for aesthetics
+            integrals  = self._terms[group[0]]._integrals
+            op_strings = self._terms[group[0]]._op_strings
+            scalars = list(chain.from_iterable(self._terms[i].scalars() for i in group))
+
+            same_pows = []
+            for scalar_1 in scalars:
+                same_pows_1 = []    # everything that has the same pows as the current scalar_1, including itself
+                for i,scalar_2 in enumerate(scalars):
+                    if scalar_1.frag_pows==scalar_2.frag_pows:
+                        same_pows_1 += [i]
+                same_pows += [tuple(sorted(same_pows_1))]    # eventually contains all groups of equivalent powers (ordered and hashable), but with duplicate groups
+            same_pows = set(same_pows)    # remove duplicates
+            combined_scalars = []
+            for pow_group in sorted(same_pows):   # sorting is redundant?
+                frag_pows = scalars[pow_group[0]].frag_pows
+                raw_scalar = 0
+                for i in pow_group:
+                    raw_scalar += scalars[i].scale * (-1)**scalars[i].const_pow
+                combined_scalars += [struct(const_pow=int(raw_scalar<0), frag_pows=frag_pows, scale=abs(raw_scalar))]
+
+            new_terms += [diagram_term(integrals, op_strings, combined_scalars)]
+        return term_list(new_terms)
     def __str__(self):
-        string = "\\\\\n".join(str(term) for term in self._terms)
-        if string[:2]=="+~":  string = "  " + string[2:]
-        else:                 string = " -" + string[2:]
-        return string
+        return " &~" + "\\\\\n+&~".join(str(term) for term in self._terms)
 
 
 
@@ -373,14 +436,10 @@ if __name__ == "__main__":
     terms = s_diagram(S_order, n_frags=2)
     sorted_terms = frag_sorted(terms)
     factored_terms = frag_factorized(sorted_terms)
-    simplified_terms = frag_simplified(factored_terms)
+    rho_terms = rho_notation(factored_terms)
     print(terms, "\n")
     print(sorted_terms, "\n")
     print(factored_terms, "\n")
+    print(rho_terms, "\n")
+    simplified_terms = simplified(rho_terms)
     print(simplified_terms, "\n")
-    for i,term1 in enumerate(simplified_terms._terms):
-        same = []
-        for j,term2 in enumerate(simplified_terms._terms):
-            if term1==term2:
-                same += [j]
-        print(i, same)
