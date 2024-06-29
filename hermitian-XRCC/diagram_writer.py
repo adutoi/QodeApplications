@@ -16,12 +16,19 @@
 #    along with QodeApplications.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-import sys
 import copy
 import itertools
 from qode.util import struct, as_tuple
 
-_letters = "pqrstuvwxyzabcdefghijklmno"
+letters = "pqrstuvwxyzabcdefghijklmno"
+
+
+
+# this syntax because operations not performed in place
+def frag_sorted(obj):      return obj._frag_sorted()
+def frag_factorized(obj):  return obj._frag_factorized()    # rename to exp_val and take brackets off of sorted and unsorted ones? (brackets/exp_val as earlier option?
+def simplified(obj):       return obj._simplified()
+def condense_perm(obj):    return obj._condense_perm()
 
 
 
@@ -186,14 +193,6 @@ class integral_list(object):
 
 
 
-# this syntax because operations not performed in place
-def frag_sorted(obj):      return obj._frag_sorted()
-def frag_factorized(obj):  return obj._frag_factorized()    # rename to exp_val and take brackets off of sorted and unsorted ones? (brackets/exp_val as earlier option?
-def simplified(obj):       return obj._simplified()
-def condense_perm(obj):    return obj._condense_perm()
-
-
-
 class field_op(object):
     def __init__(self, idx):
         self.idx = idx
@@ -308,7 +307,7 @@ class diagram_term(object):
         for term in [term1_copy, term2_copy]:
             letter_idx = 0
             for p in term._integrals.dens_indices():    # these are ordere by fragment
-                p.letter = _letters[letter_idx]
+                p.letter = letters[letter_idx]
                 letter_idx += 1
         return (term1_copy._integrals == term2_copy._integrals)    # only care about multiples, do not test the scalars
     def are_frag_perm_multiples(term1, term2, perm):    # perm needs to be a dict bc frags may not be contiguous nor start at zero
@@ -460,19 +459,17 @@ class term_list(object):
 
 
 
-frag_range = lambda n: range(1, n+1)
-
 def combine(old, new):
     if old==[1]:  return       [new]
     else:         return old + [new]
 
-def s_diagram(S_order, n_frags, letters=_letters):
+def s_diagram(S_order, frags, letters=letters):
     letter_idx = 0
     prototerms = [[1]]
     for o in range(S_order):
         new_prototerms = []
-        for p_frag in frag_range(n_frags):
-            for q_frag in frag_range(n_frags):
+        for p_frag in frags:
+            for q_frag in frags:
                 p = index(letters[letter_idx],   p_frag)
                 q = index(letters[letter_idx+1], q_frag)
                 try:
@@ -485,52 +482,24 @@ def s_diagram(S_order, n_frags, letters=_letters):
         letter_idx += 2
     return term_list([diagram_term.from_integrals(prototerm) for prototerm in prototerms])
 
-def h_diagram(S_order, n_frags):
+def h_diagram(S_order, frags):
     prototerms = []
-    for p_frag in frag_range(n_frags):
-        for q_frag in frag_range(n_frags):
+    for p_frag in frags:
+        for q_frag in frags:
             p = index("p", p_frag)
             q = index("q", q_frag)
             prototerms += [[h_int(p, q)]]
-    return gen_diagram(S_order, n_frags, prototerms, letters=_letters[4:])
+    return gen_diagram(S_order, frags, prototerms, letters=letters[4:])
 
-def v_diagram(S_order, n_frags):
+def v_diagram(S_order, frags):
     prototerms = []
-    for p_frag in frag_range(n_frags):
-        for q_frag in frag_range(n_frags):
-            for r_frag in frag_range(n_frags):
-                for s_frag in frag_range(n_frags):
+    for p_frag in frags:
+        for q_frag in frags:
+            for r_frag in frags:
+                for s_frag in frags:
                     p = index("p", p_frag)
                     q = index("q", q_frag)
                     r = index("r", r_frag)
                     s = index("s", s_frag)
                     prototerms += [[v_int(p, q, r, s)]]
-    return gen_diagram(S_order, n_frags, prototerms, letters=_letters[4:])
-
-
-
-if __name__ == "__main__":
-    S_order = int(sys.argv[1])
-    terms = s_diagram(S_order, n_frags=2)
-    print(terms, "\n")
-    sorted_terms = frag_sorted(terms)
-    print(sorted_terms, "\n")
-    factored_terms = frag_factorized(sorted_terms)
-    print(factored_terms, "\n")
-    factored_terms.rho_notation()
-    print(factored_terms, "\n")
-    simplified_terms = simplified(factored_terms)
-    print(simplified_terms, "\n")
-    condensed_terms = condense_perm(simplified_terms)    
-    print(condensed_terms, "\n")
-    #same = []
-    #for j,term_1 in enumerate(simplified_terms._terms):
-    #    print(f"{j} ->", end=" ")
-    #    same_1 = []    # everything that is the same as the current term_1, including itself
-    #    for i,term_2 in enumerate(simplified_terms._terms):
-    #        if diagram_term.are_frag_perm_multiples(term_1, term_2, {1:2, 2:1}):
-    #            print(i, end=" ")
-    #            same_1 += [i]
-    #    same += [tuple(sorted(same_1))]    # eventually contains all groups of equivalent terms (ordered and hashable), but with duplicate groups
-    #    print()
-    #same = set(same)    # remove duplicates
+    return gen_diagram(S_order, frags, prototerms, letters=letters[4:])
