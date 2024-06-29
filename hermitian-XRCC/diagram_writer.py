@@ -57,8 +57,8 @@ class integral_type(object):
             self._rho_notation = not on_off
     def _labels(self):
         return (
-            ",".join(str(p) for p in self.c_indices),
-            ",".join(str(p) for p in self.a_indices)
+            " ".join(str(p) for p in self.c_indices),
+            " ".join(str(p) for p in self.a_indices)
         )
     def __eq__(self, other):
         try:
@@ -106,7 +106,7 @@ class d_int(integral_type):
             integral_type.__init__(self, c_indices)
         else:
             integral_type.__init__(self, c_indices, a_indices)
-        self._rho_notation = False    # publically accessible.  only affects printing
+        self._rho_notation = False
     def fragment(self):
         try:
             frag = self.c_indices[0].fragment    # these should all be the same ...
@@ -145,10 +145,16 @@ class integral_list(object):
         return list(itertools.chain.from_iterable([reversed(integral.c_indices) for integral in self._integrals if integral.kind!="d"]))    # exemption on kind ...
     def moint_a_indices(self):
         return list(itertools.chain.from_iterable([reversed(integral.a_indices) for integral in self._integrals if integral.kind!="d"]))    # ... is just reflection of ...
-    def dens_c_indices(self):
-        return list(itertools.chain.from_iterable([integral.c_indices for integral in self._integrals if integral.kind=="d"]))              # ... the limited purposes ...
-    def dens_a_indices(self):
-        return list(itertools.chain.from_iterable([integral.a_indices for integral in self._integrals if integral.kind=="d"]))              # ... of these functions
+    def dens_indices(self):
+        dens_ints = {frag:[] for frag in self.fragments()}
+        for integral in self._integrals:
+            if integral.kind=="d":                                                                                                          # ... the limited purposes of these functions
+                dens_ints[integral.fragment()] += [integral]
+        indices = []
+        for frag in sorted(dens_ints.keys()):
+            for integral in dens_ints[frag]:
+                indices += integral.c_indices + integral.a_indices
+        return indices
     def fragments(self):
         return {p.fragment for p in self.moint_c_indices()} | {p.fragment for p in self.moint_a_indices()}
     def raw_list(self):
@@ -184,6 +190,7 @@ class integral_list(object):
 def frag_sorted(obj):      return obj._frag_sorted()
 def frag_factorized(obj):  return obj._frag_factorized()    # rename to exp_val and take brackets off of sorted and unsorted ones? (brackets/exp_val as earlier option?
 def simplified(obj):       return obj._simplified()
+def condense_perm(obj):    return obj._condense_perm()
 
 
 
@@ -263,11 +270,15 @@ class operator_string(object):
 
 # op_strings does not need to be a list any more -> op_string
 class diagram_term(object):
-    def __init__(self, integrals, op_strings=None, scalar_sum=None):
-        if op_strings is None:    # allows copying with different scalar_sum
+    def __init__(self, integrals, op_strings=None, scalar_sum=None, perm_list=None):
+        if op_strings is None:    # if not copying, op_strings is required, so use as switch
             other = integrals
             integrals  = other._integrals
             op_strings = other._op_strings
+            if scalar_sum is None:    # allows copying with different scalar_sum ...
+                scalar_sum = other._scalar_sum
+            if perm_list is None:     # ... or perm_list
+                perm_list = other._perm_list
         def simplify_scalars(scalar_sum):    # just an encapsulation of some sublogic
             new_scalar_sum = []
             for scalar in scalar_sum:
@@ -280,6 +291,9 @@ class diagram_term(object):
         self._scalar_sum = simplify_scalars(scalar_sum)               # simplifies __str__ function, and deep-copy-making side-effect is desired
         self._integrals = integral_list(integrals)
         self._op_strings = [operator_string(op_string) for op_string in op_strings]
+        if perm_list is None:
+            perm_list = []
+        self._perm_list = [(sign,dict(perm)) for sign,perm in perm_list]    # just making a copy
     @staticmethod
     def are_multiples(term1, term2):
         # Since Einstein summation implied, can rearrange letters for indices to see equality.
@@ -288,44 +302,19 @@ class diagram_term(object):
         # Assumes operator strings having been sorted and factorized (otherwise could get false negatives),
         #  but test on integrals equality allows for permutations of scalar factors
         # Only tests integrals and operators; scale and phase handled upon combination
-        #print("# # #")
         if term1._op_strings or term2._op_strings:
             raise RuntimeError("can only compare terms that have been reduced to products of MO integrals and single-fragment densities")
         term1_copy, term2_copy = copy.deepcopy(term1), copy.deepcopy(term2)
-        #print("before", term1_copy)
-        #print("before", term2_copy)
         for term in [term1_copy, term2_copy]:
             letter_idx = 0
-            indices = term._integrals.dens_c_indices() + term._integrals.dens_a_indices()
-            for p in indices:
+            for p in term._integrals.dens_indices():    # these are ordere by fragment
                 p.letter = _letters[letter_idx]
                 letter_idx += 1
-        #print("after", term1_copy)
-        #print("after", term2_copy)
-        #print(term1_copy._integrals == term2_copy._integrals)
         return (term1_copy._integrals == term2_copy._integrals)    # only care about multiples, do not test the scalars
     def are_frag_perm_multiples(term1, term2, perm):    # perm needs to be a dict bc frags may not be contiguous nor start at zero
-        #print("#####")
-        #print("term1", term1)
-        #print("term2", term2)
         term2_copy = copy.deepcopy(term2)
-        integrals = []
-        for integral in term2_copy._integrals.raw_list():
-            if integral.kind=="d":
-                integrals += [integral.fragment()]
-            else:
-                integrals += [integral]
-        for integral in term2_copy._integrals.raw_list():
-            if integral.kind=="d":
-                integrals[integrals.index(perm[integral.fragment()])] = integral
-        integrals = integral_list(integrals)
-        #print(integrals)
-        indices = integrals.dens_c_indices() + integrals.dens_a_indices()
-        for p in indices:
+        for p in term2_copy._integrals.dens_indices():
             p.fragment = perm[p.fragment]
-        #print(integrals)
-        term2_copy._integrals = integrals
-        #print("term2_copy", term2_copy)
         return diagram_term.are_multiples(term1, term2_copy)
     def rho_notation(self):
         self._integrals.rho_notation()
@@ -384,6 +373,9 @@ class diagram_term(object):
         for op_string in self._op_strings:
             string += f"~{op_string}"
         string += scalar_sum_str(self._scalar_sum)
+        for sign,perm in self._perm_list:    # sign is stored as a character
+            perms = " \\\\ ".join(f"{p}\\rightarrow{q}" for p,q in sorted(perm.items()))
+            string += f"~{sign}~P_{{\\substack{{ {perms} }} }}"
         return string
     @staticmethod
     def from_integrals(integrals):
@@ -421,7 +413,7 @@ class term_list(object):
         for group in sorted(same):    # sorting just for aesthetics
             term = self._terms[group[0]]
             scalar_sum = list(itertools.chain.from_iterable(self._terms[i].scalar_sum() for i in group))
-
+            #
             same_pows = []
             for scalar_1 in scalar_sum:
                 same_pows_1 = []    # everything that has the same pows as the current scalar_1, including itself
@@ -437,8 +429,31 @@ class term_list(object):
                 for i in pow_group:
                     raw_scalar += scalar_sum[i].scale * (-1)**scalar_sum[i].const_pow
                 combined_scalar_sum += [struct(const_pow=int(raw_scalar<0), frag_pows=frag_pows, scale=abs(raw_scalar))]
-
+            #
             new_terms += [diagram_term(term, scalar_sum=combined_scalar_sum)]
+        return term_list(new_terms)
+    def _condense_perm(self):
+        new_terms = []
+        exclude = []
+        for i,term_i in enumerate(self._terms):
+            if i not in exclude:
+                perm_list = []
+                for j,term_j in list(enumerate(self._terms))[i+1:]:
+                    if j not in exclude:
+                        for perm in [{1:2, 2:1}]:
+                            if diagram_term.are_frag_perm_multiples(term_i, term_j, perm):
+                                scalar_sum_i = term_i.scalar_sum()
+                                scalar_sum_j = term_j.scalar_sum()
+                                if len(scalar_sum_i)>1 or len(scalar_sum_j)>1:
+                                    raise RuntimeError("cannot handle this yet")
+                                scalar_i = scalar_sum_i[0]
+                                scalar_j = scalar_sum_j[0]
+                                sign = "+" if scalar_i.const_pow==scalar_j.const_pow else "-"
+                                if as_tuple(scalar_i("frag_pows,scale"))!=as_tuple(scalar_j("frag_pows,scale")):
+                                    raise RuntimeError("cannot handle this yet")
+                                perm_list += [(sign,perm)]
+                                exclude += [j]
+                new_terms += [diagram_term(term_i, perm_list=perm_list)]
         return term_list(new_terms)
     def __str__(self):
         return " &~" + "\\\\\n+&~".join(str(term) for term in self._terms)
@@ -506,14 +521,16 @@ if __name__ == "__main__":
     print(factored_terms, "\n")
     simplified_terms = simplified(factored_terms)
     print(simplified_terms, "\n")
-    same = []
-    for term_1 in simplified_terms._terms:
-        print("###################################")
-        same_1 = []    # everything that is the same as the current term_1, including itself
-        for i,term_2 in enumerate(simplified_terms._terms):
-            if diagram_term.are_frag_perm_multiples(term_1, term_2, {1:2, 2:1}):
-                print(i)
-                same_1 += [i]
-        same += [tuple(sorted(same_1))]    # eventually contains all groups of equivalent terms (ordered and hashable), but with duplicate groups
-    same = set(same)    # remove duplicates
-    print(same)
+    condensed_terms = condense_perm(simplified_terms)    
+    print(condensed_terms, "\n")
+    #same = []
+    #for j,term_1 in enumerate(simplified_terms._terms):
+    #    print(f"{j} ->", end=" ")
+    #    same_1 = []    # everything that is the same as the current term_1, including itself
+    #    for i,term_2 in enumerate(simplified_terms._terms):
+    #        if diagram_term.are_frag_perm_multiples(term_1, term_2, {1:2, 2:1}):
+    #            print(i, end=" ")
+    #            same_1 += [i]
+    #    same += [tuple(sorted(same_1))]    # eventually contains all groups of equivalent terms (ordered and hashable), but with duplicate groups
+    #    print()
+    #same = set(same)    # remove duplicates
