@@ -107,15 +107,18 @@ class d_int(integral_type):
         else:
             integral_type.__init__(self, c_indices, a_indices)
         self._rho_notation = False    # publically accessible.  only affects printing
+    def fragment(self):
+        try:
+            frag = self.c_indices[0].fragment    # these should all be the same ...
+        except IndexError:
+            frag = self.a_indices[0].fragment    # ... if they exist at all
+        return frag
     def __str__(self):
         if self._rho_notation:    # i and j indices suppressed
             c, a = self._labels()
             return f"\\rho_{{{c}}}^{{{a}}}"
         else:
-            try:
-                frag = self.c_indices[0].fragment    # these should all be the same ...
-            except IndexError:
-                frag = self.a_indices[0].fragment    # ... if they exist at all
+            frag = self.fragment()
             c = " ".join(str(c_op(p)) for p in self.c_indices)
             a = " ".join(str(a_op(p)) for p in self.a_indices)
             return f"{{}}^{{i_{{ {frag} }} }}\\langle {c} {a} \\rangle_{{j_{{ {frag} }} }}"
@@ -285,16 +288,45 @@ class diagram_term(object):
         # Assumes operator strings having been sorted and factorized (otherwise could get false negatives),
         #  but test on integrals equality allows for permutations of scalar factors
         # Only tests integrals and operators; scale and phase handled upon combination
+        #print("# # #")
         if term1._op_strings or term2._op_strings:
             raise RuntimeError("can only compare terms that have been reduced to products of MO integrals and single-fragment densities")
         term1_copy, term2_copy = copy.deepcopy(term1), copy.deepcopy(term2)
+        #print("before", term1_copy)
+        #print("before", term2_copy)
         for term in [term1_copy, term2_copy]:
             letter_idx = 0
             indices = term._integrals.dens_c_indices() + term._integrals.dens_a_indices()
             for p in indices:
                 p.letter = _letters[letter_idx]
                 letter_idx += 1
+        #print("after", term1_copy)
+        #print("after", term2_copy)
+        #print(term1_copy._integrals == term2_copy._integrals)
         return (term1_copy._integrals == term2_copy._integrals)    # only care about multiples, do not test the scalars
+    def are_frag_perm_multiples(term1, term2, perm):    # perm needs to be a dict bc frags may not be contiguous nor start at zero
+        #print("#####")
+        #print("term1", term1)
+        #print("term2", term2)
+        term2_copy = copy.deepcopy(term2)
+        integrals = []
+        for integral in term2_copy._integrals.raw_list():
+            if integral.kind=="d":
+                integrals += [integral.fragment()]
+            else:
+                integrals += [integral]
+        for integral in term2_copy._integrals.raw_list():
+            if integral.kind=="d":
+                integrals[integrals.index(perm[integral.fragment()])] = integral
+        integrals = integral_list(integrals)
+        #print(integrals)
+        indices = integrals.dens_c_indices() + integrals.dens_a_indices()
+        for p in indices:
+            p.fragment = perm[p.fragment]
+        #print(integrals)
+        term2_copy._integrals = integrals
+        #print("term2_copy", term2_copy)
+        return diagram_term.are_multiples(term1, term2_copy)
     def rho_notation(self):
         self._integrals.rho_notation()
     def scalar_sum(self):
@@ -474,13 +506,14 @@ if __name__ == "__main__":
     print(factored_terms, "\n")
     simplified_terms = simplified(factored_terms)
     print(simplified_terms, "\n")
-    #same = []
-    #for term_1 in simplified_terms._terms:
-    #    print("##############################")
-    #    same_1 = []    # everything that is the same as the current term_1, including itself
-    #    for i,term_2 in enumerate(simplified_terms._terms):
-    #        if diagram_term.are_frag_perm_multiples(term_1, term_2, {1:2, 2:1}):
-    #            same_1 += [i]
-    #    same += [tuple(sorted(same_1))]    # eventually contains all groups of equivalent terms (ordered and hashable), but with duplicate groups
-    #same = set(same)    # remove duplicates
-    #print(same)
+    same = []
+    for term_1 in simplified_terms._terms:
+        print("###################################")
+        same_1 = []    # everything that is the same as the current term_1, including itself
+        for i,term_2 in enumerate(simplified_terms._terms):
+            if diagram_term.are_frag_perm_multiples(term_1, term_2, {1:2, 2:1}):
+                print(i)
+                same_1 += [i]
+        same += [tuple(sorted(same_1))]    # eventually contains all groups of equivalent terms (ordered and hashable), but with duplicate groups
+    same = set(same)    # remove duplicates
+    print(same)
