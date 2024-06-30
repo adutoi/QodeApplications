@@ -27,6 +27,20 @@
 %%% Allow alignment of columns by decimal point
 \usepackage{siunitx}
 
+%%%%%%%%%% Code %%%%%%%%%%
+% from https://www.overleaf.com/learn/latex/Code_listing
+\usepackage{listings}
+\lstdefinestyle{mystyle}{
+    basicstyle=\ttfamily\footnotesize,
+    breakatwhitespace=false,
+    breaklines=true,
+    keepspaces=true,
+    showspaces=false,
+    showstringspaces=false,
+    showtabs=false,
+}
+\lstset{style=mystyle}
+
 %%%%%%%%%% Bibliography %%%%%%%%%%
 \usepackage[super,comma,sort&compress]{natbib}
 \makeatletter

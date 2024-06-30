@@ -26,7 +26,7 @@ letters = "pqrstuvwxyzabcdefghijklmno"
 
 # this syntax because operations not performed in place
 def frag_sorted(obj):      return obj._frag_sorted()
-def frag_factorized(obj):  return obj._frag_factorized()    # rename to exp_val and take brackets off of sorted and unsorted ones? (brackets/exp_val as earlier option?
+def frag_factorized(obj):  return obj._frag_factorized()
 def simplified(obj):       return obj._simplified()
 def condense_perm(obj):    return obj._condense_perm()
 
@@ -34,9 +34,14 @@ def condense_perm(obj):    return obj._condense_perm()
 
 class index(struct):
     def __init__(self, letter, fragment):
-        struct.__init__(self, letter=letter, fragment=fragment)
+        struct.__init__(self, letter=letter, fragment=fragment, abbreviated=False)
     def __str__(self):
-        return f"{self.letter}_{self.fragment}"
+        if self.fragment is None:
+            return f"{self.letter}"
+        elif self.abbreviated:
+            return f"{self.fragment}"
+        else:
+            return f"{self.letter}_{self.fragment}"
 
 
 
@@ -52,9 +57,13 @@ class integral_type(object):
             other = c_indices
             self.c_indices = list(other.c_indices)
             self.a_indices = list(other.a_indices)
+            self._abbreviated = other._abbreviated
+            self._code = other._code
         else:
             self.c_indices = list(c_indices)
             self.a_indices = list(a_indices)
+            self._abbreviated = False
+            self._code = False
     def rho_notation(self):
         try:
             on_off = self._rho_notation
@@ -62,11 +71,25 @@ class integral_type(object):
             pass
         else:
             self._rho_notation = not on_off
+    def abbreviated(self):
+        self._abbreviated = not self._abbreviated
+        for index in self.c_indices + self.a_indices:    # direct toggle of indices is unreliable ...
+            index.abbreviated = self._abbreviated        # because each will be toggled once for each occurance
+    def code(self):
+        self._code = not self._code
     def _labels(self):
-        return (
-            " ".join(str(p) for p in self.c_indices),
-            " ".join(str(p) for p in self.a_indices)
-        )
+        if self._code:
+            letters = []
+            frags = []
+            for p in self.c_indices + self.a_indices:
+                letters += [p.letter]
+                frags   += [str(p.fragment)]
+            return (",".join(frags), ",".join(letters))
+        else:
+            return (
+                " ".join(str(p) for p in self.c_indices),
+                " ".join(str(p) for p in self.a_indices)
+            )
     def __eq__(self, other):
         try:
             result = ((self.kind, self.c_indices, self.a_indices) == (other.kind, other.c_indices, other.a_indices))
@@ -82,18 +105,26 @@ class h_int(integral_type):
         else:
             integral_type.__init__(self, [p], [q])
     def __str__(self):
-        c, a = self._labels()
-        return f"h^{{{c}}}_{{{a}}}"
+        if self._code:
+            frags, letters = self._labels()
+            return f"h[{frags}]({letters})"
+        else:
+            c, a = self._labels()
+            return f"h^{{{c}}}_{{{a}}}"
 
 class s_int(h_int):
     kind = "s"
     def __init__(self, p, q=None):
         h_int.__init__(self, p, q)
-        if self.c_indices[0].fragment==self.a_indices[0].fragment:
+        if (self.c_indices[0].fragment is not None) and (self.c_indices[0].fragment==self.a_indices[0].fragment):
             raise sigmaError()
     def __str__(self):
-        c, a = self._labels()
-        return f"\\sigma_{{{c} {a}}}"
+        if self._code:
+            frags, letters = self._labels()
+            return f"s[{frags}]({letters})"
+        else:
+            c, a = self._labels()
+            return f"\\sigma_{{{c} {a}}}"
 
 class v_int(integral_type):
     kind = "v"
@@ -103,8 +134,12 @@ class v_int(integral_type):
         else:
             integral_type.__init__(self, [p,q], [r,s])
     def __str__(self):
-        c, a = self._labels()
-        return f"v^{{{c}}}_{{{a}}}"
+        if self._code:
+            frags, letters = self._labels()
+            return f"v[{frags}]({letters})"
+        else:
+            c, a = self._labels()
+            return f"v^{{{c}}}_{{{a}}}"
 
 class d_int(integral_type):
     kind = "d"
@@ -121,14 +156,20 @@ class d_int(integral_type):
             frag = self.a_indices[0].fragment    # ... if they exist at all
         return frag
     def __str__(self):
-        if self._rho_notation:    # i and j indices suppressed
-            c, a = self._labels()
-            return f"\\rho_{{{c}}}^{{{a}}}"
+        if self._code:
+            ca = "c"*len(self.c_indices) + "a"*len(self.a_indices)
+            frags, letters = self._labels()
+            frag = frags[0]    # because they should all be the same
+            return f"{ca}[{frag}](i{frag},j{frag},{letters})"
         else:
-            frag = self.fragment()
-            c = " ".join(str(c_op(p)) for p in self.c_indices)
-            a = " ".join(str(a_op(p)) for p in self.a_indices)
-            return f"{{}}^{{i_{{ {frag} }} }}\\langle {c} {a} \\rangle_{{j_{{ {frag} }} }}"
+            if self._rho_notation:    # i and j indices suppressed
+                c, a = self._labels()
+                return f"\\rho_{{{c}}}^{{{a}}}"
+            else:
+                frag = self.fragment()
+                c = " ".join(str(c_op(p)) for p in self.c_indices)
+                a = " ".join(str(a_op(p)) for p in self.a_indices)
+                return f"{{}}^{{i_{{ {frag} }} }}\\langle {c} {a} \\rangle_{{j_{{ {frag} }} }}"
     @staticmethod
     def from_ops(op_list):
         c_indices = [op.idx for op in op_list if op.kind=="c"]
@@ -146,8 +187,15 @@ class integral_list(object):
             new_integrals = integrals._integrals
         except AttributeError:
             self._integrals = list(integrals)
+            self._publication_ordered = False
+            self._abbreviated = False
+            self._code = False
         else:
+            other = integrals
             self._integrals = list(new_integrals)
+            self._publication_ordered = other._publication_ordered
+            self._abbreviated = other._abbreviated
+            self._code = other._code
     def moint_c_indices(self):
         return list(itertools.chain.from_iterable([reversed(integral.c_indices) for integral in self._integrals if integral.kind!="d"]))    # exemption on kind ...
     def moint_a_indices(self):
@@ -168,6 +216,15 @@ class integral_list(object):
         return list(self._integrals)
     def rho_notation(self):
         for integral in self._integrals:  integral.rho_notation()
+    def publication_ordered(self):
+        self._publication_ordered = not self._publication_ordered
+    def abbreviated(self):
+        for integral in self._integrals:  integral.abbreviated()
+        self._abbreviated = not self._abbreviated
+    def code(self):
+        for integral in self._integrals:
+            integral.code()
+        self._code = not self._code
     def __eq__(self, other):
         # This will eventually need to be generalized in the following way:
         # We should not just test if one integral is equal to another but also if it is equal and opposite.
@@ -189,7 +246,18 @@ class integral_list(object):
             result = False
         return result
     def __str__(self):
-        return " ~ ".join(str(integral) for integral in self._integrals)
+        integrals = self._integrals
+        enclose = "{}"
+        connect = " ~ "
+        if self._abbreviated:
+            integrals  = [integral for integral in self._integrals if integral.kind!="d"]
+            enclose = "\\langle{}\\rangle"
+        elif self._publication_ordered:
+            integrals  = [integral for integral in self._integrals if integral.kind=="d"]
+            integrals += [integral for integral in self._integrals if integral.kind!="d"]
+        if self._code:
+            connect = "\n    @ "
+        return enclose.format(connect.join(str(integral) for integral in integrals))
 
 
 
@@ -224,8 +292,12 @@ class operator_string(object):
                 self._ops = dict(ops)
             except TypeError:
                 self._ops = {None: list(ops)}
+            self._exp_val = False
         else:
             self._ops = dict(new_ops)
+            self._exp_val = ops._exp_val
+    def as_exp_val(self):
+        self._exp_val = not self._exp_val
     def _flatten_ops(self):
         return itertools.chain.from_iterable([self._ops[key] for key in sorted(self._ops.keys())])
     def fragments(self):
@@ -260,16 +332,21 @@ class operator_string(object):
             result = False
         return result
     def __str__(self):
-        bra = " ".join(f"i_{{{n}}}" for n in self.fragments())
-        ket = " ".join(f"j_{{{n}}}" for n in self.fragments())
+        bra, ket = "", ""
+        if self._exp_val:
+            bra = "{{}}^{{{bra}}}\\langle".format(bra=" ".join(f"i_{{{n}}}" for n in self.fragments()))
+            ket =     "\\rangle_{{{ket}}}".format(ket=" ".join(f"j_{{{n}}}" for n in self.fragments()))
         ops = " ".join(str(op) for op in self._flatten_ops())
-        return f"{{}}^{{{bra}}}\\langle{ops}\\rangle_{{{ket}}}"
+        return f"{bra}{ops}{ket}"
 
 
 
 # op_strings does not need to be a list any more -> op_string
 class diagram_term(object):
     def __init__(self, integrals, op_strings=None, scalar_sum=None, perm_list=None):
+        publication_ordered = False
+        abbreviated = False
+        code = False
         if op_strings is None:    # if not copying, op_strings is required, so use as switch
             other = integrals
             integrals  = other._integrals
@@ -278,6 +355,9 @@ class diagram_term(object):
                 scalar_sum = other._scalar_sum
             if perm_list is None:     # ... or perm_list
                 perm_list = other._perm_list
+            publication_ordered = other._publication_ordered
+            abbreviated = other._abbreviated
+            code = other._code
         def simplify_scalars(scalar_sum):    # just an encapsulation of some sublogic
             new_scalar_sum = []
             for scalar in scalar_sum:
@@ -293,6 +373,9 @@ class diagram_term(object):
         if perm_list is None:
             perm_list = []
         self._perm_list = [(sign,dict(perm)) for sign,perm in perm_list]    # just making a copy
+        self._publication_ordered = publication_ordered
+        self._abbreviated = abbreviated
+        self._code = code
     @staticmethod
     def are_multiples(term1, term2):
         # Since Einstein summation implied, can rearrange letters for indices to see equality.
@@ -317,6 +400,17 @@ class diagram_term(object):
         return diagram_term.are_multiples(term1, term2_copy)
     def rho_notation(self):
         self._integrals.rho_notation()
+    def as_exp_val(self):
+        for op_string in self._op_strings:  op_string.as_exp_val()
+    def publication_ordered(self):
+        self._integrals.publication_ordered()
+        self._publication_ordered = not self._publication_ordered
+    def abbreviated(self):
+        self._integrals.abbreviated()
+        self._abbreviated = not self._abbreviated
+    def code(self):
+        self._integrals.code()
+        self._code = not self._code
     def scalar_sum(self):
         return [struct(scalar) for scalar in self._scalar_sum]    # do not return mutalbe original
     def _frag_sorted(self):
@@ -346,35 +440,57 @@ class diagram_term(object):
                         scalar.frag_pows = scalar.frag_pows + frag_phase.frags    # cannot use += because tuples immutable
         return diagram_term(integral_list(integrals), [], scalar_sum)
     def __str__(self):
-        def scalar_sum_str(scalar_sum):    # just an encapsulation of some sublogic
+        def scalar_sum_str(scalar_sum):    # just an encapsulation of some sublogic (does read self._publication_ordered and self._abbreviated)
+            if self._abbreviated:
+                return ""
             substrings = []
             for scalar in scalar_sum:
                 subsubstrings = []
                 if scalar.scale!=1:
                     subsubstrings += [f"{scalar.scale}"]
                 if scalar.const_pow or len(scalar.frag_pows)>0:
-                    powers = [f"n_{{i_{frag}}}" for frag in scalar.frag_pows]
+                    if self._code:
+                        powers = [f"n_i{frag}" for frag in scalar.frag_pows]
+                    else:
+                        powers = [f"n_{{i_{frag}}}" for frag in scalar.frag_pows]
                     if scalar.const_pow:  powers += ["1"]
                     power = "+".join(powers)
-                    subsubstrings += [f"(-1)^{{{power}}}"]
-                substring = "\\cdot".join(subsubstrings)
+                    if self._code:
+                        subsubstrings += [f"(-1)**({power})"]
+                    else:
+                        subsubstrings += [f"(-1)^{{{power}}}"]
+                mult = "" if self._publication_ordered else "\\cdot"
+                if self._code:
+                    mult = " * "
+                substring = mult.join(subsubstrings)
                 if not substring:  substring = "1"
                 substrings += [substring]
             string = "+".join(substrings)
             if len(substrings)>1:
-                string = f"\\big[{string}\\big]"
-            if string=="1":
+                string = f"({string})"
+            if self._code:
+                string = f"{string} *\n      "
+            elif string=="1":
                 string = ""
+            elif self._publication_ordered:
+                string = f"{string}~"
             else:
                 string = f"\\times {string}"
             return string
-        string = f"{self._integrals}"
-        for op_string in self._op_strings:
-            string += f"~{op_string}"
-        string += scalar_sum_str(self._scalar_sum)
-        for sign,perm in self._perm_list:    # sign is stored as a character
-            perms = " \\\\ ".join(f"{p}\\rightarrow{q}" for p,q in sorted(perm.items()))
-            string += f"~{sign}~P_{{\\substack{{ {perms} }} }}"
+        if self._code and len(self._op_strings)>0:
+            raise RuntimeError("can only output code for terms that have been reduced to products of MO integrals and single-fragment densities")
+        string = "".join(f"~{op_string}" for op_string in self._op_strings)
+        scalar = scalar_sum_str(self._scalar_sum)
+        if self._publication_ordered or self._code:
+            string = scalar + string + f"{self._integrals}"
+        else:
+            string = f"{self._integrals}" + string + scalar
+        if self._code:
+            string += "\n        # + permutations"
+        else:
+            for sign,perm in self._perm_list:    # sign is stored as a character
+                perms = " \\\\ ".join(f"{p}\\rightarrow{q}" for p,q in sorted(perm.items()))
+                string += f"~{sign}~P_{{\\substack{{ {perms} }} }}"
         return string
     @staticmethod
     def from_integrals(integrals):
@@ -393,8 +509,23 @@ class diagram_term(object):
 class term_list(object):
     def __init__(self, terms):
         self._terms = list(terms)
+        self._code = False
     def rho_notation(self):
         for term in self._terms:  term.rho_notation()
+        return self
+    def as_exp_val(self):
+        for term in self._terms:  term.as_exp_val()
+        return self
+    def publication_ordered(self):
+        for term in self._terms:  term.publication_ordered()
+        return self
+    def abbreviated(self):
+        for term in self._terms:  term.abbreviated()
+        return self
+    def code(self):
+        for term in self._terms:  term.code()
+        self._code = not self._code
+        return self
     def _frag_sorted(self):
         return term_list([frag_sorted(term) for term in self._terms])
     def _frag_factorized(self):
@@ -455,7 +586,15 @@ class term_list(object):
                 new_terms += [diagram_term(term_i, perm_list=perm_list)]
         return term_list(new_terms)
     def __str__(self):
-        return " &~" + "\\\\\n+&~".join(str(term) for term in self._terms)
+        if self._code:
+            connect = "\n+ "
+        else:
+            connect = "\\\\\n&+~"
+        string = connect.join(str(term) for term in self._terms)
+        if len(self._terms)>1:
+            if not self._code:
+                string = " &~~~~~" + string + "~ "
+        return string
 
 
 
@@ -480,7 +619,7 @@ def s_diagram(S_order, frags, letters=letters):
                     new_prototerms += [factor]
         prototerms = [combine(old,new) for old,new in itertools.product(prototerms, new_prototerms)]
         letter_idx += 2
-    return term_list([diagram_term.from_integrals(prototerm) for prototerm in prototerms])
+    return term_list([diagram_term.from_integrals(copy.deepcopy(prototerm)) for prototerm in prototerms])    # weird things happen if integral instances shared accross terms
 
 def h_diagram(S_order, frags):
     prototerms = []
