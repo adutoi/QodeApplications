@@ -19,6 +19,7 @@
 import copy
 import itertools
 from qode.util import struct, as_tuple
+from permute import are_permutations
 
 letters = "pqrstuvwxyzabcdefghijklmno"
 
@@ -90,11 +91,17 @@ class integral_type(object):
                 " ".join(str(p) for p in self.c_indices),
                 " ".join(str(p) for p in self.a_indices)
             )
-    def __eq__(self, other):
-        try:
-            result = ((self.kind, self.c_indices, self.a_indices) == (other.kind, other.c_indices, other.a_indices))
-        except:
-            result = False
+    def compare_sign_to(self, other):
+        result = True
+        if self.kind==other.kind:
+            c_are_perms, c_parity = are_permutations(self.c_indices, other.c_indices)
+            a_are_perms, a_parity = are_permutations(self.a_indices, other.a_indices)
+            if c_are_perms and a_are_perms:
+                return (-1)**(c_parity + a_parity)
+            else:
+                result = 0
+        else:
+            result = 0
         return result
 
 class h_int(integral_type):
@@ -197,9 +204,11 @@ class integral_list(object):
             self._abbreviated = other._abbreviated
             self._code = other._code
     def moint_c_indices(self):
-        return list(itertools.chain.from_iterable([reversed(integral.c_indices) for integral in self._integrals if integral.kind!="d"]))    # exemption on kind ...
+        aesthetically_ordered = [integral for integral in self._integrals if integral.kind in ("h","v")] + [integral for integral in self._integrals if integral.kind=="s"]
+        return list(itertools.chain.from_iterable([integral.c_indices for integral in aesthetically_ordered]))    # exemption on kind ...
     def moint_a_indices(self):
-        return list(itertools.chain.from_iterable([reversed(integral.a_indices) for integral in self._integrals if integral.kind!="d"]))    # ... is just reflection of ...
+        aesthetically_ordered = [integral for integral in self._integrals if integral.kind in ("h","v")] + [integral for integral in self._integrals if integral.kind=="s"]
+        return list(itertools.chain.from_iterable([integral.a_indices for integral in aesthetically_ordered]))    # ... is just reflection of ...
     def dens_indices(self):
         dens_ints = {frag:[] for frag in self.fragments()}
         for integral in self._integrals:
@@ -225,25 +234,18 @@ class integral_list(object):
         for integral in self._integrals:
             integral.code()
         self._code = not self._code
-    def __eq__(self, other):
-        # This will eventually need to be generalized in the following way:
-        # We should not just test if one integral is equal to another but also if it is equal and opposite.
-        # A more general function on v_int and d_int should return +1, 0, -1 for this, taking into account permutations.
-        # A similar function should be implemented for integral_list, and __eq__ for both should be deprecated.
-        # Then, assuming again that lists are the same length with no duplicates, we run over one list and ask
-        # for its comparison to each member of the other.  If any integral fails to find a match, then the integral_list
-        # function also returns 0, otherwise, it returns the product of all the +1/-1 match values.
-        # The __eq__ function here is only used in the diagram_term equality, which should be similarly generalized.
-        try:
-            result = True
-            if len(self._integrals)==len(other._integrals):
-                for integral in self._integrals:            # works because lists should not contain duplicates ...
-                    if integral not in other._integrals:    # ... and integrals have equality defined (so works with "in" operator)
-                        result = False
-            else:
-                result = False
-        except:
-            result = False
+    def compare_sign_to(self, other):
+        result = 1
+        if len(self._integrals)==len(other._integrals):
+            for self_integral in self._integrals:
+                sign = 0
+                for other_integral in other._integrals:
+                    s = self_integral.compare_sign_to(other_integral)
+                    if s!=0:        # works because neither list ...
+                        sign = s    # ... should contain duplicates
+                result *= sign
+        else:
+            result = 0
         return result
     def __str__(self):
         integrals = self._integrals
@@ -251,7 +253,7 @@ class integral_list(object):
         connect = " ~ "
         if self._abbreviated:
             integrals  = [integral for integral in self._integrals if integral.kind!="d"]
-            enclose = "\\langle{}\\rangle"
+            enclose = "\\langle {} \\rangle"
         elif self._publication_ordered:
             integrals  = [integral for integral in self._integrals if integral.kind=="d"]
             integrals += [integral for integral in self._integrals if integral.kind!="d"]
@@ -377,7 +379,7 @@ class diagram_term(object):
         self._abbreviated = abbreviated
         self._code = code
     @staticmethod
-    def are_multiples(term1, term2):
+    def compare_signs(term1, term2):
         # Since Einstein summation implied, can rearrange letters for indices to see equality.
         # Since integrals and operators both point to same indices (ie, same object id) can just change letters therein,
         #  and fortunately deepcopy preserves the "connectivity".
@@ -392,12 +394,12 @@ class diagram_term(object):
             for p in term._integrals.dens_indices():    # these are ordere by fragment
                 p.letter = letters[letter_idx]
                 letter_idx += 1
-        return (term1_copy._integrals == term2_copy._integrals)    # only care about multiples, do not test the scalars
-    def are_frag_perm_multiples(term1, term2, perm):    # perm needs to be a dict bc frags may not be contiguous nor start at zero
+        return term1_copy._integrals.compare_sign_to(term2_copy._integrals)    # only care about multiples, do not test the scalars
+    def compare_frag_perm_signs(term1, term2, perm):    # perm needs to be a dict bc frags may not be contiguous nor start at zero
         term2_copy = copy.deepcopy(term2)
         for p in term2_copy._integrals.dens_indices():
             p.fragment = perm[p.fragment]
-        return diagram_term.are_multiples(term1, term2_copy)
+        return diagram_term.compare_signs(term1, term2_copy)
     def rho_notation(self):
         self._integrals.rho_notation()
     def as_exp_val(self):
@@ -535,14 +537,20 @@ class term_list(object):
         for term_1 in self._terms:
             same_1 = []    # everything that is the same as the current term_1, including itself
             for i,term_2 in enumerate(self._terms):
-                if diagram_term.are_multiples(term_1, term_2):
+                if diagram_term.compare_signs(term_1, term_2)!=0:
                     same_1 += [i]
             same += [tuple(sorted(same_1))]    # eventually contains all groups of equivalent terms (ordered and hashable), but with duplicate groups
         same = set(same)    # remove duplicates
         new_terms = []
         for group in sorted(same):    # sorting just for aesthetics
             term = self._terms[group[0]]
-            scalar_sum = list(itertools.chain.from_iterable(self._terms[i].scalar_sum() for i in group))
+            scalar_sum = []
+            for i in group:
+                other_term = self._terms[i]    # could be same as term
+                parity = 0 if diagram_term.compare_signs(term, other_term)==+1 else 1
+                for scalar in other_term.scalar_sum():
+                    scalar.const_pow += parity    # copy, so ok to modify
+                scalar_sum += [scalar]
             #
             same_pows = []
             for scalar_1 in scalar_sum:
@@ -570,15 +578,19 @@ class term_list(object):
                 perm_list = []
                 for j,term_j in list(enumerate(self._terms))[i+1:]:
                     if j not in exclude:
-                        for perm in [{1:2, 2:1}]:
-                            if diagram_term.are_frag_perm_multiples(term_i, term_j, perm):
+                        for perm in [{1:2, 2:1}]:    # NEED TO GENERALIZE
+                            perm_sign = diagram_term.compare_frag_perm_signs(term_i, term_j, perm)
+                            if perm_sign!=0:
                                 scalar_sum_i = term_i.scalar_sum()
                                 scalar_sum_j = term_j.scalar_sum()
                                 if len(scalar_sum_i)>1 or len(scalar_sum_j)>1:
                                     raise RuntimeError("cannot handle this yet")
                                 scalar_i = scalar_sum_i[0]
                                 scalar_j = scalar_sum_j[0]
-                                sign = "+" if scalar_i.const_pow==scalar_j.const_pow else "-"
+                                if perm_sign==+1:
+                                    sign = "+" if scalar_i.const_pow==scalar_j.const_pow else "-"
+                                else:
+                                    sign = "-" if scalar_i.const_pow==scalar_j.const_pow else "+"
                                 if as_tuple(scalar_i("frag_pows,scale"))!=as_tuple(scalar_j("frag_pows,scale")):
                                     raise RuntimeError("cannot handle this yet")
                                 perm_list += [(sign,perm)]
@@ -602,9 +614,9 @@ def combine(old, new):
     if old==[1]:  return       [new]
     else:         return old + [new]
 
-def s_diagram(S_order, frags, letters=letters):
-    letter_idx = 0
+def make_terms(frags, S_order, MOint=None):
     prototerms = [[1]]
+    letter_idx = 4 if MOint else 0    # reserve p,q,r,s for MO integral, even with h
     for o in range(S_order):
         new_prototerms = []
         for p_frag in frags:
@@ -619,26 +631,24 @@ def s_diagram(S_order, frags, letters=letters):
                     new_prototerms += [factor]
         prototerms = [combine(old,new) for old,new in itertools.product(prototerms, new_prototerms)]
         letter_idx += 2
-    return term_list([diagram_term.from_integrals(copy.deepcopy(prototerm)) for prototerm in prototerms])    # weird things happen if integral instances shared accross terms
-
-def h_diagram(S_order, frags):
-    prototerms = []
-    for p_frag in frags:
-        for q_frag in frags:
-            p = index("p", p_frag)
-            q = index("q", q_frag)
-            prototerms += [[h_int(p, q)]]
-    return gen_diagram(S_order, frags, prototerms, letters=letters[4:])
-
-def v_diagram(S_order, frags):
-    prototerms = []
-    for p_frag in frags:
-        for q_frag in frags:
-            for r_frag in frags:
+    if MOint=="h":
+        new_prototerms = []
+        for p_frag in frags:
+            for q_frag in frags:
+                p = index(letters[0], p_frag)
+                q = index(letters[1], q_frag)
+                new_prototerms += [h_int(p, q)]
+        prototerms = [combine(old,new) for old,new in itertools.product(prototerms, new_prototerms)]
+    if MOint=="v":
+        new_prototerms = []
+        for p_frag in frags:
+            for q_frag in frags:
                 for s_frag in frags:
-                    p = index("p", p_frag)
-                    q = index("q", q_frag)
-                    r = index("r", r_frag)
-                    s = index("s", s_frag)
-                    prototerms += [[v_int(p, q, r, s)]]
-    return gen_diagram(S_order, frags, prototerms, letters=letters[4:])
+                    for r_frag in frags:
+                        p = index(letters[0], p_frag)
+                        q = index(letters[1], q_frag)
+                        r = index(letters[2], r_frag)
+                        s = index(letters[3], s_frag)
+                        new_prototerms += [v_int(p, q, r, s)]
+        prototerms = [combine(old,new) for old,new in itertools.product(prototerms, new_prototerms)]
+    return term_list([diagram_term.from_integrals(copy.deepcopy(prototerm)) for prototerm in prototerms])    # weird things happen if integral instances shared accross terms
