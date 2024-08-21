@@ -31,7 +31,12 @@ def tens_wrap(tensor):
 # states[n].coeffs  = [numpy.array, numpy.array, . . .]   One (effectively 1D) array of coefficients per n-electron state
 # states[n].configs = [int, int, . . . ]                  Each int represents a configuration (has the same length as arrays in list above)
 
-def build_tensors(states, n_orbs, n_elec_0, thresh=1e-10, n_threads=1, bra_det=False):
+def build_tensors(states, n_orbs, n_elec_0, thresh=1e-10, n_threads=1, bra_det=False):#, coeffs=[{}, {}]):
+    #if not hasattr(states[0], "bra_coeffs") and not hasattr(states[0], "ket_coeffs"):  # careful!!!!!!!!! this only checks for charge zero
+    #    for chg in states:
+    #        states[chg].bra_coeffs = states[chg].coeffs
+    #        states[chg].ket_coeffs = states[chg].coeffs
+
     densities = {}
     densities["n_elec"]   = {chg:(n_elec_0-chg)          for chg in states}
     densities["n_states_ket"] = {chg:len(states[chg].coeffs) for chg in states}
@@ -49,17 +54,23 @@ def build_tensors(states, n_orbs, n_elec_0, thresh=1e-10, n_threads=1, bra_det=F
         #print(states[bra_chg].configs)
         if bra_det == False:
             bra_coeffs  = states[bra_chg].coeffs
+            #if len(coeffs[0].keys()) != 0:
+            #    bra_coeffs = coeffs[0][bra_chg]  # also let this allow for differing number of states in the future
         else:
             n_configs = (len(states[bra_chg].coeffs[0]))  # better set (len(states[bra_chg].configs)) for more transparency
             bra_coeffs = [i for i in np.eye(n_configs)]
             #op_strings = {2:["aa"], 1:["a", "caa"], 0:["ca"], -1:["c", "cca"], -2:["cc"]}
             #op_strings = {2:["aa"], 1:["a"], 0:["ca"], -1:["c"], -2:["cc"]}
+        #print("len bras", len(bra_coeffs))
         bra_configs = field_op.packed_configs(states[bra_chg].configs)
         for ket_chg in states:
             print("  ", ket_chg)
             #print("  ", states[ket_chg].coeffs)
             #print("  ", states[ket_chg].configs)
             ket_coeffs  = states[ket_chg].coeffs
+            #if len(coeffs[1].keys()) != 0:
+            #    ket_coeffs = coeffs[1][ket_chg]  # also let this allow for differing number of states in the future
+            #print("len kets", len(ket_coeffs))
             ket_configs = field_op.packed_configs(states[ket_chg].configs)
             chg_diff = bra_chg - ket_chg
             if chg_diff not in op_strings:
@@ -76,15 +87,18 @@ def build_tensors(states, n_orbs, n_elec_0, thresh=1e-10, n_threads=1, bra_det=F
                         c_count = op_string.count("c")
                         try:
                             if len(bra_coeffs) > 200 and op_string == "ccaa":
-                                print("this density is not SVD'd, because it's already in a compressed form")
+                                #print("this density is not SVD'd, because it's already in a compressed form")
                                 #rho[i,j] = tens_wrap(rho[i,j])  # this density is already a tl_tensor object
-                                pass
+                                #pass
+                                tmp = rho[i,j]
                             else:
-                                rho[i,j] = svd_decomposition(rho[i,j], indices[:c_count], indices[c_count:], wrapper=tens_wrap)
+                                #print("now svd the density")
+                                tmp = svd_decomposition(rho[i,j], indices[:c_count], indices[c_count:], wrapper=tens_wrap)
                         except np.linalg.LinAlgError:
-                            print("this density is not SVD'd, because svd didn't converge")
-                            #rho[i,j] = tens_wrap(rho[i,j])  # this sometimes leaves NaNs or infs, which the eigensolver cannot handle
+                            #print("this density is not SVD'd, because svd didn't converge")
+                            #tmp = tens_wrap(rho[i,j])  # this sometimes leaves NaNs or infs, which the eigensolver cannot handle
                             raise ValueError("SVD didnt converge")
+                        rho[i,j] = tmp
                 densities[op_string][bra_chg,ket_chg] = rho
 
     return densities
