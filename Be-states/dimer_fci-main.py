@@ -80,10 +80,10 @@ H_2_MO, V_2_MO = MO_transform(H_2, V_2, C_2)
 psi4_check.print_HF_energy(Be_2, basis_string)
 
 # Put everything in terms of spin orbitals
-H_1_MO = spatial_to_spin.one_electron_blocked(H_1_MO)
-V_1_MO = spatial_to_spin.two_electron_blocked(V_1_MO) / 2
-H_2_MO = spatial_to_spin.one_electron_blocked(H_2_MO)
-V_2_MO = spatial_to_spin.two_electron_blocked(V_2_MO) / 2
+H_1_MO = spatial_to_spin.one_electron(H_1_MO, "blocked")
+V_1_MO = spatial_to_spin.two_electron(V_1_MO, "blocked") / 2
+H_2_MO = spatial_to_spin.one_electron(H_2_MO, "blocked")
+V_2_MO = spatial_to_spin.two_electron(V_2_MO, "blocked") / 2
 V_1_MO -= V_1_MO.transpose(1,0,2,3)
 V_1_MO -= V_1_MO.transpose(0,1,3,2)
 V_1_MO /= 4
@@ -109,7 +109,7 @@ guess = CI_space_atom.member(CI_space_atom.aux.basis_vec([0,1,9,10]))
 
 print((guess|H|guess))
 (Eval,Evec), = qode.math.lanczos.lowest_eigen(H, [guess], thresh=1e-8)
-print("\nE_gs = {}\n".format(Eval))
+print("\nmonomer E_gs = {}\n".format(Eval))
 
 
 
@@ -129,4 +129,4 @@ guess = CI_space_dimer.member(CI_space_dimer.aux.basis_vec([0,1,2,3,18,19,20,21]
 
 print((guess|H|guess) + Enuc_2)
 (Eval,Evec), = qode.math.lanczos.lowest_eigen(H, [guess], thresh=1e-8)
-print("\nE_gs = {}\n".format(Eval + Enuc_2))
+print("\ndimer E_gs = {}\n".format(Eval + Enuc_2))

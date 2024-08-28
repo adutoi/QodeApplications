@@ -1,7 +1,8 @@
 from   get_ints import get_ints
 from   get_xr_result import get_xr_states, get_xr_H
 from qode.math.tensornet import raw, tl_tensor
-import qode.util
+#import qode.util
+from qode.util import timer
 from state_gradients import state_gradients
 
 #import torch
@@ -32,6 +33,7 @@ def optimize_states(displacement, max_iter, xr_order):
     displacement = displacement
     project_core = True
     monomer_charges = [[0, +1, -1], [0, +1, -1]]
+    density_options = ["compress=SVD,cc-aa"]
 
     # "Assemble" the supersystem for the displaced fragments and get integrals
     BeN = []
@@ -42,11 +44,13 @@ def optimize_states(displacement, max_iter, xr_order):
         state_obj, dens_var_1, dens_var_2, n_threads, Be = get_fci_states(displacement)
         for elem,coords in Be.atoms:  coords[2] += m * displacement    # displace along z
         BeN.append(Be)
-        dens.append(densities.build_tensors(state_obj, dens_var_1, dens_var_2, n_threads=n_threads))
-        dens_builder_stuff.append([state_obj, dens_var_1, dens_var_2])
+        dens.append(densities.build_tensors(state_obj, dens_var_1, dens_var_2, options=density_options, n_threads=n_threads))
+        dens_builder_stuff.append([state_obj, dens_var_1, dens_var_2, density_options])
         state_coeffs.append({chg: state_obj[chg].coeffs for chg in state_obj})
+    #print(type(raw(dens[0]["a"][(+1,0)])), raw(dens[0]["a"][(+1,0)]).shape)
 
-    ints = get_ints(BeN, project_core)
+    int_timer = timer()
+    ints = get_ints(BeN, project_core, int_timer)
 
     ######################################################
     # iterative procedure
@@ -502,14 +506,14 @@ def optimize_states(displacement, max_iter, xr_order):
         #    dens_builder_stuff[0][0][chg].coeffs = [i.copy() for i in state_coeffs[0][chg]]
             dens_builder_stuff[1][0][chg].coeffs = [i.copy() for i in state_coeffs[1][chg]]
         #dens[0] = densities.build_tensors(*dens_builder_stuff[0], n_threads=n_threads)
-        dens[1] = densities.build_tensors(*dens_builder_stuff[1], n_threads=n_threads)  # do this because dens[1] was also changed in state_gradients function
+        dens[1] = densities.build_tensors(*dens_builder_stuff[1][:-1], options=dens_builder_stuff[1][-1], n_threads=n_threads)  # do this because dens[1] was also changed in state_gradients function
         #gs_en, gs_vec = get_xr_states(ints, dens, 0)
         #print("old energy", gs_energy)
         #print("is this still the old gs_energy?", gs_en)
 
         for chg in monomer_charges[0]:
             dens_builder_stuff[0][0][chg].coeffs = [i.copy() for i in tot_a_coeffs[chg]]
-        dens[0] = densities.build_tensors(*dens_builder_stuff[0], n_threads=n_threads)
+        dens[0] = densities.build_tensors(*dens_builder_stuff[0][:-1], options=dens_builder_stuff[0][-1], n_threads=n_threads)
         H1, H2 = get_xr_H(ints, dens, 0)
 
         #tmp = H2.reshape(2 * n, n, 2 * n, n)
@@ -573,7 +577,7 @@ def optimize_states(displacement, max_iter, xr_order):
         #print(new_coeffs[1])
         for chg in monomer_charges[0]:
             dens_builder_stuff[0][0][chg].coeffs = [i.copy() for i in new_coeffs[chg]]
-        dens[0] = densities.build_tensors(*dens_builder_stuff[0], n_threads=n_threads)#,
+        dens[0] = densities.build_tensors(*dens_builder_stuff[0][:-1], options=dens_builder_stuff[0][-1], n_threads=n_threads)#,
                                         #coeffs=[new_coeffs, {}])
         new_gs_en, new_gs_vec = get_xr_states(ints, dens, 0)
         print("gs energy old", gs_energy)

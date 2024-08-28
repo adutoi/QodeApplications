@@ -122,12 +122,13 @@ def state_gradients(frag_ind, ints, dens_builder_stuff, dens, monomer_charges, n
     
     # build new densities (slater det densities for fragment under optimization and contract_with_d densities for the other one)
     print(f"build densities from states contracted with d on fragment {frag_map[1]}")
-    dens[frag_map[1]] = densities.build_tensors(*dens_builder_stuff[frag_map[1]], n_threads=n_threads)
+    #dens[frag_map[1]] = densities.build_tensors(*dens_builder_stuff[frag_map[1]][:-1], options=dens_builder_stuff[frag_map[1]][-1], n_threads=n_threads)
+    dens[frag_map[1]] = densities.build_tensors(*dens_builder_stuff[frag_map[1]][:-1], n_threads=n_threads)
     print(f"build densities between slater determinant and state on fragment {frag_map[0]}")
-    dens[frag_map[0]] = densities.build_tensors(*dens_builder_stuff[frag_map[0]], n_threads=n_threads, bra_det=True)
+    dens[frag_map[0]] = densities.build_tensors(*dens_builder_stuff[frag_map[0]][:-1], options=dens_builder_stuff[frag_map[0]][-1] + ["bra_det"], n_threads=n_threads)
 
     # build gradient
-    H1, H2 = get_xr_H(ints, dens, xr_order, bra_det=True)
+    H1, H2 = get_xr_H(ints, dens, xr_order)#, bra_det=True)
     print(H1[0].shape, H1[1].shape, H2.shape)
     H2 = H2.reshape((H1[0].shape[0], H1[1].shape[0], H1[0].shape[1], H1[1].shape[1]))
     # H1 of frag A can be used as is and H1 of frag B needs to be contracted with the state coeffs of frag A. Note, that this is independent of the XR order 

@@ -15,7 +15,8 @@
 #    You should have received a copy of the GNU General Public License
 #    along with QodeApplications.  If not, see <http://www.gnu.org/licenses/>.
 #
-from qode.math.tensornet import scalar_value
+import numpy
+from qode.math.tensornet import scalar_value, raw
 from build_diagram       import build_diagram
 
 p, q, r, s, t, u, v, w = "pqrstuvw"    # some contraction indices for easier reading
@@ -32,68 +33,95 @@ p, q, r, s, t, u, v, w = "pqrstuvw"    # some contraction indices for easier rea
 # monomer diagram
 
 # pq,pq-> :  ca0  u0_00
-def u000(X, i0,j0):
-    return 1 * scalar_value( X.ca0pq_U0pq[i0,j0] )
+def u000(X, i0s,j0s):
+    return 1 * raw( X.ca0pq_U0pq )
+    #return 1 * scalar_value( X.ca0pq_U0pq[i0,j0] )
     #return 1 * scalar_value( X.ca0[i0,j0](p,q) @ X.u0_00(p,q) )
 
 # dimer diagrams
 
+i0, i1, j0, j1 = 0, 1, 2, 3
+
 # pq,pq-> :  ca0  u1_00
-def u100(X, i0,i1,j0,j1):
-    if i1==j1:
-        return 1 * scalar_value( X.ca0pq_U1pq[i0,j0] )
-        #return 1 * scalar_value( X.ca0[i0,j0](p,q) @ X.u1_00(p,q) )
+def u100(X, i0s,i1s,j0s,j1s):
+    i0m,i0s = i0s
+    i1m,i1s = i1s
+    j0m,j0s = j0s
+    j1m,j1s = j1s
+    result = numpy.zeros((i0s,i1s,j0s,j1s))
+    if i1s == j1s:
+        for i1 in range(i1s):
+            j1 = i1
+            result[:,i1,:,j1] = 1 * raw( X.ca0pq_U1pq )
     else:
-        return 0
+        for i1 in range(i1s):
+            for j1 in range(j1s):
+                result[:,i1,:,j1] = 1 * raw( X.ca0pq_U1pq )
+    return result
+    #if i1==j1:
+    #    return 1 * scalar_value( X.ca0pq_U1pq[i0,j0] )
+    #    #return 1 * scalar_value( X.ca0[i0,j0](p,q) @ X.u1_00(p,q) )
+    #else:
+    #    return 0
 
 # p,q,pq-> :  c0  a1  u0_01
-def u001(X, i0,i1,j0,j1):
-    return (-1)**(X.n_i1 + X.P) * scalar_value( X.c0[i0,j0](p) @ X.a1q_U00q[i1,j1](p) )
+def u001(X, i0s,i1s,j0s,j1s):
+    return (-1)**(X.n_i1 + X.P) * raw( X.c0(i0,j0,p) @ X.a1q_U00q(i1,j1,p) )
+    #return (-1)**(X.n_i1 + X.P) * scalar_value( X.c0[i0,j0](p) @ X.a1q_U00q[i1,j1](p) )
     #return (-1)**(X.n_i1 + X.P) * scalar_value( X.c0[i0,j0](p) @ X.a1[i1,j1](q) @ X.u0_01(p,q) )
 
 # p,q,pq-> :  c0  a1  u1_01
-def u101(X, i0,i1,j0,j1):
-    return (-1)**(X.n_i1 + X.P) * scalar_value( X.c0[i0,j0](p) @ X.a1q_U10q[i1,j1](p) )
+def u101(X, i0s,i1s,j0s,j1s):
+    return (-1)**(X.n_i1 + X.P) * raw( X.c0(i0,j0,p) @ X.a1q_U10q(i1,j1,p) )
+    #return (-1)**(X.n_i1 + X.P) * scalar_value( X.c0[i0,j0](p) @ X.a1q_U10q[i1,j1](p) )
     #return (-1)**(X.n_i1 + X.P) * scalar_value( X.c0[i0,j0](p) @ X.a1[i1,j1](q) @ X.u1_01(p,q) )
 
 # tq,pu,tu,pq-> :  ca0  ca1  s01  u0_10
-def s01u010(X, i0,i1,j0,j1):
-    return -1 * scalar_value( X.ca0tX_St1[i0,j0](q,u) @ X.ca1pX_U0p0[i1,j1](u,q) )
+def s01u010(X, i0s,i1s,j0s,j1s):
+    return -1 * raw( X.ca0tX_St1(i0,j0,q,u) @ X.ca1pX_U0p0(i1,j1,u,q) )
+    #return -1 * scalar_value( X.ca0tX_St1[i0,j0](q,u) @ X.ca1pX_U0p0[i1,j1](u,q) )
     #return -1 * scalar_value( X.ca0[i0,j0](t,q) @ X.ca1[i1,j1](p,u) @ X.s01(t,u) @ X.u0_10(p,q) )
 
 # tq,pu,tu,pq-> :  ca0  ca1  s01  u1_10
-def s01u110(X, i0,i1,j0,j1):
-    return -1 * scalar_value( X.ca0tX_St1[i0,j0](q,u) @ X.ca1pX_U1p0[i1,j1](u,q) )
+def s01u110(X, i0s,i1s,j0s,j1s):
+    return -1 * raw( X.ca0tX_St1(i0,j0,q,u) @ X.ca1pX_U1p0(i1,j1,u,q) )
+    #return -1 * scalar_value( X.ca0tX_St1[i0,j0](q,u) @ X.ca1pX_U1p0[i1,j1](u,q) )
     #return -1 * scalar_value( X.ca0[i0,j0](t,q) @ X.ca1[i1,j1](p,u) @ X.s01(t,u) @ X.u1_10(p,q) )
 
 # ptq,u,tu,pq-> :  cca0  a1  s01  u0_00
-def s01u000(X, i0,i1,j0,j1):
-    return (-1)**(X.n_i1 + X.P + 1) * scalar_value( X.a1u_S0u[i1,j1](t) @ X.cca0pXq_U0pq[i0,j0](t) )
+def s01u000(X, i0s,i1s,j0s,j1s):
+    return (-1)**(X.n_i1 + X.P + 1) * raw( X.a1u_S0u(i1,j1,t) @ X.cca0pXq_U0pq(i0,j0,t) )
+    #return (-1)**(X.n_i1 + X.P + 1) * scalar_value( X.a1u_S0u[i1,j1](t) @ X.cca0pXq_U0pq[i0,j0](t) )
     #return (-1)**(X.n_i1 + X.P + 1) * scalar_value( X.cca0[i0,j0](p,t,q) @ X.a1[i1,j1](u) @ X.s01(t,u) @ X.u0_00(p,q) )
 
 # ptq,u,tu,pq-> :  cca0  a1  s01  u1_00
-def s01u100(X, i0,i1,j0,j1):
-    return (-1)**(X.n_i1 + X.P + 1) * scalar_value( X.a1u_S0u[i1,j1](t) @ X.cca0pXq_U1pq[i0,j0](t) )
+def s01u100(X, i0s,i1s,j0s,j1s):
+    return (-1)**(X.n_i1 + X.P + 1) * raw( X.a1u_S0u(i1,j1,t) @ X.cca0pXq_U1pq(i0,j0,t) )
+    #return (-1)**(X.n_i1 + X.P + 1) * scalar_value( X.a1u_S0u[i1,j1](t) @ X.cca0pXq_U1pq[i0,j0](t) )
     #return (-1)**(X.n_i1 + X.P + 1) * scalar_value( X.cca0[i0,j0](p,t,q) @ X.a1[i1,j1](u) @ X.s01(t,u) @ X.u1_00(p,q) )
 
 # t,puq,tu,pq-> :  c0  caa1  s01  u0_11
-def s01u011(X, i0,i1,j0,j1):
-    return (-1)**(X.n_i1 + X.P + 1) * scalar_value( X.c0t_St1[i0,j0](u) @ X.caa1pXq_U0pq[i1,j1](u) )
+def s01u011(X, i0s,i1s,j0s,j1s):
+    return (-1)**(X.n_i1 + X.P + 1) * raw( X.c0t_St1(i0,j0,u) @ X.caa1pXq_U0pq(i1,j1,u) )
+    #return (-1)**(X.n_i1 + X.P + 1) * scalar_value( X.c0t_St1[i0,j0](u) @ X.caa1pXq_U0pq[i1,j1](u) )
     #return (-1)**(X.n_i1 + X.P + 1) * scalar_value( X.c0[i0,j0](t) @ X.caa1[i1,j1](p,u,q) @ X.s01(t,u) @ X.u0_11(p,q) )
 
 # t,puq,tu,pq-> :  c0  caa1  s01  u1_11
-def s01u111(X, i0,i1,j0,j1):
-    return (-1)**(X.n_i1 + X.P + 1) * scalar_value( X.c0t_St1[i0,j0](u) @ X.caa1pXq_U1pq[i1,j1](u) )
+def s01u111(X, i0s,i1s,j0s,j1s):
+    return (-1)**(X.n_i1 + X.P + 1) * raw( X.c0t_St1(i0,j0,u) @ X.caa1pXq_U1pq(i1,j1,u) )
+    #return (-1)**(X.n_i1 + X.P + 1) * scalar_value( X.c0t_St1[i0,j0](u) @ X.caa1pXq_U1pq[i1,j1](u) )
     #return (-1)**(X.n_i1 + X.P + 1) * scalar_value( X.c0[i0,j0](t) @ X.caa1[i1,j1](p,u,q) @ X.s01(t,u) @ X.u1_11(p,q) )
 
 # pt,uq,tu,pq-> :  cc0  aa1  s01  u0_01
-def s01u001(X, i0,i1,j0,j1):
-    return 1 * scalar_value( X.cc0Xt_St1[i0,j0](p,u) @ X.aa1Xq_U00q[i1,j1](u,p) )
+def s01u001(X, i0s,i1s,j0s,j1s):
+    return 1 * raw( X.cc0Xt_St1(i0,j0,p,u) @ X.aa1Xq_U00q(i1,j1,u,p) )
+    #return 1 * scalar_value( X.cc0Xt_St1[i0,j0](p,u) @ X.aa1Xq_U00q[i1,j1](u,p) )
     #return 1 * scalar_value( X.cc0[i0,j0](p,t) @ X.aa1[i1,j1](u,q) @ X.s01(t,u) @ X.u0_01(p,q) )
 
 # pt,uq,tu,pq-> :  cc0  aa1  s01  u1_01
-def s01u101(X, i0,i1,j0,j1):
-    return 1 * scalar_value( X.cc0Xt_St1[i0,j0](p,u) @ X.aa1Xq_U10q[i1,j1](u,p) )
+def s01u101(X, i0s,i1s,j0s,j1s):
+    return 1 * raw( X.cc0Xt_St1(i0,j0,p,u) @ X.aa1Xq_U10q(i1,j1,u,p) )
+    #return 1 * scalar_value( X.cc0Xt_St1[i0,j0](p,u) @ X.aa1Xq_U10q[i1,j1](u,p) )
     #return 1 * scalar_value( X.cc0[i0,j0](p,t) @ X.aa1[i1,j1](u,q) @ X.s01(t,u) @ X.u1_01(p,q) )
 
 

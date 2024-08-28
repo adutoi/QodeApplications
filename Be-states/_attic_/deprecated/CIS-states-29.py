@@ -151,27 +151,24 @@ print("\nE_gs = {}\n".format(Eval+N))
 
 
 
-irt2 = (1/2)**(1/2)
+
 states = {}
 chg = 0
 states[chg] = empty()
 states[chg].configs = configs_atom    # there are 29 configs
 states[chg].coeffs  = []
 evecs = numpy.identity(29)
-tmp = numpy.zeros(29, dtype=Double.numpy)
-tmp[:] = evecs[:,0]
-states[chg].coeffs += [tmp]
-for i in range(1,15):
-    tmp = numpy.zeros(29, dtype=Double.numpy)
-    tmp[:] = irt2 * (evecs[:,i] + evecs[:,i+14])
+for i in range(29):
+    tmp = numpy.zeros(29, dtype=Double.numpy, order="C")
+    tmp[:] = evecs[:,i]
     states[chg].coeffs += [tmp]
 
-#for chg,states_chg in states.items():
-#    num_states = len(states_chg.coeffs)
-#    if num_states>0:
-#        print("{}: {} x {}".format(chg, num_states, states_chg.coeffs[0].shape))
-#        for config in states_chg.configs:
-#            print("  {:018b}".format(config))
+for chg,states_chg in states.items():
+    num_states = len(states_chg.coeffs)
+    if num_states>0:
+        print("{}: {} x {}".format(chg, num_states, states_chg.coeffs[0].shape))
+        #for config in states_chg.configs:
+        #    print("  {:018b}".format(config))
 
 frag0.rho = densities.build_tensors(states, 2*frag0.basis.n_spatial_orb, frag0.n_elec_ref, thresh=1e-30, n_threads=n_threads)
 

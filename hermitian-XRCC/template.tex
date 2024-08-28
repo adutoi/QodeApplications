@@ -1,0 +1,77 @@
+\documentclass[12pt,letterpaper]{article}
+
+%%%%%%%%%%    Layout    %%%%%%%%%%
+%%% Turn these off if not using pdflatex (see Figures section)
+\setlength{\pdfpagewidth}{\paperwidth}
+\setlength{\pdfpageheight}{\paperheight}
+%%% Letter
+\setlength{\textheight}{24cm}
+\setlength{\textwidth}{17cm}
+\addtolength{\topmargin}{-2.5cm}
+\addtolength{\hoffset}{-1.6cm}
+%%% Spacing
+\usepackage{setspace}
+%%% Line numbers (for "proofing")
+\usepackage{lineno}
+
+%%%%%%%%%%   Figures    %%%%%%%%%%
+%%% Use this if all the figures are pdf
+\usepackage{graphicx}
+%%% Avoid having empty-ish pages
+\renewcommand{\floatpagefraction}{0.85}
+\renewcommand{\textfraction}{0.05}
+\renewcommand{\topfraction}{0.95}
+\renewcommand{\bottomfraction}{0.3}
+
+%%%%%%%%%% Tables %%%%%%%%%%
+%%% Allow alignment of columns by decimal point
+\usepackage{siunitx}
+
+%%%%%%%%%% Code %%%%%%%%%%
+% from https://www.overleaf.com/learn/latex/Code_listing
+\usepackage{listings}
+\lstdefinestyle{mystyle}{
+    basicstyle=\ttfamily\footnotesize,
+    breakatwhitespace=false,
+    breaklines=true,
+    keepspaces=true,
+    showspaces=false,
+    showstringspaces=false,
+    showtabs=false,
+}
+\lstset{style=mystyle}
+
+%%%%%%%%%% Bibliography %%%%%%%%%%
+\usepackage[super,comma,sort&compress]{natbib}
+\makeatletter
+\renewcommand\@biblabel[1]{(#1)}
+\makeatother
+
+%%%%%%%%%%  Customize   %%%%%%%%%%
+\usepackage{amsfonts}
+\usepackage{amsmath}
+\usepackage{amssymb}
+
+\begin{document}
+
+%%% Invoke lineno package
+%\modulolinenumbers[1]
+%\linenumbers
+
+
+
+\title{Derivation of Working Equations for XR[$o$] Diagrams}
+\author{Anthony Dutoi, via \texttt{diagram\_writer.py} (same author)}
+\maketitle
+
+%\begin{abstract}
+%The abstract.
+%\end{abstract}
+
+\begin{spacing}{0.75}
+
+%-%-%-%-% CONTENTS %-%-%-%-%
+
+\end{spacing}
+
+\end{document}
