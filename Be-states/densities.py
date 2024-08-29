@@ -210,5 +210,11 @@ def build_tensors(states, n_orbs, n_elec_0, thresh=1e-10, options=None, n_thread
     else:
         densities["n_states_bra"]  = densities["n_states"]
 
+    densities["KetCoeffs"] = {}
+    for ket_chg in states:
+        #temp_i = tensor_sum()
+        #temp_i += _tens_wrap(states[ket_chg].coeffs)
+        densities["KetCoeffs"][(ket_chg,ket_chg)] = _tens_wrap(states[ket_chg].coeffs)
+
     print("Writing to hard drive ...")
     return densities

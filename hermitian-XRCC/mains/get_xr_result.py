@@ -46,7 +46,7 @@ from precontract import precontract
 #torch.set_num_threads(4)
 #tensorly.set_backend("pytorch")
 
-def get_xr_H(ints, dens, xr_order):#, bra_det=False):
+def get_xr_H(ints, dens, xr_order, bra_det=False):
     diag_timer = timer()
     precon_timer = timer()
     matrix_timer = timer()
@@ -56,27 +56,27 @@ def get_xr_H(ints, dens, xr_order):#, bra_det=False):
     BeN_rho = dens  #[frag.rho for frag in BeN]   # diagrammatic_expansion.blocks should take BeN directly? (n_states and n_elec one level higher)
     contract_cache = precontract(BeN_rho, symm_ints.S, precon_timer)
 
-    S_blocks       = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=symm_ints.S,                               diagrams=S_diagrams,  contract_cache=contract_cache, timings=diag_timer, precon_timings=precon_timer)#, bra_det=bra_det)
-    St_blocks_symm = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, T=symm_ints.T),      diagrams=St_diagrams, contract_cache=contract_cache, timings=diag_timer, precon_timings=precon_timer)#, bra_det=bra_det)
-    Su_blocks_symm = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, U=symm_ints.U),      diagrams=Su_diagrams, contract_cache=contract_cache, timings=diag_timer, precon_timings=precon_timer)#, bra_det=bra_det)
-    Sv_blocks_symm = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, V=symm_ints.V),      diagrams=Sv_diagrams, contract_cache=contract_cache, timings=diag_timer, precon_timings=precon_timer)#, bra_det=bra_det)
-    St_blocks_bior = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, T=bior_ints.T),      diagrams=St_diagrams, contract_cache=contract_cache, timings=diag_timer, precon_timings=precon_timer)#, bra_det=bra_det)
-    Su_blocks_bior = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, U=bior_ints.U),      diagrams=Su_diagrams, contract_cache=contract_cache, timings=diag_timer, precon_timings=precon_timer)#, bra_det=bra_det)
-    Sv_blocks_bior = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, V=bior_ints.V),      diagrams=Sv_diagrams, contract_cache=contract_cache, timings=diag_timer, precon_timings=precon_timer)#, bra_det=bra_det)
-    Sv_blocks_half = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, V=bior_ints.V_half), diagrams=Sv_diagrams, contract_cache=contract_cache, timings=diag_timer, precon_timings=precon_timer)#, bra_det=bra_det)
-    Sv_blocks_diff = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, V=bior_ints.V_diff), diagrams=Sv_diagrams, contract_cache=contract_cache, timings=diag_timer, precon_timings=precon_timer)#, bra_det=bra_det)
+    S_blocks       = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=symm_ints.S,                               diagrams=S_diagrams,  contract_cache=contract_cache, timings=diag_timer, precon_timings=precon_timer)
+    St_blocks_symm = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, T=symm_ints.T),      diagrams=St_diagrams, contract_cache=contract_cache, timings=diag_timer, precon_timings=precon_timer, bra_det=bra_det)
+    Su_blocks_symm = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, U=symm_ints.U),      diagrams=Su_diagrams, contract_cache=contract_cache, timings=diag_timer, precon_timings=precon_timer, bra_det=bra_det)
+    Sv_blocks_symm = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, V=symm_ints.V),      diagrams=Sv_diagrams, contract_cache=contract_cache, timings=diag_timer, precon_timings=precon_timer, bra_det=bra_det)
+    St_blocks_bior = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, T=bior_ints.T),      diagrams=St_diagrams, contract_cache=contract_cache, timings=diag_timer, precon_timings=precon_timer, bra_det=bra_det)
+    Su_blocks_bior = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, U=bior_ints.U),      diagrams=Su_diagrams, contract_cache=contract_cache, timings=diag_timer, precon_timings=precon_timer, bra_det=bra_det)
+    Sv_blocks_bior = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, V=bior_ints.V),      diagrams=Sv_diagrams, contract_cache=contract_cache, timings=diag_timer, precon_timings=precon_timer, bra_det=bra_det)
+    #Sv_blocks_half = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, V=bior_ints.V_half), diagrams=Sv_diagrams, contract_cache=contract_cache, timings=diag_timer, precon_timings=precon_timer, bra_det=bra_det)
+    Sv_blocks_diff = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, V=bior_ints.V_diff), diagrams=Sv_diagrams, contract_cache=contract_cache, timings=diag_timer, precon_timings=precon_timer, bra_det=bra_det)
 
-    Combo_blocks_bior = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, T=bior_ints.T, U=bior_ints.U, V=bior_ints.V),      diagrams=combo_diagram, contract_cache=contract_cache, timings=diag_timer, precon_timings=precon_timer)
+    Combo_blocks_bior = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, T=bior_ints.T, U=bior_ints.U, V=bior_ints.V),      diagrams=combo_diagram, contract_cache=contract_cache, timings=diag_timer, precon_timings=precon_timer, bra_det=bra_det)
 
     # charges under consideration
     monomer_charges = [0, +1, -1]
-    dimer_charges = {
-                    6:  [(+1, +1)],
-                    7:  [(0, +1), (+1, 0)],
-                    8:  [(0, 0), (+1, -1), (-1, +1)],
-                    9:  [(0, -1), (-1, 0)],
-                    10: [(-1, -1)]
-                    }
+    #dimer_charges = {
+    #                6:  [(+1, +1)],
+    #                7:  [(0, +1), (+1, 0)],
+    #                8:  [(0, 0), (+1, -1), (-1, +1)],
+    #                9:  [(0, -1), (-1, 0)],
+    #                10: [(-1, -1)]
+    #                }
     all_dimer_charges = [(0,0), (0,+1), (0,-1), (+1,0), (+1,+1), (+1,-1), (-1,0), (-1,+1), (-1,-1)]
     #all_dimer_charges = [(0,0), (+1,-1), (-1,+1)]
 
@@ -133,21 +133,21 @@ def get_xr_H(ints, dens, xr_order):#, bra_det=False):
                                 2: [
                                     "t01"
                                 ]
-                            }, (0,1), all_dimer_charges, matrix_timer)
+                            }, (0,1), all_dimer_charges, matrix_timer, bra_det=bra_det)
         print("starting U")
         S2H2  += XR_term.dimer_matrix(Su_blocks_bior, {
                                 2: [
                                     "u100",
                                     "u001", "u101"
                                 ]
-                            }, (0,1), all_dimer_charges, matrix_timer)
+                            }, (0,1), all_dimer_charges, matrix_timer, bra_det=bra_det)
 
         print("starting V")
         S2H2  += XR_term.dimer_matrix(Sv_blocks_bior, {
                                 2: [
                                     "v0101", "v0010", "v0111", "v0011"
                                 ]
-                            }, (0,1), all_dimer_charges, matrix_timer)
+                            }, (0,1), all_dimer_charges, matrix_timer, bra_det=bra_det)
 
 
         print("finished H build")
@@ -205,7 +205,7 @@ def get_xr_H(ints, dens, xr_order):#, bra_det=False):
                             2: [
                                 "t01"
                                 ]
-                            }, (0,1), all_dimer_charges, matrix_timer)
+                            }, (0,1), all_dimer_charges, matrix_timer, bra_det=bra_det)
         S2H2 += XR_term.dimer_matrix(Su_blocks_symm, {
                             1: [
                                 "u000"
@@ -214,7 +214,7 @@ def get_xr_H(ints, dens, xr_order):#, bra_det=False):
                                 "u100",
                                 "u001", "u101"
                                 ]
-                            }, (0,1), all_dimer_charges, matrix_timer)
+                            }, (0,1), all_dimer_charges, matrix_timer, bra_det=bra_det)
 
         S2H2 += XR_term.dimer_matrix(St_blocks_bior, {
                             2: [
@@ -222,7 +222,7 @@ def get_xr_H(ints, dens, xr_order):#, bra_det=False):
                                 #->#"s01t10", 
                                 "s01t01"
                                 ]
-                            }, (0,1), all_dimer_charges, matrix_timer)
+                            }, (0,1), all_dimer_charges, matrix_timer, bra_det=bra_det)
         S2H2 += XR_term.dimer_matrix(Su_blocks_bior, {
                             2: [
                                 "s01u000", "s01u011",
@@ -230,7 +230,7 @@ def get_xr_H(ints, dens, xr_order):#, bra_det=False):
                                 #->#"s01u010", "s01u110", 
                                 "s01u001", "s01u101"
                                 ]
-                            }, (0,1), all_dimer_charges, matrix_timer)
+                            }, (0,1), all_dimer_charges, matrix_timer, bra_det=bra_det)
 
         print("build S2H2 (2e)")
 
@@ -250,7 +250,7 @@ def get_xr_H(ints, dens, xr_order):#, bra_det=False):
                             2: [
                                 "v0101", "v0010", "v0111", "v0011"
                                 ]
-                            }, (0,1), all_dimer_charges, matrix_timer)
+                            }, (0,1), all_dimer_charges, matrix_timer, bra_det=bra_det)
 
         S2H2 += XR_term.dimer_matrix(Sv_blocks_bior, {
                             2: [
@@ -259,14 +259,14 @@ def get_xr_H(ints, dens, xr_order):#, bra_det=False):
                                 #->#"s01v1000", 
                                 "s01v1100", "s01v0010", "s01v0111"#, "s01v0011"
                                 ]
-                            }, (0,1), all_dimer_charges, matrix_timer)
+                            }, (0,1), all_dimer_charges, matrix_timer, bra_det=bra_det)
 
 
         S2H2 += XR_term.dimer_matrix(Combo_blocks_bior, {
                             2: [
                                 "combo"
                                 ]
-                            }, (0,1), all_dimer_charges, matrix_timer)
+                            }, (0,1), all_dimer_charges, matrix_timer, bra_det=bra_det)
 
         print("Apply H")
 
@@ -280,18 +280,18 @@ def get_xr_H(ints, dens, xr_order):#, bra_det=False):
                             1: [
                                 "t00"
                                 ]
-                            }, (0,1), all_dimer_charges, matrix_timer)
+                            }, (0,1), all_dimer_charges, matrix_timer, bra_det=bra_det)
         H2blocked -= XR_term.dimer_matrix(Su_blocks_symm, {
                             1: [
                                 "u000"
                                 ]
-                            }, (0,1), all_dimer_charges, matrix_timer)
+                            }, (0,1), all_dimer_charges, matrix_timer, bra_det=bra_det)
 
         H2blocked -= XR_term.dimer_matrix(Sv_blocks_symm, {
                             1: [
                                 "v0000"
                                 ]
-                            }, (0,1), all_dimer_charges, matrix_timer)
+                            }, (0,1), all_dimer_charges, matrix_timer, bra_det=bra_det)
     else:
         raise NotImplementedError("only xr in zeroth and first order are implemented")
 
@@ -342,30 +342,35 @@ def get_xr_H(ints, dens, xr_order):#, bra_det=False):
             mapping_bra += [mapping2[m][n]]
 
     # determine ket map
-    dims0_ket = [BeN_rho[0]['n_states'][chg] for chg in [0,+1,-1]]
-    dims1_ket = [BeN_rho[1]['n_states'][chg] for chg in [0,+1,-1]]
-    mapping2 = [[None]*sum(dims1_ket) for _ in range(sum(dims0_ket))]
-    idx = 0
-    beg0 = 0
-    for dim0 in dims0_ket:
-        beg1 = 0
-        for dim1 in dims1_ket:
-            for m in range(dim0):
-                for n in range(dim1):
-                    mapping2[beg0+m][beg1+n] = idx
-                    idx += 1
-            beg1 += dim1
-        beg0 += dim0
-    mapping_ket = []
-    for m in range(sum(dims0_ket)):
-        for n in range(sum(dims1_ket)):
-            mapping_ket += [mapping2[m][n]]
+    if not bra_det:
+        dims0_ket = [BeN_rho[0]['n_states'][chg] for chg in [0,+1,-1]]
+        dims1_ket = [BeN_rho[1]['n_states'][chg] for chg in [0,+1,-1]]
+        mapping2 = [[None]*sum(dims1_ket) for _ in range(sum(dims0_ket))]
+        idx = 0
+        beg0 = 0
+        for dim0 in dims0_ket:
+            beg1 = 0
+            for dim1 in dims1_ket:
+                for m in range(dim0):
+                    for n in range(dim1):
+                        mapping2[beg0+m][beg1+n] = idx
+                        idx += 1
+                beg1 += dim1
+            beg0 += dim0
+        mapping_ket = []
+        for m in range(sum(dims0_ket)):
+            for n in range(sum(dims1_ket)):
+                mapping_ket += [mapping2[m][n]]
 
     H2 = numpy.zeros(H2blocked.shape)
     print(H2blocked.shape)
-    for i,i_ in enumerate(mapping_bra):
-        for j,j_ in enumerate(mapping_ket):
-            H2[i,j] = H2blocked[i_,j_]
+    if bra_det:
+        for i,i_ in enumerate(mapping_bra):
+            H2[i] = H2blocked[i_]
+    else:
+        for i,i_ in enumerate(mapping_bra):
+            for j,j_ in enumerate(mapping_ket):
+                H2[i,j] = H2blocked[i_,j_]
 
     return H1, H2
 

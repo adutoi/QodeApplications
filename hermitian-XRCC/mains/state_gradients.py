@@ -128,9 +128,9 @@ def state_gradients(frag_ind, ints, dens_builder_stuff, dens, monomer_charges, n
     dens[frag_map[0]] = densities.build_tensors(*dens_builder_stuff[frag_map[0]][:-1], options=dens_builder_stuff[frag_map[0]][-1] + ["bra_det"], n_threads=n_threads)
 
     # build gradient
-    H1, H2 = get_xr_H(ints, dens, xr_order)#, bra_det=True)
+    H1, H2 = get_xr_H(ints, dens, xr_order, bra_det=True)
     print(H1[0].shape, H1[1].shape, H2.shape)
-    H2 = H2.reshape((H1[0].shape[0], H1[1].shape[0], H1[0].shape[1], H1[1].shape[1]))
+    H2 = H2.reshape((H1[0].shape[0], H1[1].shape[0]))#, H1[0].shape[1], H1[1].shape[1]))
     # H1 of frag A can be used as is and H1 of frag B needs to be contracted with the state coeffs of frag A. Note, that this is independent of the XR order 
     gradient_states = {}
     
@@ -139,9 +139,11 @@ def state_gradients(frag_ind, ints, dens_builder_stuff, dens, monomer_charges, n
         gradient_states[chg] = H1[frag_map[0]][c_slices[frag_map[0]][chg], d_slices[frag_map[0]][chg]].T  # frag A monomer H term
         gradient_states[chg] -= E * cs  # E term
         if frag_ind == 0:
-            gradient_states[chg] += np.einsum("pkii->kp", H2[c_slices[frag_map[0]][chg], d_slices[frag_map[0]][chg], :, :])  # dimer H term
+            #gradient_states[chg] += np.einsum("pkii->kp", H2[c_slices[frag_map[0]][chg], d_slices[frag_map[0]][chg], :, :])  # dimer H term
+            gradient_states[chg] += H2[c_slices[frag_map[0]][chg], d_slices[frag_map[0]][chg]].T  # dimer H term
         else:
-            gradient_states[chg] += np.einsum("kpii->kp", H2[d_slices[frag_map[0]][chg], c_slices[frag_map[0]][chg], :, :])  # dimer H term
+            #gradient_states[chg] += np.einsum("kpii->kp", H2[d_slices[frag_map[0]][chg], c_slices[frag_map[0]][chg], :, :])  # dimer H term
+            gradient_states[chg] += H2[d_slices[frag_map[0]][chg], c_slices[frag_map[0]][chg]]  # dimer H term
         # this line also relies on equal charges on fragments A and B
         gradient_states[chg] += np.einsum("ip,ki->kp", cs, H1[frag_map[1]][d_slices[frag_map[0]][chg], d_slices[frag_map[0]][chg]])  # frag B monomer H term
         gradient_states[chg] *= 2

@@ -38,10 +38,10 @@ def identity(X):
 
 # dimer diagrams
 
-i0, i1, j0, j1 = 0, 1, 2, 3
+#i0, i1, j0, j1 = 0, 1, 2, 3
 
 # p,q,pq-> :  c0  a1  s01
-def s01(X, i0s,i1s,j0s,j1s):
+def s01(X, i0,i1,j0,j1):
     return (-1)**(X.n_i1 + X.P) * raw( X.c0(i0,j0,p) @ X.a1q_S0q(i1,j1,p) )
     #return (-1)**(X.n_i1 + X.P) * scalar_value( X.c0[i0,j0](p) @ X.a1q_S0q[i1,j1](p) )
     #return (-1)**(X.n_i1 + X.P) * scalar_value( X.c0[i0,j0](p) @ X.a1[i1,j1](q) @ X.s01(p,q))

@@ -21,13 +21,13 @@ from build_diagram       import build_diagram
 
 p, q, r, s, t, u, v, w = "pqrstuvw"    # some contraction indices for easier reading
 
-i0, i1, j0, j1 = 0, 1, 2, 3
+#i0, i1, j0, j1 = 0, 1, 2, 3
 
 # tq,pu,tu,pq-> :        ca0  ca1  s01    t10
 # tq,pu,tu,pq-> :        ca0  ca1  s01  u0_10
 # tq,pu,tu,pq-> :        ca0  ca1  s01  u1_10
 # qtsr,pu,tu,pqrs-> :  ccaa0  ca1  s01  v1000
-def combo(X, i0s,i1s,j0s,j1s):
+def combo(X, i0,i1,j0,j1):
     temp = evaluate(2 * X.ccaa0qXsr_V1qrs - X.ca0Xq_T1q - X.ca0Xq_U01q - X.ca0Xq_U11q )
     return raw( X.ca1Xu_S0u(i1,j1,p,t) @ temp(i0,j0,t,p) )
     ##temp = evaluate(2 * X.ccaa0qXsr_V1qrs[i0,j0] - X.ca0Xq_T1q[i0,j0] - X.ca0Xq_U01q[i0,j0] - X.ca0Xq_U11q[i0,j0] )

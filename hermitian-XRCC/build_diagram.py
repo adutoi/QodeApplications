@@ -116,6 +116,8 @@ class frag_resolve(object):
     def __getattr__(self, attr):
         if attr[:3]=="n_i" or attr=="Dchg":
             return self._storage[attr]
+        #elif attr == "ket_coeffs":
+        #    return _density_array(self._densities, label_template[:-1], self._subsys_chgs, self._n_frag)
         else:
             frag_indices = tuple(int(i) for i in filter(lambda c: c.isdigit(), attr))    # extract the digits from the string (heaven forbid >=9-fragment subsystem)
             label_template = re.sub("\d", "#", attr)                                     # replace digits with hashes to anonymize the label

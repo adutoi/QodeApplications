@@ -19,7 +19,7 @@
 import numpy
 from qode.util import recursive_looper, compound_range
 
-def _evaluate_block(result, op_blocks, frag_order, active_diagrams, subsys_indices, subsys_charges, timings):
+def _evaluate_block(result, op_blocks, frag_order, active_diagrams, subsys_indices, subsys_charges, timings, bra_det=False):
     # Can handle (sub)systems with any number of fragments using diagrams of any fragment order.
     # So can use for trimer_matrix, etc.
     # !!! Phases for some fragment_order < subsystem_size have not yet been coded in (easy)!
@@ -58,12 +58,18 @@ def _evaluate_block(result, op_blocks, frag_order, active_diagrams, subsys_indic
                     timings.record("block evaluation")
                     if diagram_block is not None:
                         if block is None:
-                            block = numpy.zeros(n_states_i+n_states_j)    # concatenate lists and make ndarray
+                            if bra_det:
+                                block = numpy.zeros(n_states_i)    # make ndarray
+                            else:
+                                block = numpy.zeros(n_states_i+n_states_j)    # concatenate lists and make ndarray
                         # !!! phases not yet implemented should be handled here.
                         #count = 0
                         for I in compound_range([range(n) for n in n_states_j], inactive=frags):    # with frags of interest inactive, i vs j does not matter here
                             for frag in frags:  I[frag] = full
-                            indices = tuple(I+I)    # concatenate I with itself for "diagonal" element (wrt specified indices)
+                            if bra_det:
+                                indices = tuple(I)
+                            else:
+                                indices = tuple(I+I)    # concatenate I with itself for "diagonal" element (wrt specified indices)
                             #try:
                             #if block[indices].shape != diagram_block.shape and len(diagram_block.shape) < 4:
                             #    print(block[indices].shape, diagram_block.shape)
@@ -76,7 +82,10 @@ def _evaluate_block(result, op_blocks, frag_order, active_diagrams, subsys_indic
                             #    if count >= 130:
                             #        raise IndexError("blablabla")
                 if block is not None:
-                    block = block.reshape(numpy.prod(n_states_i), numpy.prod(n_states_j))
+                    if bra_det:
+                        block = block.reshape(numpy.prod(n_states_i))
+                    else:
+                        block = block.reshape(numpy.prod(n_states_i), numpy.prod(n_states_j))
                     result += block
     recursive_looper(loops, kernel)
 
@@ -101,23 +110,37 @@ def monomer_matrix(op_blocks, active_diagrams, subsys_index, charge_blocks, timi
         Ibeg = Iend
     return Matrix
 
-def dimer_matrix(op_blocks, active_diagrams, subsys_indices, charge_blocks, timings):
+def dimer_matrix(op_blocks, active_diagrams, subsys_indices, charge_blocks, timings, bra_det=False):
     # This code is restricted specifically to dimer (sub)systems
     rho1, rho2 = (op_blocks.densities[m] for m in subsys_indices)
     dim_bra = sum(rho1['n_states_bra'][chg1]*rho2['n_states_bra'][chg2] for chg1,chg2 in charge_blocks)
-    dim_ket = sum(rho1['n_states'][chg1]*rho2['n_states'][chg2] for chg1,chg2 in charge_blocks)
-    Matrix = numpy.zeros((dim_bra,dim_ket))
-    #
-    Ibeg = 0
-    for chg_i1,chg_i2 in charge_blocks:
-        Iend = Ibeg + rho1['n_states_bra'][chg_i1]*rho2['n_states_bra'][chg_i2]
-        Jbeg = 0
-        for chg_j1,chg_j2 in charge_blocks:
-            Jend = Jbeg + rho1['n_states'][chg_j1]*rho2['n_states'][chg_j2]
-            result = Matrix[Ibeg:Iend,Jbeg:Jend]
-            subsys_charges = [(chg_i1,chg_j1),(chg_i2,chg_j2)]
-            for frag_order in active_diagrams:
-                _evaluate_block(result, op_blocks, frag_order, active_diagrams[frag_order], subsys_indices, subsys_charges, timings)
-            Jbeg = Jend
-        Ibeg = Iend
+    if bra_det:
+        Matrix = numpy.zeros(dim_bra)
+        #
+        Ibeg = 0
+        for chg_i1,chg_i2 in charge_blocks:
+            Iend = Ibeg + rho1['n_states_bra'][chg_i1]*rho2['n_states_bra'][chg_i2]
+            Jbeg = 0
+            for chg_j1,chg_j2 in charge_blocks:
+                result = Matrix[Ibeg:Iend]
+                subsys_charges = [(chg_i1,chg_j1),(chg_i2,chg_j2)]
+                for frag_order in active_diagrams:
+                    _evaluate_block(result, op_blocks, frag_order, active_diagrams[frag_order], subsys_indices, subsys_charges, timings, bra_det=bra_det)
+            Ibeg = Iend
+    else:
+        dim_ket = sum(rho1['n_states'][chg1]*rho2['n_states'][chg2] for chg1,chg2 in charge_blocks)
+        Matrix = numpy.zeros((dim_bra,dim_ket))
+        #
+        Ibeg = 0
+        for chg_i1,chg_i2 in charge_blocks:
+            Iend = Ibeg + rho1['n_states_bra'][chg_i1]*rho2['n_states_bra'][chg_i2]
+            Jbeg = 0
+            for chg_j1,chg_j2 in charge_blocks:
+                Jend = Jbeg + rho1['n_states'][chg_j1]*rho2['n_states'][chg_j2]
+                result = Matrix[Ibeg:Iend,Jbeg:Jend]
+                subsys_charges = [(chg_i1,chg_j1),(chg_i2,chg_j2)]
+                for frag_order in active_diagrams:
+                    _evaluate_block(result, op_blocks, frag_order, active_diagrams[frag_order], subsys_indices, subsys_charges, timings)
+                Jbeg = Jend
+            Ibeg = Iend
     return Matrix
