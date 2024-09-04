@@ -54,11 +54,22 @@ def u100(X, *args):
     if len(args) == 4:
         get_standard(result)
     elif len(args) == 5:
-        if args[4] == 0:  # state with state on frag 1 -> dirac_delta
+        if args[4] == 0 and args[1][1] == args[3][1]:  # state with state on frag 1 -> dirac_delta
             get_standard(result)
-        else:
+        elif args[4] == 1 and args[1][1] == args[3][1]:  # state with state on frag 1 -> dirac_delta with i0 and i1 permuted
+            for i1 in range(args[1][1]):
+                j1 = i1
+                result[:,i1,:,j1] = 1 * raw( X.ca0pq_U1pq )
+            result = numpy.transpose(result, (1,0,2,3))  # 2 and 3 dont matter, because they are traced out at the end
+        elif args[4] == 0 and args[1][1] != args[3][1]:
             # do this, since backend might not always be nunmpy...best use would be backend independent post processing though
             result[:,:,:,:] = 1 * raw( X.ca0pq_U1pq(0,2) @ X.KetCoeffs1(3,1) )
+        elif args[4] == 1 and args[1][1] != args[3][1]:
+            # do this, since backend might not always be nunmpy...best use would be backend independent post processing though
+            result[:,:,:,:] = 1 * raw( X.ca0pq_U1pq(0,2) @ X.KetCoeffs1(3,1) )  # 2 and 3 dont matter, because they are traced out at the end
+            result = numpy.transpose(result, (1,0,2,3))
+        else:
+            raise ValueError("One of the if statements needs to be True!")
         result = numpy.einsum("abii->ab", result)
     else:
         raise ValueError(f"{len(args)} are too many/few args")

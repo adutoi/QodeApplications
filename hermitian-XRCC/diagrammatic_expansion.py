@@ -33,13 +33,13 @@ def _build_block(diagram_term, n_states, permutation, bra_det, label):
         dims = [(m,n_states_i[m]) for m in permutation] + [(frag_order+m,n_states_j[m]) for m in permutation]
         reorder = [m for m,r in dims]
         dims = sorted(dims)    # tuples sorted into lexicographical order (so, but first element of tuple here)
-        if label == "u100":  # something needs to be done about this special diagram...maybe evaluate it as a H1 term and add it to H2 later
+        if label == "u100":  # something needs to be done about this special diagram...e.g. evaluate it as a H1 term and add it to H2 later
             if bra_det:
                 if dims[-2][1] != dims[-1][1]:
                     result = []
                 else:
-                    result = diagram_term(*dims, reorder[0]).transpose(reorder[:2])
-            else: 
+                    result = diagram_term(*dims, reorder[0])#.transpose(reorder[:2])  # transpose is handled in the diagram
+            else:
                 result = diagram_term(*dims).transpose(reorder)
         else:
             inds = [i for i in range(len(dims))]

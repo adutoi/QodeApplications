@@ -2,7 +2,7 @@ from   get_ints import get_ints
 from   get_xr_result import get_xr_states, get_xr_H
 from qode.math.tensornet import raw, tl_tensor
 #import qode.util
-from qode.util import timer
+from qode.util import timer, sort_eigen
 from state_gradients import state_gradients
 
 #import torch
@@ -333,12 +333,23 @@ def optimize_states(displacement, max_iter, xr_order):
             #coeffs_grads = [state_coeffs, gradient_states]
             #pickle.dump(coeffs_grads, open("coeffs_grads.pkl", mode="wb"))
             #self.rho = pickle.load(open("dumped_densities.pkl", mode="rb"))
+        """
+        gs_energy_b, gradient_states_b = state_gradients(1, ints, dens_builder_stuff, dens, monomer_charges, n_threads=n_threads, xr_order=xr_order)
+        #gs_energy_a, gradient_states_a = state_gradients(0, ints, dens_builder_stuff, dens, monomer_charges, n_threads=n_threads, xr_order=xr_order)
 
-        gs_energy, gradient_states = state_gradients(0, ints, dens_builder_stuff, dens, monomer_charges, n_threads=n_threads, xr_order=xr_order)
-
+        for chg in monomer_charges[0]:
+        #    dens_builder_stuff[0][0][chg].coeffs = [i.copy() for i in state_coeffs[0][chg]]
+            dens_builder_stuff[1][0][chg].coeffs = [i.copy() for i in state_coeffs[1][chg]]
+            dens_builder_stuff[0][0][chg].coeffs = [i.copy() for i in state_coeffs[0][chg]]
+        #dens[0] = densities.build_tensors(*dens_builder_stuff[0], n_threads=n_threads)
+        dens[1] = densities.build_tensors(*dens_builder_stuff[1][:-1], options=dens_builder_stuff[1][-1], n_threads=n_threads)  # do this because dens[0] was changed in state_gradients function
+        dens[0] = densities.build_tensors(*dens_builder_stuff[0][:-1], options=dens_builder_stuff[0][-1], n_threads=n_threads)  # do this because dens[1] was also changed in state_gradients function
+        """
+        #gs_energy_b, gradient_states_b = state_gradients(1, ints, dens_builder_stuff, dens, monomer_charges, n_threads=n_threads, xr_order=xr_order)
+        gs_energy_a, gradient_states_a = state_gradients(0, ints, dens_builder_stuff, dens, monomer_charges, n_threads=n_threads, xr_order=xr_order)
         #coeffs_grads = [state_coeffs, gradient_states]
         #pickle.dump(coeffs_grads, open("coeffs_grads.pkl", mode="wb"))
-
+        
         ################################
         # Application of the derivatives
         ################################
@@ -384,21 +395,18 @@ def optimize_states(displacement, max_iter, xr_order):
         """
 
 
-        a_coeffs = {chg: np.array(tens) for chg, tens in state_coeffs[0].items()}
-        #grad_coeffs = {chg: val / np.linalg.norm(val) for chg, val in gradient_states.items()}
-        grad_coeffs = {chg: val for chg, val in gradient_states.items()}
+        a_coeffs = {chg: np.array(tens.copy()) for chg, tens in state_coeffs[0].items()}
+        #b_coeffs = {chg: np.array(tens.copy()) for chg, tens in state_coeffs[1].items()}
+        grad_coeffs_a = {chg: np.array([vec / np.linalg.norm(vec) for vec in val]) for chg, val in gradient_states_a.items()}
+        #grad_coeffs_b = {chg: np.array([vec / np.linalg.norm(vec) for vec in val]) for chg, val in gradient_states_b.items()}
 
-        #print([[a_coeffs[chg][i].T @ grad_coeffs[chg][i] for i in range(len(a_coeffs[chg]))] for chg in a_coeffs.keys()])
-        #print(a_coeffs[0][0].T @ grad_coeffs[0][0])
-        #print(a_coeffs[1][0].T)
-        #print(grad_coeffs[1][0])
 
         # for Hamiltonian evaluation in extended state basis, i.e. states + gradients, an orthonormal set for each fragment
         # is required, but this choice is not unique. One could e.g. normalize, orthogonalize and then again normalize,
         # or orthogonalize and normalize without previous normalization.
-
-        tot_a_coeffs = {chg: orthogonalize(np.vstack((a_coeffs[chg], grad_coeffs[chg]))) for chg in monomer_charges[0]}
-        #tot_a_coeffs = orthogonalize(tot_a_coeffs)
+        tot_a_coeffs = {chg: orthogonalize(np.vstack((a_coeffs[chg], grad_coeffs_a[chg]))) for chg in monomer_charges[0]}
+        #tot_a_coeffs = {chg: orthogonalize(val) for chg, val in tot_a_coeffs.items()}  # orthogonalize twice to make sure, imaginary part does not originate from numerical error here
+        #tot_b_coeffs = {chg: orthogonalize(np.vstack((b_coeffs[chg], grad_coeffs_b[chg]))) for chg in monomer_charges[1]}
         """
         dummy_ind = 0
         for chg in monomer_charges[0]:
@@ -467,8 +475,8 @@ def optimize_states(displacement, max_iter, xr_order):
         print("previous energy", gs_energy)
         """
 
-        state_dict = [{chg: len(dens_builder_stuff[i][0][chg].coeffs) for chg in monomer_charges[i]} for i in range(2)]
-        conf_dict = [{chg: len(dens_builder_stuff[i][0][chg].coeffs[0]) for chg in monomer_charges[i]} for i in range(2)]
+        state_dict = [{chg: len(state_coeffs[i][chg]) for chg in monomer_charges[i]} for i in range(2)]
+        conf_dict = [{chg: len(state_coeffs[i][chg][0]) for chg in monomer_charges[i]} for i in range(2)]
 
         def get_slices(dict, chgs, type="standard"):
             dummy_ind = 0
@@ -502,11 +510,11 @@ def optimize_states(displacement, max_iter, xr_order):
         d_slices_latter = [get_slices(state_dict[i], monomer_charges[i], type="latter") for i in range(2)]
         #c_slices_latter = [get_slices(conf_dict[i], monomer_charges[i], type="latter") for i in range(2)]
 
-        for chg in monomer_charges[0]:
+        #for chg in monomer_charges[0]:
         #    dens_builder_stuff[0][0][chg].coeffs = [i.copy() for i in state_coeffs[0][chg]]
-            dens_builder_stuff[1][0][chg].coeffs = [i.copy() for i in state_coeffs[1][chg]]
+        #    dens_builder_stuff[1][0][chg].coeffs = [i.copy() for i in state_coeffs[1][chg]]
         #dens[0] = densities.build_tensors(*dens_builder_stuff[0], n_threads=n_threads)
-        dens[1] = densities.build_tensors(*dens_builder_stuff[1][:-1], options=dens_builder_stuff[1][-1], n_threads=n_threads)  # do this because dens[1] was also changed in state_gradients function
+        #dens[1] = densities.build_tensors(*dens_builder_stuff[1][:-1], options=dens_builder_stuff[1][-1], n_threads=n_threads)  # do this because dens[1] was also changed in state_gradients function
         #gs_en, gs_vec = get_xr_states(ints, dens, 0)
         #print("old energy", gs_energy)
         #print("is this still the old gs_energy?", gs_en)
@@ -514,14 +522,51 @@ def optimize_states(displacement, max_iter, xr_order):
         for chg in monomer_charges[0]:
             dens_builder_stuff[0][0][chg].coeffs = [i.copy() for i in tot_a_coeffs[chg]]
         dens[0] = densities.build_tensors(*dens_builder_stuff[0][:-1], options=dens_builder_stuff[0][-1], n_threads=n_threads)
+
+        for chg in monomer_charges[1]:
+            dens_builder_stuff[1][0][chg].coeffs = [i.copy() for i in state_coeffs[1][chg]]
+        #    dens_builder_stuff[1][0][chg].coeffs = [i.copy() for i in tot_b_coeffs[chg]]
+        dens[1] = densities.build_tensors(*dens_builder_stuff[1][:-1], options=dens_builder_stuff[1][-1], n_threads=n_threads)
+
         H1, H2 = get_xr_H(ints, dens, 0)
+        """
+        def add_to_full(mat, b):  # update in place ... b is (0, 0) or (0, 1), etc.
+            if sum(b) == 1:
+                diag = False
+            else:
+                diag = True
+            d_sl = {0: d_slices_first, 1: d_slices_latter}
+            for chg0 in monomer_charges[0]:
+                for chg1 in monomer_charges[1]:
+                    #(0,0)
+                    mat[d_slices_first[0][chg0], d_sl[b[0]][1][chg1], d_slices_first[0][chg0], d_sl[b[1]][1][chg1]] +=\
+                        np.einsum("ij,kl->ikjl", np.eye(state_dict[0][chg0]), H1[1][d_sl[b[0]][1][chg1], d_sl[b[1]][1][chg1]])
+                    if diag:
+                        mat[d_slices_first[0][chg0], d_sl[b[0]][1][chg1], d_slices_first[0][chg0], d_sl[b[1]][1][chg1]] +=\
+                            np.einsum("ij,kl->ikjl", H1[0][d_slices_first[0][chg0], d_slices_first[0][chg0]], np.eye(state_dict[1][chg1]))
+                    #(0,1)
+                    if diag:
+                        mat[d_slices_first[0][chg0], d_sl[b[0]][1][chg1], d_slices_latter[0][chg0], d_sl[b[1]][1][chg1]] +=\
+                            np.einsum("ij,kl->ikjl", H1[0][d_slices_first[0][chg0], d_slices_latter[0][chg0]], np.eye(state_dict[1][chg1]))
+                    #(1,0)
+                    if diag:
+                        mat[d_slices_latter[0][chg0], d_sl[b[0]][1][chg1], d_slices_first[0][chg0], d_sl[b[1]][1][chg1]] +=\
+                            np.einsum("ij,kl->ikjl", H1[0][d_slices_latter[0][chg0], d_slices_first[0][chg0]], np.eye(state_dict[1][chg1]))
+                    #(1,1)
+                    mat[d_slices_latter[0][chg0], d_sl[b[0]][1][chg1], d_slices_latter[0][chg0], d_sl[b[1]][1][chg1]] +=\
+                        np.einsum("ij,kl->ikjl", np.eye(state_dict[0][chg0]), H1[1][d_sl[b[0]][1][chg1], d_sl[b[1]][1][chg1]])
+                    if diag:
+                        mat[d_slices_latter[0][chg0], d_sl[b[0]][1][chg1], d_slices_latter[0][chg0], d_sl[b[1]][1][chg1]] +=\
+                            np.einsum("ij,kl->ikjl", H1[0][d_slices_latter[0][chg0], d_slices_latter[0][chg0]], np.eye(state_dict[1][chg1]))
 
-        #tmp = H2.reshape(2 * n, n, 2 * n, n)
-        #for chg in monomer_charges[0]:
-        #    tmp[d_slices]
+        full = H2.reshape(2 * n, 2 * n, 2 * n, 2 * n)
+        add_to_full(full, (0, 0))
+        add_to_full(full, (0, 1))
+        add_to_full(full, (1, 0))
+        add_to_full(full, (1, 1))
 
-        
-
+        full = full.reshape(4 * n**2, 4 * n**2)
+        """
         full = H2.reshape(2 * n, n, 2 * n, n)
         for chg0 in monomer_charges[0]:
             for chg1 in monomer_charges[1]:
@@ -541,21 +586,45 @@ def optimize_states(displacement, max_iter, xr_order):
                     np.einsum("ij,kl->ikjl", np.eye(state_dict[0][chg0]), H1[1][d_slices[1][chg1], d_slices[1][chg1]])
 
         full = full.reshape(2 * n**2, 2 * n**2)
-        #np.save("H_with_grads.npy", full)
-        full_eigvals, full_eigvec = np.linalg.eig(full)
-        print(np.real(np.min(full_eigvals)), np.imag(np.min(full_eigvals)))
-        #print("relative imag contribution of lowest eigvec of full H with grads, which will be dropped", np.linalg.norm(np.imag(full_eigvec[0])) / np.linalg.norm(np.real(full_eigvec[0])))
+        
+        #np.save("H_with_both_grads.npy", full)
+        full_eigvals, full_eigvec = sort_eigen(np.linalg.eig(full))
+        #if full_eigvals[0] != np.min(full_eigvals):
+        #    print("for eig lowest eigval is not initial eigval, even after sorting")
+        print(np.min(full_eigvals))
+        #print(full_eigvec[0])
+        print("relative imag contribution of lowest eigvec of full H with grads with eig", np.linalg.norm(np.imag(full_eigvec[:, 0])) / np.linalg.norm(full_eigvec[:, 0]))
+        #print("imaginary part of full matrix", np.linalg.norm(np.imag(full)))  <-- zero
+        #print("norm(full - full.T) / norm(full)", np.linalg.norm(full - full.T) / np.linalg.norm(full))
+
+        #svdl, svd_eig, svdr = np.linalg.svd(full)
+        #if svd_eig[0] != np.min(svd_eig):
+        #    print("for svd lowest eigval is not initial eigval")
+        #print(np.min(svd_eig))
+        #print("this is how far off svdl @ svdr - id is", np.linalg.norm(svdl @ svdr - np.identity(len(svdl))))
+        #print("relative imag contribution of lowest eigvec of full H with grads with svd", np.linalg.norm(np.imag(svdl[0])) / np.linalg.norm(svdl[0]))
+        #print("imag contributions of svdl and svdr", np.linalg.norm(np.imag(svdl)), np.linalg.norm(np.imag(svdr)))
 
         # now determine which elements of the eigvec to keep
-        full_gs_vec = full_eigvec[0].reshape(2 * n, n)
+        #full_gs_vec = full_eigvec[0].reshape(2 * n, 2 * n)
+        full_gs_vec = full_eigvec[:, 0].reshape(2 * n, n)
+        #for i, row in enumerate(full_gs_vec):
+        #    for j, val in enumerate(row):
+        #        if np.imag(val) >= 1e-14:
+        #            print((i,j), val)
         dens_mat_a = np.einsum("ij,kj->ik", full_gs_vec, np.conj(full_gs_vec))  # contract over frag_b part
+        #dens_mat_b = np.einsum("ij,ik->jk", full_gs_vec, np.conj(full_gs_vec))  # contract over frag_a part
         #dens_eigvals, dens_eigvecs = qode.util.sort_eigen(np.linalg.eig(dens_mat_a))  # this sorts from low to high
         
-        dens_eigvals, dens_eigvecs = np.linalg.eigh(dens_mat_a)
-        print(dens_eigvals)
+        dens_eigvals_a, dens_eigvecs_a = np.linalg.eigh(dens_mat_a)
+        #dens_eigvals_b, dens_eigvecs_b = np.linalg.eigh(dens_mat_b)
+        print(dens_eigvals_a)
+        #print(dens_eigvals_b)
         # choosing more/less states here at higher iterations, depending on the diagonal values might be a good way to slightly enlarge/compress the state space automatically
-        print("imaginary contribution of dens_eigvecs", np.linalg.norm(np.imag(dens_eigvecs)))
-        new_large_vecs = np.real(dens_eigvecs)#[n:])
+        print("imaginary contribution of dens_eigvecs", np.linalg.norm(np.imag(dens_eigvecs_a)))
+        print("relative imaginary contribution of dens_eigvecs", np.linalg.norm(np.imag(dens_eigvecs_a)) / np.linalg.norm(dens_eigvecs_a))
+        new_large_vecs_a = np.real(dens_eigvecs_a)
+        #new_large_vecs_b = np.real(dens_eigvecs_b)#[n:])
         
         #new_large_vecs = dens_mat_a#np.real(dens_eigvecs[n:])
         #print("dropped imag part of eigvecs for new coeffs is", np.linalg.norm(np.imag(dens_eigvecs[n:])))
@@ -565,22 +634,97 @@ def optimize_states(displacement, max_iter, xr_order):
             large_vec_map[d_slices[0][chg], c_slices[0][chg]] = state_coeffs[0][chg]
         large_vec_map = np.vstack((large_vec_map, large_vec_map))
         """
-        large_vec_map = np.zeros((2 * n, n_conf))
+        thresh = 1e-8
+
+        keepers = []
+        for i, vec in enumerate(new_large_vecs_a.T):
+            if dens_eigvals_a[i] >= thresh:
+                keepers.append(vec)
+        print(f"{len(keepers)} states are kept")
+        
+        large_vec_map = {}
+        for frag in range(2):
+            large_vec_map[frag] = np.zeros((2 * n, n_conf))
+            for chg in monomer_charges[frag]:
+                large_vec_map[frag][d_slices_first[frag][chg], c_slices[frag][chg]] = state_coeffs[frag][chg]
+                large_vec_map[frag][d_slices_latter[frag][chg], c_slices[frag][chg]] = state_coeffs[frag][chg]
+
+        new_vecs_a = np.einsum("ij,jp->ip", np.array(keepers), large_vec_map[0])
+        print(new_vecs_a.shape)
+        
+        chg_sorted_keepers = {chg: [] for chg in monomer_charges[0]}  #{0: [], 1: [], -1: []}
+        #print("c_slices[0]", c_slices[0])
+        for state in new_vecs_a:
+            state /= np.linalg.norm(state)
+            norms = {chg: np.linalg.norm(state[c_slices[0][chg]]) for chg in monomer_charges[0]}
+            #print(norms)
+            if max(norms.values()) < 0.99:
+                ValueError(f"mixed state encountered (different charges are mixed for a state on a single fragment), see {norms}")
+            chg_sorted_keepers[max(norms, key=norms.get)].append(state[c_slices[0][max(norms, key=norms.get)]])
+
+        for chg, vecs in chg_sorted_keepers.items():
+            chg_sorted_keepers[chg] = [i for i in orthogonalize(np.array(vecs))]
+
+        #new_vecs_a = np.einsum("ij,ip->jp", new_large_vecs_a, large_vec_map[0])
+        #new_vecs_b = np.einsum("ij,jp->ip", new_large_vecs_b, large_vec_map[1])
+        #print(new_vecs_a.shape)
+        #print(np.dot(new_vecs_a[-1], new_vecs_a[-2]), np.dot(new_vecs_a[-1], new_vecs_a[-1]))
+        #print(np.dot(chg_sorted_keepers[0][-1], chg_sorted_keepers[0][-2]), np.dot(chg_sorted_keepers[0][-1], chg_sorted_keepers[0][-1]))
+        # orthogonalization only necessary if some imaginary part was dropped
+        #new_vecs_a = orthogonalize(new_vecs_a)
+        #new_vecs_b = orthogonalize(new_vecs_b)
+        new_coeffs_a = chg_sorted_keepers
         for chg in monomer_charges[0]:
-            large_vec_map[d_slices_first[0][chg], c_slices[0][chg]] = state_coeffs[0][chg]
-            large_vec_map[d_slices_latter[0][chg], c_slices[0][chg]] = state_coeffs[0][chg]
-        new_vecs = np.einsum("ij,jp->ip", new_large_vecs, large_vec_map)
-        print(new_vecs.shape)
-        print(np.dot(new_vecs[0], new_vecs[1]), np.dot(new_vecs[0], new_vecs[0]))
-        new_vecs = orthogonalize(new_vecs)
-        new_coeffs = {chg: new_vecs[d_slices[0][chg], c_slices[0][chg]] for chg in monomer_charges[0]}
-        #print(new_coeffs[1])
+            if len(new_coeffs_a[chg]) == 0:
+                print(f"{chg} part of new vectors is empty and therefore filled up with previous coeffs")
+                new_coeffs_a[chg] = state_coeffs[0][chg]
+            print(f"for charge {chg} {len(new_coeffs_a[chg])} states are used")
+        #new_coeffs_a = {chg: new_vecs_a[d_slices[0][chg], c_slices[0][chg]] for chg in monomer_charges[0]}
+        #new_coeffs_b = {chg: new_vecs_b[d_slices[1][chg], c_slices[1][chg]] for chg in monomer_charges[1]}
+        #save_obj = [dens_eigvals_a[:], dens_eigvecs_a[:, :], new_vecs_a, state_coeffs, grad_coeffs_a]
+        #pickle.dump(save_obj, open("step_size_stuff.pkl", mode="wb"))
+        """
+        # get step sizes from some heuristic based on the procedure from above
+
+        # Apply all the gradients to the subset of states and diagonalize with obtained step size
+        # frag A
         for chg in monomer_charges[0]:
-            dens_builder_stuff[0][0][chg].coeffs = [i.copy() for i in new_coeffs[chg]]
+            tmp = np.array(state_coeffs[0][chg])
+            #tmp[-1] -= 0.2 * gradient_states_a[chg][-1]
+            tmp -= 0.2 * gradient_states_a[chg]
+            dens_builder_stuff[0][0][chg].coeffs = [i for i in orthogonalize(tmp)]
+            dens_builder_stuff[1][0][chg].coeffs = state_coeffs[1][chg].copy()
+
+        # frag B
+        #for chg in monomer_charges[1]:
+        #    tmp = np.array(state_coeffs[1][chg])
+        #    tmp[-1] -= 0.2 * gradient_states[chg][-1]
+        #    dens_builder_stuff[1][0][chg].coeffs = [i for i in orthogonalize(tmp)]
+        #    dens_builder_stuff[0][0][chg].coeffs = state_coeffs[0][chg]
+        """
+        for chg in monomer_charges[0]:
+            dens_builder_stuff[0][0][chg].coeffs = [i for i in new_coeffs_a[chg]]
         dens[0] = densities.build_tensors(*dens_builder_stuff[0][:-1], options=dens_builder_stuff[0][-1], n_threads=n_threads)#,
                                         #coeffs=[new_coeffs, {}])
-        new_gs_en, new_gs_vec = get_xr_states(ints, dens, 0)
-        print("gs energy old", gs_energy)
+        #for chg in monomer_charges[1]:
+        #    dens_builder_stuff[1][0][chg].coeffs = [i.copy() for i in new_coeffs_b[chg]]
+        #dens[1] = densities.build_tensors(*dens_builder_stuff[1][:-1], options=dens_builder_stuff[1][-1], n_threads=n_threads)
+
+        #new_gs_en, new_gs_vec = get_xr_states(ints, dens, 0)
+        H1_new, H2_new = get_xr_H(ints, dens, 0)
+        H2_new = H2_new.reshape(len(keepers), n, len(keepers), n)
+        state_dict_new = [{chg: len(new_coeffs_a[chg]) for chg in monomer_charges[i]} for i in range(2)]
+        d_slices_new = [get_slices(state_dict_new[i], monomer_charges[i]) for i in range(2)]
+        for chg0 in monomer_charges[0]:
+            for chg1 in monomer_charges[1]:
+                #(0,0)
+                H2_new[d_slices_new[0][chg0], d_slices[1][chg1], d_slices_new[0][chg0], d_slices[1][chg1]] +=\
+                    np.einsum("ij,kl->ikjl", H1[0][d_slices_new[0][chg0], d_slices_new[0][chg0]], np.eye(state_dict[1][chg1])) +\
+                    np.einsum("ij,kl->ikjl", np.eye(state_dict_new[0][chg0]), H1[1][d_slices[1][chg1], d_slices[1][chg1]])
+        H2_new = H2_new.reshape(len(keepers) * n, len(keepers) * n)
+        new_ens, new_states = sort_eigen(np.linalg.eig(H2_new))
+        new_gs_en = new_ens[0]
+        print("gs energy old", gs_energy_a)
         print("gs energy for H with states and gradients", np.real(np.min(full_eigvals)))
         print("gs energy new", new_gs_en)
 
