@@ -525,7 +525,7 @@ def optimize_states(displacement, max_iter, xr_order):
 
         for chg in monomer_charges[1]:
             dens_builder_stuff[1][0][chg].coeffs = [i.copy() for i in state_coeffs[1][chg]]
-        #    dens_builder_stuff[1][0][chg].coeffs = [i.copy() for i in tot_b_coeffs[chg]]
+            #dens_builder_stuff[1][0][chg].coeffs = [i.copy() for i in tot_b_coeffs[chg]]
         dens[1] = densities.build_tensors(*dens_builder_stuff[1][:-1], options=dens_builder_stuff[1][-1], n_threads=n_threads)
 
         H1, H2 = get_xr_H(ints, dens, 0)
@@ -636,11 +636,19 @@ def optimize_states(displacement, max_iter, xr_order):
         """
         thresh = 1e-8
 
-        keepers = []
+        keepers_a = []
         for i, vec in enumerate(new_large_vecs_a.T):
             if dens_eigvals_a[i] >= thresh:
-                keepers.append(vec)
-        print(f"{len(keepers)} states are kept")
+                keepers_a.append(vec)
+        print(f"{len(keepers_a)} states are kept for frag 0")
+
+        #keepers_a = [i for i in new_large_vecs_a.T]  # if you want to keep all states
+
+        #keepers_b = []
+        #for i, vec in enumerate(new_large_vecs_b.T):
+        #    if dens_eigvals_a[i] >= thresh:
+        #        keepers_b.append(vec)
+        #print(f"{len(keepers_b)} states are kept for frag 1")
         
         large_vec_map = {}
         for frag in range(2):
@@ -649,21 +657,36 @@ def optimize_states(displacement, max_iter, xr_order):
                 large_vec_map[frag][d_slices_first[frag][chg], c_slices[frag][chg]] = state_coeffs[frag][chg]
                 large_vec_map[frag][d_slices_latter[frag][chg], c_slices[frag][chg]] = state_coeffs[frag][chg]
 
-        new_vecs_a = np.einsum("ij,jp->ip", np.array(keepers), large_vec_map[0])
+        new_vecs_a = np.einsum("ij,jp->ip", np.array(keepers_a), large_vec_map[0])
         print(new_vecs_a.shape)
+        #new_vecs_b = np.einsum("ij,jp->ip", np.array(keepers_b), large_vec_map[0])
+        #print(new_vecs_b.shape)
         
-        chg_sorted_keepers = {chg: [] for chg in monomer_charges[0]}  #{0: [], 1: [], -1: []}
+        chg_sorted_keepers_a = {chg: [] for chg in monomer_charges[0]}  #{0: [], 1: [], -1: []}
+        #chg_sorted_keepers_b = {chg: [] for chg in monomer_charges[1]}
         #print("c_slices[0]", c_slices[0])
         for state in new_vecs_a:
             state /= np.linalg.norm(state)
             norms = {chg: np.linalg.norm(state[c_slices[0][chg]]) for chg in monomer_charges[0]}
             #print(norms)
             if max(norms.values()) < 0.99:
-                ValueError(f"mixed state encountered (different charges are mixed for a state on a single fragment), see {norms}")
-            chg_sorted_keepers[max(norms, key=norms.get)].append(state[c_slices[0][max(norms, key=norms.get)]])
+                ValueError(f"mixed state encountered (different charges are mixed for a state on frag 0), see {norms}")
+            chg_sorted_keepers_a[max(norms, key=norms.get)].append(state[c_slices[0][max(norms, key=norms.get)]])
 
-        for chg, vecs in chg_sorted_keepers.items():
-            chg_sorted_keepers[chg] = [i for i in orthogonalize(np.array(vecs))]
+        for chg, vecs in chg_sorted_keepers_a.items():
+            chg_sorted_keepers_a[chg] = [i for i in orthogonalize(np.array(vecs))]
+
+
+        #for state in new_vecs_b:
+        #    state /= np.linalg.norm(state)
+        #    norms = {chg: np.linalg.norm(state[c_slices[1][chg]]) for chg in monomer_charges[1]}
+        #    #print(norms)
+        #    if max(norms.values()) < 0.99:
+        #        ValueError(f"mixed state encountered (different charges are mixed for a state on frag 0), see {norms}")
+        #    chg_sorted_keepers_b[max(norms, key=norms.get)].append(state[c_slices[1][max(norms, key=norms.get)]])
+
+        #for chg, vecs in chg_sorted_keepers_b.items():
+        #    chg_sorted_keepers_b[chg] = [i for i in orthogonalize(np.array(vecs))]
 
         #new_vecs_a = np.einsum("ij,ip->jp", new_large_vecs_a, large_vec_map[0])
         #new_vecs_b = np.einsum("ij,jp->ip", new_large_vecs_b, large_vec_map[1])
@@ -673,15 +696,24 @@ def optimize_states(displacement, max_iter, xr_order):
         # orthogonalization only necessary if some imaginary part was dropped
         #new_vecs_a = orthogonalize(new_vecs_a)
         #new_vecs_b = orthogonalize(new_vecs_b)
-        new_coeffs_a = chg_sorted_keepers
+        new_coeffs_a = chg_sorted_keepers_a
+        # the following is just a safety measure
         for chg in monomer_charges[0]:
             if len(new_coeffs_a[chg]) == 0:
-                print(f"{chg} part of new vectors is empty and therefore filled up with previous coeffs")
+                print(f"{chg} part of new vectors 0 is empty and therefore filled up with previous coeffs")
                 new_coeffs_a[chg] = state_coeffs[0][chg]
-            print(f"for charge {chg} {len(new_coeffs_a[chg])} states are used")
+            print(f"for charge {chg} {len(new_coeffs_a[chg])} states are used on frag 0")
+
+        #new_coeffs_b = chg_sorted_keepers_b
+        #for chg in monomer_charges[1]:
+        #    if len(new_coeffs_b[chg]) == 0:
+        #        print(f"{chg} part of new vectors 1 is empty and therefore filled up with previous coeffs")
+        #        new_coeffs_b[chg] = state_coeffs[0][chg]
+        #    print(f"for charge {chg} {len(new_coeffs_b[chg])} states are used on frag 1")
+
         #new_coeffs_a = {chg: new_vecs_a[d_slices[0][chg], c_slices[0][chg]] for chg in monomer_charges[0]}
         #new_coeffs_b = {chg: new_vecs_b[d_slices[1][chg], c_slices[1][chg]] for chg in monomer_charges[1]}
-        #save_obj = [dens_eigvals_a[:], dens_eigvecs_a[:, :], new_vecs_a, state_coeffs, grad_coeffs_a]
+        #save_obj = [keepers_a, new_coeffs_a, state_coeffs, grad_coeffs_a]
         #pickle.dump(save_obj, open("step_size_stuff.pkl", mode="wb"))
         """
         # get step sizes from some heuristic based on the procedure from above
@@ -707,21 +739,28 @@ def optimize_states(displacement, max_iter, xr_order):
         dens[0] = densities.build_tensors(*dens_builder_stuff[0][:-1], options=dens_builder_stuff[0][-1], n_threads=n_threads)#,
                                         #coeffs=[new_coeffs, {}])
         #for chg in monomer_charges[1]:
-        #    dens_builder_stuff[1][0][chg].coeffs = [i.copy() for i in new_coeffs_b[chg]]
+        #    dens_builder_stuff[1][0][chg].coeffs = [i for i in new_coeffs_b[chg]]
         #dens[1] = densities.build_tensors(*dens_builder_stuff[1][:-1], options=dens_builder_stuff[1][-1], n_threads=n_threads)
 
         #new_gs_en, new_gs_vec = get_xr_states(ints, dens, 0)
         H1_new, H2_new = get_xr_H(ints, dens, 0)
-        H2_new = H2_new.reshape(len(keepers), n, len(keepers), n)
-        state_dict_new = [{chg: len(new_coeffs_a[chg]) for chg in monomer_charges[i]} for i in range(2)]
-        d_slices_new = [get_slices(state_dict_new[i], monomer_charges[i]) for i in range(2)]
+        H2_new = H2_new.reshape(len(keepers_a), n, len(keepers_a), n)
+        #H2_new = H2_new.reshape(len(keepers_a), len(keepers_b), len(keepers_a), len(keepers_b))
+        state_dict_new_a = [{chg: len(new_coeffs_a[chg]) for chg in monomer_charges[i]} for i in range(2)]
+        #state_dict_new_b = [{chg: len(new_coeffs_b[chg]) for chg in monomer_charges[i]} for i in range(2)]
+        d_slices_new_a = [get_slices(state_dict_new_a[i], monomer_charges[i]) for i in range(2)]
+        #d_slices_new_b = [get_slices(state_dict_new_b[i], monomer_charges[i]) for i in range(2)]
         for chg0 in monomer_charges[0]:
             for chg1 in monomer_charges[1]:
                 #(0,0)
-                H2_new[d_slices_new[0][chg0], d_slices[1][chg1], d_slices_new[0][chg0], d_slices[1][chg1]] +=\
-                    np.einsum("ij,kl->ikjl", H1[0][d_slices_new[0][chg0], d_slices_new[0][chg0]], np.eye(state_dict[1][chg1])) +\
-                    np.einsum("ij,kl->ikjl", np.eye(state_dict_new[0][chg0]), H1[1][d_slices[1][chg1], d_slices[1][chg1]])
-        H2_new = H2_new.reshape(len(keepers) * n, len(keepers) * n)
+                #H2_new[d_slices_new_a[0][chg0], d_slices_new_b[1][chg1], d_slices_new_a[0][chg0], d_slices_new_b[1][chg1]] +=\
+                #    np.einsum("ij,kl->ikjl", H1[0][d_slices_new_a[0][chg0], d_slices_new_a[0][chg0]], np.eye(state_dict_new_b[1][chg1])) +\
+                #    np.einsum("ij,kl->ikjl", np.eye(state_dict_new_a[0][chg0]), H1[1][d_slices_new_b[1][chg1], d_slices_new_b[1][chg1]])
+                H2_new[d_slices_new_a[0][chg0], d_slices[1][chg1], d_slices_new_a[0][chg0], d_slices[1][chg1]] +=\
+                    np.einsum("ij,kl->ikjl", H1[0][d_slices_new_a[0][chg0], d_slices_new_a[0][chg0]], np.eye(state_dict[1][chg1])) +\
+                    np.einsum("ij,kl->ikjl", np.eye(state_dict_new_a[0][chg0]), H1[1][d_slices[1][chg1], d_slices[1][chg1]])
+        #H2_new = H2_new.reshape(len(keepers_a) * len(keepers_b), len(keepers_a) * len(keepers_b))
+        H2_new = H2_new.reshape(len(keepers_a) * n, len(keepers_a) * n)
         new_ens, new_states = sort_eigen(np.linalg.eig(H2_new))
         new_gs_en = new_ens[0]
         print("gs energy old", gs_energy_a)
