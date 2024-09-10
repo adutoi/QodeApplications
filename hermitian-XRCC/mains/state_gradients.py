@@ -21,14 +21,15 @@ import densities
 from get_xr_result import get_xr_states, get_xr_H
 from qode.util import sort_eigen
 
+
 def contract_mon_with_d(frag_map, dens_builder_stuff, d, state_coeffs, d_slices):  # updates states.coeffs in the dens_builder_stuff object...original coeffs can be found in state_coeffs
     #beware, that the following only works, if both fragments have the same charges, which are symmetrically sampled around zero
-    if sum(d_slices[0].keys()) != 0 or sum(d_slices[0].keys()) != 0:
+    if sum(d_slices[0].keys()) != 0 or sum(d_slices[1].keys()) != 0:
         raise ValueError("charges are not symmtrically sampled around zero...this can be fixed though, by changing this function")
     for chg in d_slices[frag_map[1]].keys():
         adapted_coeffs = np.tensordot(d[d_slices[frag_map[0]][chg * (-1)], d_slices[frag_map[1]][chg]],
                                       state_coeffs[frag_map[1]][chg], axes=([1], [0]))
-        dens_builder_stuff[frag_map[1]][0][chg * (-1)].coeffs = [i for i in adapted_coeffs]
+        dens_builder_stuff[frag_map[1]][0][chg].coeffs = [i for i in adapted_coeffs]  # dont change charge in dens builder here
 
 def get_slices(dict, chgs, type="standard"):
     dummy_ind = 0
@@ -58,7 +59,7 @@ def get_gs(current_state_dict, d_sl, H1_new, H2_new, monomer_charges):
                                 n_states[0], n_states[1])
         #current_state_dict = [{chg: len(current_state_coeffs[i][chg]) for chg in monomer_charges[i]} for i in range(2)]
         #d_sl = [get_slices(current_state_dict[i], monomer_charges[i]) for i in range(2)]
-        print(d_sl, n_states, H2_new.shape, H1_new[0].shape, H1_new[1].shape)
+        #print(d_sl, n_states, H2_new.shape, H1_new[0].shape, H1_new[1].shape)
         for chg0 in monomer_charges[0]:
             for chg1 in monomer_charges[1]:
                 H2_new[d_sl[0][chg0], d_sl[1][chg1], d_sl[0][chg0], d_sl[1][chg1]] +=\
@@ -142,14 +143,6 @@ def state_gradients(frag_ind, ints, dens_builder_stuff, dens, monomer_charges, n
     #state_coeffs = [{chg: dens_builder_stuff[frag_map[i]][0][chg].coeffs for chg in monomer_charges[i]} for i in range(2)]
     conf_dict = [{chg: len(dens_builder_stuff[i][0][chg].coeffs[0]) for chg in monomer_charges[i]} for i in range(2)]
 
-    #def get_slices(dict, chgs):
-    #    dummy_ind = 0
-    #    ret = {}
-    #    for chg in chgs:
-    #        ret[chg] = slice(dummy_ind, dummy_ind+dict[chg])
-    #        dummy_ind += dict[chg]
-    #    return ret
-
     d_slices = [get_slices(state_dict[i], monomer_charges[i]) for i in range(2)]
     c_slices = [get_slices(conf_dict[i], monomer_charges[i]) for i in range(2)] 
 
@@ -180,9 +173,8 @@ def state_gradients(frag_ind, ints, dens_builder_stuff, dens, monomer_charges, n
     #print("total norm - norm of blocks", np.linalg.norm(d) - norm_of_blocks)
     #print("relative norm of d, which is not contained in the 0 0, 1 -1, and -1 1 blocks", (np.linalg.norm(d) - norm_of_blocks) / np.linalg.norm(d))
 
-
     contract_mon_with_d(frag_map, dens_builder_stuff, d, state_coeffs, d_slices)  # reevaluating the densities is not necessary...better contract d with densities on frag B...therefore recycle dens_transform function
-    
+
     # build new densities (slater det densities for fragment under optimization and contract_with_d densities for the other one)
     # decomposing the following densities sometimes yields errors, so dont decompose them for now
     print(f"build densities from states contracted with d on fragment {frag_map[1]}")
@@ -193,6 +185,7 @@ def state_gradients(frag_ind, ints, dens_builder_stuff, dens, monomer_charges, n
 
     # build gradient
     H1, H2 = get_xr_H(ints, dens, xr_order, bra_det=True)
+
     print(H1[0].shape, H1[1].shape, H2.shape)
     H2 = H2.reshape((H1[0].shape[0], H1[1].shape[0]))#, H1[0].shape[1], H1[1].shape[1]))
     # H1 of frag A can be used as is and H1 of frag B needs to be contracted with the state coeffs of frag A. Note, that this is independent of the XR order 

@@ -1,4 +1,4 @@
-#    (C) Copyright 2018, 2019, 2023 Anthony D. Dutoi and Yuhong Liu
+#    (C) Copyright 2018, 2019, 2023 Anthony D. Dutoi, Marco Bauer and Yuhong Liu
 # 
 #    This file is part of QodeApplications.
 # 

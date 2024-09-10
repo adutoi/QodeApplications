@@ -34,7 +34,7 @@ from qode.util.PyC import Double
 import densities
 import pickle
 
-def get_fci_states(dist):
+def get_fci_states(dist, n_state_list=[(+1, 4), (0, 11), (-1, 8)]):
     class empty(object):  pass
 
 
@@ -84,7 +84,7 @@ def get_fci_states(dist):
     spin_core     = frag0.basis.core + [p+n_spatial_orb for p in frag0.basis.core]
 
     states = {}
-    for charge, n_subset in [(+1, 4), (0, 11), (-1, 8)]:
+    for charge, n_subset in n_state_list:
 
         n_elec        = frag0.n_elec_ref - charge
         n_active_elec = n_elec - len(spin_core)

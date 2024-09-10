@@ -27,6 +27,7 @@ from state_gradients import state_gradients, get_slices
 import numpy as np
 import tensorly as tl
 import pickle
+#import scipy as sp
 
 #torch.set_num_threads(4)
 #tl.set_backend("pytorch")
@@ -53,7 +54,7 @@ def optimize_states(displacement, max_iter, xr_order, conv_thresh=1e-6):
     dens_builder_stuff = []
     state_coeffs_og = []
     for m in range(int(n_frag)):
-        state_obj, dens_var_1, dens_var_2, n_threads, Be = get_fci_states(displacement)
+        state_obj, dens_var_1, dens_var_2, n_threads, Be = get_fci_states(displacement, n_state_list=[(1, 2), (0, 5), (-1, 2)])
         for elem,coords in Be.atoms:  coords[2] += m * displacement    # displace along z
         BeN.append(Be)
         dens.append(densities.build_tensors(state_obj, dens_var_1, dens_var_2, options=density_options, n_threads=n_threads))
@@ -162,6 +163,7 @@ def optimize_states(displacement, max_iter, xr_order, conv_thresh=1e-6):
         dens[1 - frag_ind] = densities.build_tensors(*dens_builder_stuff[1 - frag_ind][:-1], options=dens_builder_stuff[1 - frag_ind][-1], n_threads=n_threads)
 
         H1, H2 = get_xr_H(ints, dens, xr_order)
+        
         """
         # the following code snippet builds the Hamiltonian in the space of the states and derivatives of both fragments
         # sadly this seems to lead to a complex ground state vector
@@ -202,8 +204,10 @@ def optimize_states(displacement, max_iter, xr_order, conv_thresh=1e-6):
 
         full = full.reshape(4 * n**2, 4 * n**2)
         """
+        
         full = H2.reshape((2 - frag_ind) * n_states[0], (1 + frag_ind) * n_states[1],
                           (2 - frag_ind) * n_states[0], (1 + frag_ind) * n_states[1])
+        
         for chg0 in monomer_charges[0]:
             for chg1 in monomer_charges[1]:
                 #(0,0)
@@ -229,7 +233,7 @@ def optimize_states(displacement, max_iter, xr_order, conv_thresh=1e-6):
 
         full = full.reshape(2 * n_states[0] * n_states[1],
                             2 * n_states[0] * n_states[1])
-        
+
         #np.save("H_with_both_grads.npy", full)
         full_eigvals, full_eigvec = sort_eigen(np.linalg.eig(full))
         #if full_eigvals[0] != np.min(full_eigvals):
@@ -274,7 +278,7 @@ def optimize_states(displacement, max_iter, xr_order, conv_thresh=1e-6):
         
         #new_large_vecs = dens_mat_a#np.real(dens_eigvecs[n:])
         #print("dropped imag part of eigvecs for new coeffs is", np.linalg.norm(np.imag(dens_eigvecs[n:])))
-
+        """
         # the following threshold is very delicate, because if its
         # too large -> truncation errors
         # too small -> numerical inconsistencies through terms to small to resolve even
@@ -285,6 +289,7 @@ def optimize_states(displacement, max_iter, xr_order, conv_thresh=1e-6):
             if dens_eigvals[i] >= dens_eigval_thresh:
                 keepers.append(vec)
         print(f"{len(keepers)} states are kept for frag 0")
+        keepers = np.array(keepers)
 
         #keepers_a = [i for i in new_large_vecs_a.T]  # if you want to keep all states
 
@@ -296,6 +301,7 @@ def optimize_states(displacement, max_iter, xr_order, conv_thresh=1e-6):
         
         #large_vec_map = {}
         #for frag in range(2):
+        
         large_vec_map = np.zeros((2 * n_states[frag_ind], n_confs[frag_ind]))
         for chg in monomer_charges[frag_ind]:
             large_vec_map[d_slices_first[frag_ind][chg], c_slices[frag_ind][chg]] = state_coeffs[frag_ind][chg]
@@ -341,12 +347,13 @@ def optimize_states(displacement, max_iter, xr_order, conv_thresh=1e-6):
         #new_vecs_a = orthogonalize(new_vecs_a)
         #new_vecs_b = orthogonalize(new_vecs_b)
         new_coeffs = chg_sorted_keepers
+        """
         # the following is just a safety measure
-        for chg in monomer_charges[frag_ind]:
-            if len(new_coeffs[chg]) == 0:
-                print(f"{chg} part of new vectors 0 is empty and therefore filled up with previous coeffs")
-                new_coeffs[chg] = state_coeffs[frag_ind][chg]
-            print(f"for charge {chg} {len(new_coeffs[chg])} states are used on frag 0")
+        #for chg in monomer_charges[frag_ind]:
+        #    if len(new_coeffs[chg]) == 0:
+        #        print(f"{chg} part of new vectors 0 is empty and therefore filled up with previous coeffs")
+        #        new_coeffs[chg] = state_coeffs[frag_ind][chg]
+        #    print(f"for charge {chg} {len(new_coeffs[chg])} states are used on frag {frag_ind}")
 
         #new_coeffs_b = chg_sorted_keepers_b
         #for chg in monomer_charges[1]:
@@ -357,20 +364,44 @@ def optimize_states(displacement, max_iter, xr_order, conv_thresh=1e-6):
 
         #new_coeffs_a = {chg: new_vecs_a[d_slices[0][chg], c_slices[0][chg]] for chg in monomer_charges[0]}
         #new_coeffs_b = {chg: new_vecs_b[d_slices[1][chg], c_slices[1][chg]] for chg in monomer_charges[1]}
-        #save_obj = [keepers_a, new_coeffs_a, state_coeffs, grad_coeffs_a]
+        #save_obj = [keepers, new_coeffs, state_coeffs, gradient_states_a]
         #pickle.dump(save_obj, open("step_size_stuff.pkl", mode="wb"))
-        """
+        
         # get step sizes from some heuristic based on the procedure from above
+        step_sizes_unsorted = np.zeros(n_states[frag_ind])  # use this if you want to keep the states
+        #step_sizes_unsorted = [None for _ in range(n_states[frag_ind])]  # and this if you want to throw them out
+        #og_contr = np.concatenate(tuple([keepers[:, d_slices_first[frag_ind][chg]] for chg in monomer_charges[frag_ind]]), axis=1)**2
+        #grad_contr = np.concatenate(tuple([keepers[:, d_slices_latter[frag_ind][chg]] for chg in monomer_charges[frag_ind]]), axis=1)**2
+        og_contr = np.concatenate(tuple([new_large_vecs.T[:, d_slices_first[frag_ind][chg]] for chg in monomer_charges[frag_ind]]), axis=1)**2
+        grad_contr = np.concatenate(tuple([new_large_vecs.T[:, d_slices_latter[frag_ind][chg]] for chg in monomer_charges[frag_ind]]), axis=1)**2
+        for i, vec in enumerate(og_contr):
+            print("max**2 in og", np.argmax(vec), np.max(vec))
+            if np.max(vec) < 0.5:
+                print(f"this state does not contain a dominant contribution (max**2 is {np.max(vec)})")
+                print("for now this state is therefore thrown away")
+                continue
+            print("max**2 in grad", grad_contr[i][np.argmax(vec)], np.max(grad_contr[i]))
+            print("corresponding norm of grad", np.linalg.norm(grad_contr[i]))
+            print("coeff =", np.sqrt(grad_contr[i][np.argmax(vec)] / np.max(vec)), "\n")
+            step_sizes_unsorted[np.argmax(vec)] = np.sqrt(grad_contr[i][np.argmax(vec)] / np.max(vec))
+            #print("max coeff would be", np.sqrt(np.linalg.norm(grad_contr[i]) / np.max(vec)), "\n")
+        step_sizes = {chg: step_sizes_unsorted[d_slices[frag_ind][chg]] for chg in monomer_charges[frag_ind]}
 
+        new_coeffs = {}
         # Apply all the gradients to the subset of states and diagonalize with obtained step size
         # frag A
-        for chg in monomer_charges[0]:
-            tmp = np.array(state_coeffs[0][chg])
-            #tmp[-1] -= 0.2 * gradient_states_a[chg][-1]
-            tmp -= 0.2 * gradient_states_a[chg]
-            dens_builder_stuff[0][0][chg].coeffs = [i for i in orthogonalize(tmp)]
-            dens_builder_stuff[1][0][chg].coeffs = state_coeffs[1][chg].copy()
-
+        for chg in monomer_charges[frag_ind]:
+            #tmp = np.array(state_coeffs[frag_ind][chg])
+            #tmp -= 0.2 * gradient_states_a[chg]
+            tmp = []
+            for i, step_size in enumerate(step_sizes[chg]):
+                if step_size == None:
+                    continue
+                tmp.append(state_coeffs[frag_ind][chg][i] - step_size * grad_coeffs_a[chg][i])
+            new_coeffs[chg] = [i for i in orthogonalize(np.array(tmp))]
+            #dens_builder_stuff[0][0][chg].coeffs = [i for i in orthogonalize(tmp)]
+            #dens_builder_stuff[1][0][chg].coeffs = state_coeffs[1][chg].copy()
+        """
         # frag B
         #for chg in monomer_charges[1]:
         #    tmp = np.array(state_coeffs[1][chg])
@@ -395,7 +426,7 @@ def optimize_states(displacement, max_iter, xr_order, conv_thresh=1e-6):
         print(f"History of XR[{xr_order}] energies with gradients in the Hamiltonian build"
               "(order is grads on frag 0 then on 1 then on 0 again and so on):", en_with_grads_history)
 
-        if en_history[-1] - en_history[-2] <= conv_thresh and en_history[-1] - en_with_grads_history[-1] <= conv_thresh:
+        if abs(en_history[-1] - en_history[-2]) <= conv_thresh and en_history[-1] - en_with_grads_history[-1] <= conv_thresh:
             print("Converged!!!")
             converged = True
         return converged
