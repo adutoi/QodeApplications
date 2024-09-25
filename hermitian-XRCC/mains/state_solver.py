@@ -22,6 +22,7 @@ from qode.math.tensornet import raw, tl_tensor
 #import qode.util
 from qode.util import timer, sort_eigen
 from state_gradients import state_gradients, get_slices
+from state_screening import state_screening, orthogonalize
 
 #import torch
 import numpy as np
@@ -47,6 +48,9 @@ def optimize_states(displacement, max_iter, xr_order, conv_thresh=1e-6):
     project_core = True
     monomer_charges = [[0, +1, -1], [0, +1, -1]]
     density_options = ["compress=SVD,cc-aa"]
+    frozen_orbs = [0, 9]
+    n_orbs = 9
+    n_occ = [2, 2]
 
     # "Assemble" the supersystem for the displaced fragments and get integrals
     BeN = []
@@ -57,29 +61,21 @@ def optimize_states(displacement, max_iter, xr_order, conv_thresh=1e-6):
         state_obj, dens_var_1, dens_var_2, n_threads, Be = get_fci_states(displacement, n_state_list=[(1, 2), (0, 5), (-1, 2)])
         for elem,coords in Be.atoms:  coords[2] += m * displacement    # displace along z
         BeN.append(Be)
-        dens.append(densities.build_tensors(state_obj, dens_var_1, dens_var_2, options=density_options, n_threads=n_threads))
+        #dens.append(densities.build_tensors(state_obj, dens_var_1, dens_var_2, options=density_options, n_threads=n_threads))
         dens_builder_stuff.append([state_obj, dens_var_1, dens_var_2, density_options])
-        state_coeffs_og.append({chg: state_obj[chg].coeffs for chg in state_obj})
+        #state_coeffs_og.append({chg: state_obj[chg].coeffs for chg in state_obj})
     #print(type(raw(dens[0]["a"][(+1,0)])), raw(dens[0]["a"][(+1,0)]).shape)
 
     int_timer = timer()
     ints = get_ints(BeN, project_core, int_timer)
 
-    state_coeffs_optimized = state_coeffs_og
+    state_screening(dens_builder_stuff, ints, monomer_charges, n_orbs, frozen_orbs, n_occ, n_threads=n_threads)  # updates coeffs in dens_builder_stuff in place
 
-    def orthogonalize(U, eps=1e-15):  # with the transpose commented out, it orthogonalizes rows instead of columns
-        n = len(U)
-        V = U#.T
-        for i in range(n):
-            prev_basis = V[0:i]     # orthonormal basis before V[i]
-            coeff_vec = np.dot(prev_basis, V[i].T)  # each entry is np.dot(V[j], V[i]) for all j < i
-            # subtract projections of V[i] onto already determined basis V[0:i]
-            V[i] -= np.dot(coeff_vec, prev_basis).T
-            if np.linalg.norm(V[i]) < eps:
-                V[i][V[i] < eps] = 0.   # set the small entries to 0
-            else:
-                V[i] /= np.linalg.norm(V[i])
-        return V#.T
+    for m in range(int(n_frag)):
+        state_coeffs_og.append({chg: dens_builder_stuff[m][0][chg].coeffs for chg in state_obj})
+        dens.append(densities.build_tensors(*dens_builder_stuff[m][:-1], options=density_options, n_threads=n_threads))
+
+    state_coeffs_optimized = state_coeffs_og
 
     
     def iteration(frag_ind, dens_builder_stuff, dens, state_coeffs, dens_eigval_thresh=1e-9):
@@ -278,7 +274,7 @@ def optimize_states(displacement, max_iter, xr_order, conv_thresh=1e-6):
         
         #new_large_vecs = dens_mat_a#np.real(dens_eigvecs[n:])
         #print("dropped imag part of eigvecs for new coeffs is", np.linalg.norm(np.imag(dens_eigvecs[n:])))
-        """
+        
         # the following threshold is very delicate, because if its
         # too large -> truncation errors
         # too small -> numerical inconsistencies through terms to small to resolve even
@@ -288,7 +284,7 @@ def optimize_states(displacement, max_iter, xr_order, conv_thresh=1e-6):
         for i, vec in enumerate(new_large_vecs.T):
             if dens_eigvals[i] >= dens_eigval_thresh:
                 keepers.append(vec)
-        print(f"{len(keepers)} states are kept for frag 0")
+        print(f"{len(keepers)} states are kept for frag {frag_ind}")
         keepers = np.array(keepers)
 
         #keepers_a = [i for i in new_large_vecs_a.T]  # if you want to keep all states
@@ -307,7 +303,7 @@ def optimize_states(displacement, max_iter, xr_order, conv_thresh=1e-6):
             large_vec_map[d_slices_first[frag_ind][chg], c_slices[frag_ind][chg]] = state_coeffs[frag_ind][chg]
             large_vec_map[d_slices_latter[frag_ind][chg], c_slices[frag_ind][chg]] = state_coeffs[frag_ind][chg]
 
-        new_vecs = np.einsum("ij,jp->ip", np.array(keepers), large_vec_map)
+        new_vecs = np.einsum("ij,jp->ip", keepers, large_vec_map)
         print(new_vecs.shape)
         #new_vecs_b = np.einsum("ij,jp->ip", np.array(keepers_b), large_vec_map[0])
         #print(new_vecs_b.shape)
@@ -401,6 +397,7 @@ def optimize_states(displacement, max_iter, xr_order, conv_thresh=1e-6):
             new_coeffs[chg] = [i for i in orthogonalize(np.array(tmp))]
             #dens_builder_stuff[0][0][chg].coeffs = [i for i in orthogonalize(tmp)]
             #dens_builder_stuff[1][0][chg].coeffs = state_coeffs[1][chg].copy()
+        """
         """
         # frag B
         #for chg in monomer_charges[1]:

@@ -81,11 +81,13 @@ def _compress(args):
 
 
 
-def build_tensors(states, n_orbs, n_elec_0, thresh=1e-10, options=None, n_threads=1):
+def build_tensors(states, n_orbs, n_elec_0, thresh=1e-10, options=None, n_threads=1, screen=False):
     #pool = multiprocessing.Pool(n_threads)
 
     #op_strings = {2:["aa", "caaa"], 1:["a", "caa", "ccaaa"], 0:["ca", "ccaa"]}
     op_strings = {2:["aa"], 1:["a", "caa"], 0:["ca", "ccaa"]}
+    if screen:
+        op_strings = {1:["a"], 0:["ca"]}
     densities = {}
     conj_densities = {}
 
