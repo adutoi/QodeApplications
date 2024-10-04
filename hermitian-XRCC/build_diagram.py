@@ -44,9 +44,9 @@ def build_diagram(contraction, Dchgs=(0,), permutations=((0,),)):
         # This function is used immediately below.  It feeds permuted input tensors to the contraction and
         # returns the final objective function that does the contraction once informed of the fragment states.
         def permuted_diagram(X):
-            def do_contraction(*ij_args):
+            def do_contraction(**args):
                 supersys_info.timings.start()
-                result = contraction(X, *ij_args)
+                result = contraction(X, **args)
                 supersys_info.timings.record(label)
                 return result
             return do_contraction
@@ -79,7 +79,7 @@ def build_diagram(contraction, Dchgs=(0,), permutations=((0,),)):
 #  permutation   gives the ordering of these fragments as they are to be used in the computation qualified by this
 #                information structure.
 class frag_resolve(object):
-    def __init__(self, supersys_info, subsys_chgs, permutation=(0,)):
+    def __init__(self, supersys_info, subsys_chgs, permutation):
         self._storage = {}
 	#
         self._supersys_info = supersys_info
@@ -96,6 +96,7 @@ class frag_resolve(object):
         # dynamically allocated, cached "virtual" arrays for the target information.  Not all integrals provided (or provided differently
         # but if not provided, then it is not needed and can be skipped . . . a little dirty but works
         self._storage["Dchg"] =   _Dchg_array(self._subsys_chgs, self._n_frag)
+        self._storage["n_states"]     = _n_states_array(self._supersys_info.densities, self._subsys_chgs, self._n_frag)
         try:
             self._storage["s##"]   = _subsys_array(self._supersys_info.integrals.S, self._subsys_chgs, 2, self._n_frag)    # one of these ...
         except:
@@ -114,7 +115,7 @@ class frag_resolve(object):
             pass
         self._densities        = _subsys_array(self._supersys_info.densities,   self._subsys_chgs, 1, self._n_frag)
     def __getattr__(self, attr):
-        if attr[:3]=="n_i" or attr=="Dchg":
+        if attr[:3]=="n_i" or attr=="Dchg" or attr=="n_states":
             return self._storage[attr]
         else:
             frag_indices = tuple(int(i) for i in filter(lambda c: c.isdigit(), attr))    # extract the digits from the string (heaven forbid >=9-fragment subsystem)
@@ -149,6 +150,16 @@ def _Dchg_array(subsys_chgs, n_frag):
         index = indices[0]
         chg_i, chg_j = charges[index]
         return chg_i - chg_j
+    return dynamic_array(_rule, [range(n_frag)])
+
+def _n_states_array(densities, subsys_chgs, n_frag):
+    subsystem, charges = zip(*subsys_chgs)    # "unzip" subsystem indices from their charges
+    def _rule(*indices):
+        index = indices[0]
+        n_states = densities[subsystem[index]]['n_states']
+        n_states_bra = densities[subsystem[index]]['n_states_bra']
+        chg_i, chg_j = charges[index]
+        return n_states_bra[chg_i], n_states[chg_j]
     return dynamic_array(_rule, [range(n_frag)])
 
 def _density_array(densities, label, subsys_chgs, n_frag):
