@@ -24,34 +24,27 @@ from precontract import precontract
 # This function does the heavy lifting.  Called by instances of innermost class below.
 ##########
 
-def _build_block(diagram_term, n_states, permutation, bra_det, label):
+# This function should be moved to build_diagram.py because it will be more understandble in that context (assuming it even survives the next overhaul)
+def _build_block(diagram_term, permutation, bra_det, label):
     frag_order = len(permutation)
     if frag_order==0:
         result = diagram_term()
     else:
-        n_states_i, n_states_j = n_states
-        dims = [(m,n_states_i[m]) for m in permutation] + [(frag_order+m,n_states_j[m]) for m in permutation]
-        reorder = [m for m,r in dims]
-        dims = sorted(dims)    # tuples sorted into lexicographical order (so, but first element of tuple here)
-        if label == "u100":  # something needs to be done about this special diagram...e.g. evaluate it as a H1 term and add it to H2 later
-            if bra_det:
-                if dims[-2][1] != dims[-1][1]:
-                    result = []
-                else:
-                    result = diagram_term(*dims, reorder[0])#.transpose(reorder[:2])  # transpose is handled in the diagram
+        reorder = [m for m in permutation] + [frag_order+m for m in permutation]
+        if bra_det:
+            if label == "u100":  # something needs to be done about this special diagram...e.g. evaluate it as a H1 term and add it to H2 later <- Code should be designed from the outside inward
+                result = diagram_term(special_processing=reorder[0])#.transpose(reorder[:2])  # transpose is handled in the diagram
             else:
-                result = diagram_term(*dims).transpose(reorder)
+                if len(permutation) == 2:
+                    result = diagram_term(contract_last=True)
+                    try:
+                        result = result.transpose(reorder[:2])
+                    except:
+                        result = []    # just reiterating why the try above failed
+                else:
+                    result = diagram_term().transpose(reorder)
         else:
-            inds = [i for i in range(len(dims))]
-            if bra_det and len(dims) == 4:
-                if dims[-2][1] != dims[-1][1]:
-                    result = []
-                else:
-                    inds[-1], inds[-2] = "z", "z"  # this only works, because H1 diagrams are independent of indices passed down
-                    #print(dims, inds, reorder)
-                    result = diagram_term(*inds).transpose(reorder[:2])
-            else:
-                result = diagram_term(*inds).transpose(reorder)
+            result = diagram_term().transpose(reorder)
     return result
 
 ##########
@@ -68,14 +61,6 @@ class _charges(object):
         self._diagrams = diagrams
         self._results = {}
         self._bra_det = bra_det
-    def _n_states(self, permutation):
-        n_states_i = []
-        n_states_j = []
-        for m in permutation:
-            chg_i, chg_j = self._charges[m]
-            n_states_i += [self._supersys_info.densities[self._subsystem[m]]['n_states_bra'][chg_i]]
-            n_states_j += [self._supersys_info.densities[self._subsystem[m]]['n_states'][chg_j]]
-        return n_states_i, n_states_j
     def __getitem__(self, label):
         if label not in self._results:
             frag_order = len(self._subsystem)
@@ -88,7 +73,7 @@ class _charges(object):
                 for term_permutation in terms:
                     if term_permutation is not None:
                         term, permutation = term_permutation
-                        result = _build_block(term, self._n_states(permutation), permutation, self._bra_det, label)
+                        result = _build_block(term, permutation, self._bra_det, label)
                         if self._bra_det and len(result) == 0:
                             continue
                         if self._results[label] is None:  self._results[label]  = result

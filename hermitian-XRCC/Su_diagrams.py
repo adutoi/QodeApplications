@@ -18,6 +18,7 @@
 import numpy
 from qode.math.tensornet import scalar_value, raw
 from build_diagram       import build_diagram
+from diagram_hack        import state_indices, no_result
 
 p, q, r, s, t, u, v, w = "pqrstuvw"    # some contraction indices for easier reading
 
@@ -33,50 +34,47 @@ p, q, r, s, t, u, v, w = "pqrstuvw"    # some contraction indices for easier rea
 # monomer diagram
 
 # pq,pq-> :  ca0  u0_00
-def u000(X, i0,j0):
+def u000(X):
     return 1 * raw( X.ca0pq_U0pq )
     #return 1 * scalar_value( X.ca0pq_U0pq[i0,j0] )
     #return 1 * scalar_value( X.ca0[i0,j0](p,q) @ X.u0_00(p,q) )
 
+
+
 # dimer diagrams
 
-#i0, i1, j0, j1 = 0, 1, 2, 3
-
 # pq,pq-> :  ca0  u1_00
-#def u100(X, i0s,i1s,j0s,j1s):
-def u100(X, *args):
-    result = numpy.zeros((args[0][1], args[1][1], args[2][1], args[3][1]))
+def u100(X, special_processing=None):
+    (i0s,j0s),(i1s,j1s) = X.n_states[0], X.n_states[1]
+    result = numpy.zeros((i0s, i1s, j0s, j1s))
     def get_standard(tensor):  # updates tensor in place
         res = 1 * raw( X.ca0pq_U1pq )
-        for i1 in range(args[1][1]):
+        for i1 in range(i1s):
             j1 = i1
             tensor[:,i1,:,j1] = res
-    if len(args) == 4:
+    if special_processing is None:
         get_standard(result)
-    elif len(args) == 5:
-        if args[4] == 0 and args[1][1] == args[3][1]:  # state with state on frag 1 -> dirac_delta
-            get_standard(result)
-        elif args[4] == 1 and args[1][1] == args[3][1]:  # state with state on frag 1 -> dirac_delta with i0 and i1 permuted
-            for i1 in range(args[1][1]):
-                j1 = i1
-                result[:,i1,:,j1] = 1 * raw( X.ca0pq_U1pq )
-            result = numpy.transpose(result, (1,0,2,3))  # 2 and 3 dont matter, because they are traced out at the end
-        elif args[4] == 0 and args[1][1] != args[3][1]:
-            # do this, since backend might not always be nunmpy...best use would be backend independent post processing though
-            result[:,:,:,:] = 1 * raw( X.ca0pq_U1pq(0,2) @ X.KetCoeffs1(3,1) )
-        elif args[4] == 1 and args[1][1] != args[3][1]:
-            # do this, since backend might not always be nunmpy...best use would be backend independent post processing though
-            result[:,:,:,:] = 1 * raw( X.ca0pq_U1pq(0,2) @ X.KetCoeffs1(3,1) )  # 2 and 3 dont matter, because they are traced out at the end
-            result = numpy.transpose(result, (1,0,2,3))
-        else:
-            raise ValueError("One of the if statements needs to be True!")
-        result = numpy.einsum("abii->ab", result)
     else:
-        raise ValueError(f"{len(args)} are too many/few args")
-    #else:
-    #    res = 1 * raw( X.ca0pq_U1pq )
-    #    if type(result) != numpy.ndarray:
-    #        res = numpy.array(res)
+        if no_result(X, contract_last=True):
+            result = []
+        else:
+            if special_processing == 0 and i1s == j1s:  # state with state on frag 1 -> dirac_delta
+                get_standard(result)
+            elif special_processing == 1 and i1s == j1s:  # state with state on frag 1 -> dirac_delta with i0 and i1 permuted
+                for i1 in range(i1s):
+                    j1 = i1
+                    result[:,i1,:,j1] = 1 * raw( X.ca0pq_U1pq )
+                result = numpy.transpose(result, (1,0,2,3))  # 2 and 3 dont matter, because they are traced out at the end
+            elif special_processing == 0 and i1s != j1s:
+                # do this, since backend might not always be nunmpy...best use would be backend independent post processing though
+                result[:,:,:,:] = 1 * raw( X.ca0pq_U1pq(0,2) @ X.KetCoeffs1(3,1) )
+            elif special_processing == 1 and i1s != j1s:
+                # do this, since backend might not always be nunmpy...best use would be backend independent post processing though
+                result[:,:,:,:] = 1 * raw( X.ca0pq_U1pq(0,2) @ X.KetCoeffs1(3,1) )  # 2 and 3 dont matter, because they are traced out at the end
+                result = numpy.transpose(result, (1,0,2,3))
+            else:
+                raise ValueError("One of the if statements needs to be True!")
+            result = numpy.einsum("abii->ab", result)
     return result
     #if i1==j1:
     #    return 1 * scalar_value( X.ca0pq_U1pq[i0,j0] )
@@ -85,61 +83,81 @@ def u100(X, *args):
     #    return 0
 
 # p,q,pq-> :  c0  a1  u0_01
-def u001(X, i0,i1,j0,j1):
+def u001(X, contract_last=False):
+    if no_result(X, contract_last):  return []
+    i0, i1, j0, j1 = state_indices(contract_last)
     return (-1)**(X.n_i1 + X.P) * raw( X.c0(i0,j0,p) @ X.a1q_U00q(i1,j1,p) )
     #return (-1)**(X.n_i1 + X.P) * scalar_value( X.c0[i0,j0](p) @ X.a1q_U00q[i1,j1](p) )
     #return (-1)**(X.n_i1 + X.P) * scalar_value( X.c0[i0,j0](p) @ X.a1[i1,j1](q) @ X.u0_01(p,q) )
 
 # p,q,pq-> :  c0  a1  u1_01
-def u101(X, i0,i1,j0,j1):
+def u101(X, contract_last=False):
+    if no_result(X, contract_last):  return []
+    i0, i1, j0, j1 = state_indices(contract_last)
     return (-1)**(X.n_i1 + X.P) * raw( X.c0(i0,j0,p) @ X.a1q_U10q(i1,j1,p) )
     #return (-1)**(X.n_i1 + X.P) * scalar_value( X.c0[i0,j0](p) @ X.a1q_U10q[i1,j1](p) )
     #return (-1)**(X.n_i1 + X.P) * scalar_value( X.c0[i0,j0](p) @ X.a1[i1,j1](q) @ X.u1_01(p,q) )
 
 # tq,pu,tu,pq-> :  ca0  ca1  s01  u0_10
-def s01u010(X, i0,i1,j0,j1):
+def s01u010(X, contract_last=False):
+    if no_result(X, contract_last):  return []
+    i0, i1, j0, j1 = state_indices(contract_last)
     return -1 * raw( X.ca0tX_St1(i0,j0,q,u) @ X.ca1pX_U0p0(i1,j1,u,q) )
     #return -1 * scalar_value( X.ca0tX_St1[i0,j0](q,u) @ X.ca1pX_U0p0[i1,j1](u,q) )
     #return -1 * scalar_value( X.ca0[i0,j0](t,q) @ X.ca1[i1,j1](p,u) @ X.s01(t,u) @ X.u0_10(p,q) )
 
 # tq,pu,tu,pq-> :  ca0  ca1  s01  u1_10
-def s01u110(X, i0,i1,j0,j1):
+def s01u110(X, contract_last=False):
+    if no_result(X, contract_last):  return []
+    i0, i1, j0, j1 = state_indices(contract_last)
     return -1 * raw( X.ca0tX_St1(i0,j0,q,u) @ X.ca1pX_U1p0(i1,j1,u,q) )
     #return -1 * scalar_value( X.ca0tX_St1[i0,j0](q,u) @ X.ca1pX_U1p0[i1,j1](u,q) )
     #return -1 * scalar_value( X.ca0[i0,j0](t,q) @ X.ca1[i1,j1](p,u) @ X.s01(t,u) @ X.u1_10(p,q) )
 
 # ptq,u,tu,pq-> :  cca0  a1  s01  u0_00
-def s01u000(X, i0,i1,j0,j1):
+def s01u000(X, contract_last=False):
+    if no_result(X, contract_last):  return []
+    i0, i1, j0, j1 = state_indices(contract_last)
     return (-1)**(X.n_i1 + X.P + 1) * raw( X.a1u_S0u(i1,j1,t) @ X.cca0pXq_U0pq(i0,j0,t) )
     #return (-1)**(X.n_i1 + X.P + 1) * scalar_value( X.a1u_S0u[i1,j1](t) @ X.cca0pXq_U0pq[i0,j0](t) )
     #return (-1)**(X.n_i1 + X.P + 1) * scalar_value( X.cca0[i0,j0](p,t,q) @ X.a1[i1,j1](u) @ X.s01(t,u) @ X.u0_00(p,q) )
 
 # ptq,u,tu,pq-> :  cca0  a1  s01  u1_00
-def s01u100(X, i0,i1,j0,j1):
+def s01u100(X, contract_last=False):
+    if no_result(X, contract_last):  return []
+    i0, i1, j0, j1 = state_indices(contract_last)
     return (-1)**(X.n_i1 + X.P + 1) * raw( X.a1u_S0u(i1,j1,t) @ X.cca0pXq_U1pq(i0,j0,t) )
     #return (-1)**(X.n_i1 + X.P + 1) * scalar_value( X.a1u_S0u[i1,j1](t) @ X.cca0pXq_U1pq[i0,j0](t) )
     #return (-1)**(X.n_i1 + X.P + 1) * scalar_value( X.cca0[i0,j0](p,t,q) @ X.a1[i1,j1](u) @ X.s01(t,u) @ X.u1_00(p,q) )
 
 # t,puq,tu,pq-> :  c0  caa1  s01  u0_11
-def s01u011(X, i0,i1,j0,j1):
+def s01u011(X, contract_last=False):
+    if no_result(X, contract_last):  return []
+    i0, i1, j0, j1 = state_indices(contract_last)
     return (-1)**(X.n_i1 + X.P + 1) * raw( X.c0t_St1(i0,j0,u) @ X.caa1pXq_U0pq(i1,j1,u) )
     #return (-1)**(X.n_i1 + X.P + 1) * scalar_value( X.c0t_St1[i0,j0](u) @ X.caa1pXq_U0pq[i1,j1](u) )
     #return (-1)**(X.n_i1 + X.P + 1) * scalar_value( X.c0[i0,j0](t) @ X.caa1[i1,j1](p,u,q) @ X.s01(t,u) @ X.u0_11(p,q) )
 
 # t,puq,tu,pq-> :  c0  caa1  s01  u1_11
-def s01u111(X, i0,i1,j0,j1):
+def s01u111(X, contract_last=False):
+    if no_result(X, contract_last):  return []
+    i0, i1, j0, j1 = state_indices(contract_last)
     return (-1)**(X.n_i1 + X.P + 1) * raw( X.c0t_St1(i0,j0,u) @ X.caa1pXq_U1pq(i1,j1,u) )
     #return (-1)**(X.n_i1 + X.P + 1) * scalar_value( X.c0t_St1[i0,j0](u) @ X.caa1pXq_U1pq[i1,j1](u) )
     #return (-1)**(X.n_i1 + X.P + 1) * scalar_value( X.c0[i0,j0](t) @ X.caa1[i1,j1](p,u,q) @ X.s01(t,u) @ X.u1_11(p,q) )
 
 # pt,uq,tu,pq-> :  cc0  aa1  s01  u0_01
-def s01u001(X, i0,i1,j0,j1):
+def s01u001(X, contract_last=False):
+    if no_result(X, contract_last):  return []
+    i0, i1, j0, j1 = state_indices(contract_last)
     return 1 * raw( X.cc0Xt_St1(i0,j0,p,u) @ X.aa1Xq_U00q(i1,j1,u,p) )
     #return 1 * scalar_value( X.cc0Xt_St1[i0,j0](p,u) @ X.aa1Xq_U00q[i1,j1](u,p) )
     #return 1 * scalar_value( X.cc0[i0,j0](p,t) @ X.aa1[i1,j1](u,q) @ X.s01(t,u) @ X.u0_01(p,q) )
 
 # pt,uq,tu,pq-> :  cc0  aa1  s01  u1_01
-def s01u101(X, i0,i1,j0,j1):
+def s01u101(X, contract_last=False):
+    if no_result(X, contract_last):  return []
+    i0, i1, j0, j1 = state_indices(contract_last)
     return 1 * raw( X.cc0Xt_St1(i0,j0,p,u) @ X.aa1Xq_U10q(i1,j1,u,p) )
     #return 1 * scalar_value( X.cc0Xt_St1[i0,j0](p,u) @ X.aa1Xq_U10q[i1,j1](u,p) )
     #return 1 * scalar_value( X.cc0[i0,j0](p,t) @ X.aa1[i1,j1](u,q) @ X.s01(t,u) @ X.u1_01(p,q) )
