@@ -23,6 +23,7 @@ import numpy as np
 #import tensorly as tl
 
 import densities
+import pickle
 
 
 def orthogonalize(U, eps=1e-15):  # with the transpose commented out, it orthogonalizes rows instead of columns
@@ -101,6 +102,8 @@ def state_screening(dens_builder_stuff, ints, monomer_charges, n_orbs, frozen, n
     h01 = raw(ints[0]("T")._as_tuple()[0][(0,1)])
     h01 += raw(ints[0]("U")._as_tuple()[0][(0,1,0)])
     h01 += raw(ints[0]("U")._as_tuple()[0][(0,1,1)])
+    #print(h01[:9, :9])
+    #print(h01[9:, 9:])
     h01 = get_large(h01)
 
     h10 = raw(ints[0]("T")._as_tuple()[0][(1,0)])
@@ -125,6 +128,7 @@ def state_screening(dens_builder_stuff, ints, monomer_charges, n_orbs, frozen, n
     #p1_ca_neutral = dens_looper(raw(dens[1]["ca"][(0,0)]))
 
     missing_states = [{0: {}, -1: {}}, {0: {}, -1: {}}]  # note, that within the following procedure all missing contributions are captured without appending the most positively charged states
+    #missing_states = [{0: [], -1: []}, {0: [], -1: []}]
 
     # ionization contributions
     beta_gs_config = sum([2**(n_orbs + i) for i in range(n_occ[1])])
@@ -163,38 +167,111 @@ def state_screening(dens_builder_stuff, ints, monomer_charges, n_orbs, frozen, n
                 #if chg == -1:
                 #    print(elem, ex)
                 if ex not in missing_states[frag][chg].keys():
-                    det_state = np.zeros_like(dens_builder_stuff[frag][0][chg].configs)
-                    det_state[dens_builder_stuff[frag][0][chg].configs.index(ex)] = 1.
-                    missing_states[frag][chg][ex] = det_state
- 
+                    #det_state = np.zeros_like(dens_builder_stuff[frag][0][chg].configs)
+                    #det_state[dens_builder_stuff[frag][0][chg].configs.index(ex)] = 1.
+                    #missing_states[frag][chg][ex] = det_state
+                    missing_states[frag][chg][ex] = dens_builder_stuff[frag][0][chg].configs.index(ex)
+
     # neutral contributions
     gs = total_gs_config_neutral
     for frag in range(2):
-        dens = dens_looper(raw(dens_arr[frag]["ca"][(0,0)]))
+        # the following loop is unique here, because one should also loop over charge 1, but for
+        # Be with frozen core only the frozen electron is left for the cation for one spin contribution.
+        # That means, one could only excite the electron of the other spin, corresponding to a shake up
+        # state over two different spins...These contributions are expected to be small though and due to
+        # the ambiguity of choosing states, which form densities covering the remaining large contributions
+        # of the integrals, only the strongest expected contributions are accounted for, which would be
+        # an ionization and excitation in the same spin, which is not possible though for Be with frozen core.
+        for chg in range(min(monomer_charges[frag]), max(monomer_charges[frag])):  # loops over -1 and 0
+            dens = dens_looper(raw(dens_arr[frag]["ca"][(chg,chg)]))
+            int = v0101
+            for elem in missing_orbs(int, dens, frag):  # ref_inds 2 and 3 should be equal to 0 and 1
+                if elem in frozen:
+                    continue
+                # build excitation from gs det into singly excited det
+                if elem >= n_orbs:  # beta requires beta excitation
+                    #gs = min([abs(i - beta_gs_config) for i in dens_builder_stuff[0][0][0].configs]) + beta_gs_config
+                    ion = gs - 2**(n_orbs - 1 + n_occ[1])
+                else:  # alpha requires alpha excitation
+                    #gs = min(dens_builder_stuff[0][0][0].configs)  # this works, if spin flip is not allowed
+                    ion = gs - 2**(n_occ[0] - 1)
+                if chg == 0:
+                    ex = ion + 2**elem
+                elif chg == -1:
+                    ex = gs + 2**elem
+                else:
+                    raise ValueError(f"chg {chg} not accepted")
+                if ex not in missing_states[frag][chg].keys():
+                    #det_state = np.zeros_like(dens_builder_stuff[frag][0][chg].configs)
+                    #det_state[dens_builder_stuff[frag][0][chg].configs.index(ex)] = 1.
+                    #missing_states[frag][chg][ex] = det_state
+                    missing_states[frag][chg][ex] = dens_builder_stuff[frag][0][chg].configs.index(ex)
+
+    """
+    # neutral spin flip contributions (only for chg 0)
+    gs = total_gs_config_neutral
+    for frag in range(2):
+        #for chg in range(min(monomer_charges[frag]), max(monomer_charges[frag])):  # loops over -1 and 0
+        chg = 0
+        dens = dens_looper(raw(dens_arr[frag]["ca"][(chg,chg)]))
         int = v0101
         for elem in missing_orbs(int, dens, frag):  # ref_inds 2 and 3 should be equal to 0 and 1
             if elem in frozen:
                 continue
             # build excitation from gs det into singly excited det
-            if elem >= n_orbs:  # beta requires beta excitation
-                #gs = min([abs(i - beta_gs_config) for i in dens_builder_stuff[0][0][0].configs]) + beta_gs_config
-                ion = gs - 2**(n_orbs - 1 + n_occ[1])
-            else:  # alpha requires alpha excitation
-                #gs = min(dens_builder_stuff[0][0][0].configs)  # this works, if spin flip is not allowed
+            if elem >= n_orbs:  # spin flip beta requires alpha hole
                 ion = gs - 2**(n_occ[0] - 1)
+            else:  # spin flip alpha requires beta hole
+                ion = gs - 2**(n_orbs + n_occ[1] - 1)
+            #if chg == 0:
             ex = ion + 2**elem
-            if ex not in missing_states[frag][0].keys():
-                det_state = np.zeros_like(dens_builder_stuff[frag][0][0].configs)
-                det_state[dens_builder_stuff[frag][0][0].configs.index(ex)] = 1.
-                missing_states[frag][0][ex] = det_state
-
+            #elif chg == -1:
+            #    ex = gs + 2**elem
+            #else:
+            #    raise ValueError(f"chg {chg} not accepted")
+            if ex not in missing_states[frag][chg].keys():
+                det_state = np.zeros_like(dens_builder_stuff[frag][0][chg].configs)
+                det_state[dens_builder_stuff[frag][0][chg].configs.index(ex)] = 1.
+                missing_states[frag][chg][ex] = det_state
+    """
     #print(missing_states[0][0].keys(), missing_states[0][-1].keys())
 
+    # building missing states initially from just the determinants seems to not work well...
+    # Therefore here is some heuristic...
+    # It is based on the Be FCI example, where one can see, that the states are not purely alpha
+    # or beta, but rather mixed (often 50/50), so the mixing is determined from the provided
+    # lowest energy states, averaged and then applied. Furthermore, it can be seen, that some
+    # orbitals (mostly the one non-frozen occupied orbital) have large partial shares in many
+    # excitations, so the partial occupancies of the occupied orbitals is also determined, averaged
+    # and then applied, such that the determinant excitations are now only partial excitations as
+    # well. It seems appropriate to take an other look at the integrals again though, as this
+    # scheme seems awfully arbitrary. Also double check which index of the u integrals is actually the core!!!!!!!!!!!!!!!!!!!!!!!!
+
     for frag in range(2):
-        for chg in missing_states[frag].keys():
+        for chg in range(min(monomer_charges[frag]), max(monomer_charges[frag])):
             new_states = dens_builder_stuff[frag][0][chg].coeffs + list(missing_states[frag][chg].values())
             new_states = orthogonalize(np.array(new_states))
             dens_builder_stuff[frag][0][chg].coeffs = [i for i in new_states]
-    #raise ValueError("stop here")
+
+
+
+    opt_dens = pickle.load(open("../../../QodeApplications_old/hermitian-XRCC/density_c_a_ca.pkl", mode="rb"))
+
+    new_dens_arr = [densities.build_tensors(*dens_builder_stuff[m][:-1], options=[], n_threads=n_threads, screen=True) for m in range(2)]
+
+    
+    chg = -1
+    for bra in range(len(raw(new_dens_arr[0]["ca"][(chg,chg)]))):
+        #for ket in range(2):
+        print(bra, "alpha", raw(new_dens_arr[0]["ca"][(chg,chg)])[bra, bra][:9, :9])
+        print(bra, "beta", raw(new_dens_arr[0]["ca"][(chg,chg)])[bra, bra][9:, 9:])
+    for bra in range(len(opt_dens[2][(chg,chg)])):
+        #for ket in range(4):
+        print(bra, "alpha", np.array(opt_dens[2][(chg,chg)][bra][bra])[:9, :9])
+        print(bra, "beta", np.array(opt_dens[2][(chg,chg)][bra][bra])[9:, 9:])
+    
+    #print(h01)
+    
+    raise ValueError("stop here")
 
     #return dens_builder_stuff

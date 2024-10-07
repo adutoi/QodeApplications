@@ -46,7 +46,7 @@ from precontract import precontract
 #torch.set_num_threads(4)
 #tensorly.set_backend("pytorch")
 
-def get_xr_H(ints, dens, xr_order, bra_det=False):
+def get_xr_H(ints, dens, xr_order, monomer_charges, bra_det=False):
     diag_timer = timer()
     precon_timer = timer()
     matrix_timer = timer()
@@ -69,7 +69,7 @@ def get_xr_H(ints, dens, xr_order, bra_det=False):
     Combo_blocks_bior = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, T=bior_ints.T, U=bior_ints.U, V=bior_ints.V),      diagrams=combo_diagram, contract_cache=contract_cache, timings=diag_timer, precon_timings=precon_timer, bra_det=bra_det)
 
     # charges under consideration
-    monomer_charges = [0, +1, -1]
+    #monomer_charges = [0, +1, -1]
     #dimer_charges = {
     #                6:  [(+1, +1)],
     #                7:  [(0, +1), (+1, 0)],
@@ -77,7 +77,10 @@ def get_xr_H(ints, dens, xr_order, bra_det=False):
     #                9:  [(0, -1), (-1, 0)],
     #                10: [(-1, -1)]
     #                }
-    all_dimer_charges = [(0,0), (0,+1), (0,-1), (+1,0), (+1,+1), (+1,-1), (-1,0), (-1,+1), (-1,-1)]
+    all_dimer_charges = []#[(0,0), (0,+1), (0,-1), (+1,0), (+1,+1), (+1,-1), (-1,0), (-1,+1), (-1,-1)]
+    for chg0 in monomer_charges[0]:
+        for chg1 in monomer_charges[1]:
+            all_dimer_charges.append((chg0,chg1))
     #all_dimer_charges = [(0,0), (+1,-1), (-1,+1)]
 
     #########
@@ -94,40 +97,29 @@ def get_xr_H(ints, dens, xr_order, bra_det=False):
             #                        "n00"
             #                        ]
             #                    }, m, monomer_charges)
-
+            
             H1_m = XR_term.monomer_matrix(St_blocks_bior, {
                                 1: [
                                     "t00"
                                     ]
-                                }, m, monomer_charges, matrix_timer)
+                                }, m, monomer_charges[m], matrix_timer)
             H1_m += XR_term.monomer_matrix(Su_blocks_bior, {
                                 1: [
                                     "u000"
                                     ]
-                                }, m, monomer_charges, matrix_timer)
-
+                                }, m, monomer_charges[m], matrix_timer)
+            
             H1_m += XR_term.monomer_matrix(Sv_blocks_bior, {
                                 1: [
                                     "v0000"
                                     ]
-                                }, m, monomer_charges, matrix_timer)
+                                }, m, monomer_charges[m], matrix_timer)
+            
             H1 += [H1_m]
 
 
-        #print("starting S2")
-        """
-        S2     = XR_term.dimer_matrix(S_blocks, {
-                                0: [
-                                    "identity"
-                                ]
-                            },  (0,1), all_dimer_charges)
-
-        S2inv = qode.math.precise_numpy_inverse(S2)
-        """
-
-
         print("starting S2H2")
-
+        
         print("starting T")
         S2H2  = XR_term.dimer_matrix(St_blocks_bior, {
                                 2: [
@@ -141,14 +133,14 @@ def get_xr_H(ints, dens, xr_order, bra_det=False):
                                     "u001", "u101"
                                 ]
                             }, (0,1), all_dimer_charges, matrix_timer, bra_det=bra_det)
-
+        
         print("starting V")
         S2H2  += XR_term.dimer_matrix(Sv_blocks_bior, {
                                 2: [
                                     "v0101", "v0010", "v0111", "v0011"
                                 ]
                             }, (0,1), all_dimer_charges, matrix_timer, bra_det=bra_det)
-
+        
 
         print("finished H build")
 
@@ -164,18 +156,18 @@ def get_xr_H(ints, dens, xr_order, bra_det=False):
                                 1: [
                                     "t00"
                                     ]
-                                }, m, monomer_charges, matrix_timer)
+                                }, m, monomer_charges[m], matrix_timer)
             H1_m += XR_term.monomer_matrix(Su_blocks_symm, {
                                 1: [
                                     "u000"
                                     ]
-                                }, m, monomer_charges, matrix_timer)
+                                }, m, monomer_charges[m], matrix_timer)
 
             H1_m += XR_term.monomer_matrix(Sv_blocks_symm, {
                                 1: [
                                     "v0000"
                                     ]
-                                }, m, monomer_charges, matrix_timer)
+                                }, m, monomer_charges[m], matrix_timer)
 
             H1 += [H1_m]
 
@@ -322,8 +314,8 @@ def get_xr_H(ints, dens, xr_order, bra_det=False):
             H2[i,j] = H2blocked[i_,j_]
     """
     # determine bra map
-    dims0_bra = [BeN_rho[0]['n_states_bra'][chg] for chg in [0,+1,-1]]
-    dims1_bra = [BeN_rho[1]['n_states_bra'][chg] for chg in [0,+1,-1]]
+    dims0_bra = [BeN_rho[0]['n_states_bra'][chg] for chg in monomer_charges[0]]
+    dims1_bra = [BeN_rho[1]['n_states_bra'][chg] for chg in monomer_charges[1]]
     mapping2 = [[None]*sum(dims1_bra) for _ in range(sum(dims0_bra))]  # dims were originally swapped here, which leads to false assignment, if dims0 != dims1
     idx = 0
     beg0 = 0
@@ -343,8 +335,8 @@ def get_xr_H(ints, dens, xr_order, bra_det=False):
 
     # determine ket map
     if not bra_det:
-        dims0_ket = [BeN_rho[0]['n_states'][chg] for chg in [0,+1,-1]]
-        dims1_ket = [BeN_rho[1]['n_states'][chg] for chg in [0,+1,-1]]
+        dims0_ket = [BeN_rho[0]['n_states'][chg] for chg in monomer_charges[0]]
+        dims1_ket = [BeN_rho[1]['n_states'][chg] for chg in monomer_charges[1]]
         mapping2 = [[None]*sum(dims1_ket) for _ in range(sum(dims0_ket))]
         idx = 0
         beg0 = 0

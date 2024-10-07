@@ -99,6 +99,7 @@ def build_tensors(states, n_orbs, n_elec_0, thresh=1e-10, options=None, n_thread
     if options("bra_det"):
         op_strings[-1] = ["c", "cca"]
         op_strings[-2] = ["cc"]
+    #op_strings = {0: op_strings[0]}
 
     print("Computing densities ...")
 

@@ -20,8 +20,10 @@ import numpy as np
 import densities
 from get_xr_result import get_xr_states, get_xr_H
 from qode.util import sort_eigen
+import tensorly as tl
+from qode.math.tensornet import tl_tensor
 
-
+"""
 def contract_mon_with_d(frag_map, dens_builder_stuff, d, state_coeffs, d_slices):  # updates states.coeffs in the dens_builder_stuff object...original coeffs can be found in state_coeffs
     #beware, that the following only works, if both fragments have the same charges, which are symmetrically sampled around zero
     if sum(d_slices[0].keys()) != 0 or sum(d_slices[1].keys()) != 0:
@@ -29,7 +31,39 @@ def contract_mon_with_d(frag_map, dens_builder_stuff, d, state_coeffs, d_slices)
     for chg in d_slices[frag_map[1]].keys():
         adapted_coeffs = np.tensordot(d[d_slices[frag_map[0]][chg * (-1)], d_slices[frag_map[1]][chg]],
                                       state_coeffs[frag_map[1]][chg], axes=([1], [0]))
+        #print(adapted_coeffs.shape)
+        #for i, vec_i in enumerate(adapted_coeffs):
+        #    for j, vec_j in enumerate(adapted_coeffs):
+        #        print(i, j, np.dot(vec_i, vec_j))
         dens_builder_stuff[frag_map[1]][0][chg].coeffs = [i for i in adapted_coeffs]  # dont change charge in dens builder here
+"""
+
+def get_adapted_overlaps(frag_map, d, state_coeffs, d_slices):
+    #beware, that the following only works, if both fragments have the same charges, which are symmetrically sampled around zero
+    if sum(d_slices[0].keys()) != 0 or sum(d_slices[1].keys()) != 0:
+        raise ValueError("charges are not symmtrically sampled around zero...this can be fixed though, by changing this function")
+    overlaps = {}
+    for chg in d_slices[frag_map[1]].keys():
+        adapted_coeffs = np.tensordot(d[d_slices[frag_map[0]][chg * (-1)], d_slices[frag_map[1]][chg]],
+                                      state_coeffs[frag_map[1]][chg], axes=([1], [0]))
+        overlaps[chg * (-1)] = np.array([[np.dot(i,j) for j in adapted_coeffs] for i in adapted_coeffs])
+    return overlaps
+
+def contract_dens_with_d(dens, d, frag_map, d_slices, state_dict):  # updates dens in place
+    #beware, that the following only works, if both fragments have the same charges, which are symmetrically sampled around zero
+    if sum(d_slices[0].keys()) != 0 or sum(d_slices[1].keys()) != 0:
+        raise ValueError("charges are not symmtrically sampled around zero...this can be fixed though, by changing this function")
+    for op_string in dens:
+        if "n_" in op_string:
+            continue
+        for bra_chg,ket_chg in dens[op_string]:
+            dens_inds = [num for num in range(2, len(dens[op_string][(bra_chg,ket_chg)].shape))]
+            d_left  = tl_tensor(tl.tensor(d[d_slices[frag_map[0]][bra_chg * (-1)], d_slices[frag_map[1]][bra_chg]], dtype=tl.float64))
+            d_right = tl_tensor(tl.tensor(d[d_slices[frag_map[0]][ket_chg * (-1)], d_slices[frag_map[1]][ket_chg]], dtype=tl.float64))
+            dens[op_string][(bra_chg,ket_chg)] = d_left(0,"i") @ dens[op_string][(bra_chg,ket_chg)]("i","j",*dens_inds) @ d_right(1,"j")
+            #dens[op_string][(bra_chg * (-1),ket_chg * (-1))] = d_left(0,"i") @ dens[op_string][(bra_chg,ket_chg)]("i","j",*dens_inds) @ d_right(1,"j")
+    for chg in d_slices[frag_map[0]]:
+        dens["n_states"][chg] = state_dict[frag_map[0]][chg * (-1)]
 
 def get_slices(dict, chgs, type="standard"):
     dummy_ind = 0
@@ -149,7 +183,7 @@ def state_gradients(frag_ind, ints, dens_builder_stuff, dens, monomer_charges, n
     state_coeffs = [{chg: np.array(states.coeffs) for chg, states in dens_builder_stuff[frag][0].items()} for frag in range(len(dens_builder_stuff))]
 
     #gs_energy, gs_state = get_xr_states(ints, dens, xr_order)
-    H1_for_d, H2_for_d = get_xr_H(ints, dens, xr_order)
+    H1_for_d, H2_for_d = get_xr_H(ints, dens, xr_order, monomer_charges)
     gs_energy, gs_state = get_gs(state_dict, d_slices, H1_for_d, H2_for_d, monomer_charges)
     E = np.real(gs_energy)
     d = gs_state
@@ -173,28 +207,37 @@ def state_gradients(frag_ind, ints, dens_builder_stuff, dens, monomer_charges, n
     #print("total norm - norm of blocks", np.linalg.norm(d) - norm_of_blocks)
     #print("relative norm of d, which is not contained in the 0 0, 1 -1, and -1 1 blocks", (np.linalg.norm(d) - norm_of_blocks) / np.linalg.norm(d))
 
-    contract_mon_with_d(frag_map, dens_builder_stuff, d, state_coeffs, d_slices)  # reevaluating the densities is not necessary...better contract d with densities on frag B...therefore recycle dens_transform function
+    #contract_mon_with_d(frag_map, dens_builder_stuff, d, state_coeffs, d_slices)  # reevaluating the densities is not necessary...better contract d with densities on frag B...therefore recycle dens_transform function
 
     # build new densities (slater det densities for fragment under optimization and contract_with_d densities for the other one)
     # decomposing the following densities sometimes yields errors, so dont decompose them for now
-    print(f"build densities from states contracted with d on fragment {frag_map[1]}")
+    #print(f"build densities from states contracted with d on fragment {frag_map[1]}")
     #dens[frag_map[1]] = densities.build_tensors(*dens_builder_stuff[frag_map[1]][:-1], options=dens_builder_stuff[frag_map[1]][-1], n_threads=n_threads)
-    dens[frag_map[1]] = densities.build_tensors(*dens_builder_stuff[frag_map[1]][:-1], n_threads=n_threads)
+    #dens[frag_map[1]] = densities.build_tensors(*dens_builder_stuff[frag_map[1]][:-1], n_threads=n_threads)
+    print(f"contract densities on fragment {frag_map[1]} with d")
+    contract_dens_with_d(dens[frag_map[1]], d, frag_map, d_slices, state_dict)  # alternatively save to new object (less CPU time, but more RAM, since densities dont need to be rebuild)
+    #contract_mon_with_d(frag_map, dens_builder_stuff, d, state_coeffs, d_slices)
     print(f"build densities between slater determinant and state on fragment {frag_map[0]}")
+    # maybe its a good idea to contract d with the ket states here, because it doesnt affect how one has to deal with the
+    # determinant to state densities, but maybe eases up the building of them, because it might put a lot more elements
+    # of the state below the threshold indicating whether the transition density for this element should even be built or not.
     dens[frag_map[0]] = densities.build_tensors(*dens_builder_stuff[frag_map[0]][:-1], options=dens_builder_stuff[frag_map[0]][-1] + ["bra_det"], n_threads=n_threads)
 
     # build gradient
-    H1, H2 = get_xr_H(ints, dens, xr_order, bra_det=True)
+    H1, H2 = get_xr_H(ints, dens, xr_order, monomer_charges, bra_det=True)
 
     print(H1[0].shape, H1[1].shape, H2.shape)
     H2 = H2.reshape((H1[0].shape[0], H1[1].shape[0]))#, H1[0].shape[1], H1[1].shape[1]))
     # H1 of frag A can be used as is and H1 of frag B needs to be contracted with the state coeffs of frag A. Note, that this is independent of the XR order 
     gradient_states = {}
+    new_overlaps = get_adapted_overlaps(frag_map, d, state_coeffs, d_slices)
     
     for chg in monomer_charges[frag_map[0]]:
-        cs = state_coeffs[frag_map[0]][chg]
-        gradient_states[chg] = H1[frag_map[0]][c_slices[frag_map[0]][chg], d_slices[frag_map[0]][chg]].T  # frag A monomer H term
-        gradient_states[chg] -= E * cs  # E term
+        c0 = state_coeffs[frag_map[0]][chg]
+        #gradient_states[chg] = H1[frag_map[0]][c_slices[frag_map[0]][chg], d_slices[frag_map[0]][chg]].T  # frag A monomer H term
+        gradient_states[chg] = np.einsum("pi,ki->kp", H1[frag_map[0]][c_slices[frag_map[0]][chg], d_slices[frag_map[0]][chg]], new_overlaps[chg])  # frag A monomer H term
+        #gradient_states[chg] -= E * c0  # E term
+        gradient_states[chg] -= np.einsum("ip,ki->kp", c0, new_overlaps[chg]) * E
         if frag_ind == 0:
             #gradient_states[chg] += np.einsum("pkii->kp", H2[c_slices[frag_map[0]][chg], d_slices[frag_map[0]][chg], :, :])  # dimer H term
             gradient_states[chg] += H2[c_slices[frag_map[0]][chg], d_slices[frag_map[0]][chg]].T  # dimer H term
@@ -202,7 +245,7 @@ def state_gradients(frag_ind, ints, dens_builder_stuff, dens, monomer_charges, n
             #gradient_states[chg] += np.einsum("kpii->kp", H2[d_slices[frag_map[0]][chg], c_slices[frag_map[0]][chg], :, :])  # dimer H term
             gradient_states[chg] += H2[d_slices[frag_map[0]][chg], c_slices[frag_map[0]][chg]]  # dimer H term
         # this line also relies on equal charges on fragments A and B
-        gradient_states[chg] += np.einsum("ip,ki->kp", cs, H1[frag_map[1]][d_slices[frag_map[0]][chg], d_slices[frag_map[0]][chg]])  # frag B monomer H term
+        gradient_states[chg] += np.einsum("ip,ki->kp", c0, H1[frag_map[1]][d_slices[frag_map[0]][chg], d_slices[frag_map[0]][chg]])  # frag B monomer H term
         gradient_states[chg] *= 2
     
     return gs_energy, gradient_states
