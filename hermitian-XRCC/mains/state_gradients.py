@@ -31,10 +31,6 @@ def contract_mon_with_d(frag_map, dens_builder_stuff, d, state_coeffs, d_slices)
     for chg in d_slices[frag_map[1]].keys():
         adapted_coeffs = np.tensordot(d[d_slices[frag_map[0]][chg * (-1)], d_slices[frag_map[1]][chg]],
                                       state_coeffs[frag_map[1]][chg], axes=([1], [0]))
-        #print(adapted_coeffs.shape)
-        #for i, vec_i in enumerate(adapted_coeffs):
-        #    for j, vec_j in enumerate(adapted_coeffs):
-        #        print(i, j, np.dot(vec_i, vec_j))
         dens_builder_stuff[frag_map[1]][0][chg].coeffs = [i for i in adapted_coeffs]  # dont change charge in dens builder here
 """
 
@@ -61,7 +57,6 @@ def contract_dens_with_d(dens, d, frag_map, d_slices, state_dict):  # updates de
             d_left  = tl_tensor(tl.tensor(d[d_slices[frag_map[0]][bra_chg * (-1)], d_slices[frag_map[1]][bra_chg]], dtype=tl.float64))
             d_right = tl_tensor(tl.tensor(d[d_slices[frag_map[0]][ket_chg * (-1)], d_slices[frag_map[1]][ket_chg]], dtype=tl.float64))
             dens[op_string][(bra_chg,ket_chg)] = d_left(0,"i") @ dens[op_string][(bra_chg,ket_chg)]("i","j",*dens_inds) @ d_right(1,"j")
-            #dens[op_string][(bra_chg * (-1),ket_chg * (-1))] = d_left(0,"i") @ dens[op_string][(bra_chg,ket_chg)]("i","j",*dens_inds) @ d_right(1,"j")
     for chg in d_slices[frag_map[0]]:
         dens["n_states"][chg] = state_dict[frag_map[0]][chg * (-1)]
 
@@ -103,64 +98,6 @@ def get_gs(current_state_dict, d_sl, H1_new, H2_new, monomer_charges):
                                 n_states[0] * n_states[1])
         new_ens, new_states = sort_eigen(np.linalg.eig(H2_new))
         return new_ens[0], new_states[:, 0].T
-
-
-# the following code snippet can be used to contract d with the densities, to circumvent building them again
-# it is however not tested yet
-"""
-def dens_contract_with_d(density, frag_ind):
-    ret = {}
-    for dens_key in density:
-        #print(dens_key)
-        #if dens_key not in ("ca", "ccaa"):
-        #    continue
-        #print(density[dens_key].keys())
-        ret[dens_key] = {}
-        for chg in density[dens_key]:
-            #if chg != (0,0):
-            #    continue
-            #print(dens_key, chg, type(density[dens_key][chg][0][0]))
-            if type(density[dens_key][chg]) == int:
-                ret[dens_key][chg] = density[dens_key][chg]
-                continue  # skip n_elec and n_states keys
-
-            ret[dens_key][(chg[0] * (-1), chg[1] * (-1))] = {}
-
-            # this has to be circumvented, because it requires building the full density tensors explicitly
-            tmp = np.empty((state_dict[chg[0]], state_dict[chg[1]], *density[dens_key][chg][(0, 0)].shape))
-            for i in range(state_dict[chg[0]]):
-                for j in range(state_dict[chg[1]]):
-                    tmp[i][j] = raw(density[dens_key][chg][(i, j)])
-            #print("tmp", tmp)
-            #print(dens_key, chg)
-            #print(tmp.shape)
-            #if frag_ind == 0:
-            #print(chg)
-            #print(type(d[d_slices[chg[0]], d_slices[chg[1]]]), d[d_slices[chg[0]], d_slices[chg[1]]].shape)
-            #print(type(tmp), tmp.shape)
-            #print(d[d_slices[chg[0]], d_slices[chg[1]]].shape, tmp.shape)
-            # in the following the only non-zero contributions are 0 0, +1 -1, and -1 +1, which can be mapped with a factor of -1
-            if frag_ind == 0:
-                tmp = np.tensordot(d[d_slices[chg[0]], d_slices[chg[0] * (-1)]], tmp, axes=([0], [1]))  # ket ind of density
-                tmp = np.tensordot(d[d_slices[chg[1] * (-1)], d_slices[chg[1]]], tmp, axes=([1], [1]))  # bra ind of density
-            elif frag_ind == 1:
-                tmp = np.tensordot(d[d_slices[chg[1] * (-1)], d_slices[chg[1]]], tmp, axes=([1], [1]))  # ket ind of density
-                tmp = np.tensordot(d[d_slices[chg[0]], d_slices[chg[0] * (-1)]], tmp, axes=([0], [1]))  # bra ind of density
-            else:
-                raise IndexError("dimer interaction only takes fragment indices 0 and 1")
-            #elif frag_ind == 1:
-            #    tmp = np.tensordot(d, tmp, dims=([1], [1]))
-            #    tmp = np.tensordot(d, tmp, dims=([1], [1]))
-            #else:
-            #    raise IndexError("cannot request frag_ind > 1 for dimers")
-            for i in range(state_dict[chg[0] * (-1)]):
-                for j in range(state_dict[chg[1] * (-1)]):
-                    ret[dens_key][(chg[0] * (-1), chg[1] * (-1))][(i, j)] = tl_tensor(tl.tensor(tmp[i][j], dtype=tl.float64))  # tl_tensor(tl.tensor(tmp[i][j].copy()))
-    return density
-
-# contract densities for frag B with d
-B_dens_with_d = dens_contract_with_d(dens[1], 1)
-"""
 
 def state_gradients(frag_ind, ints, dens_builder_stuff, dens, monomer_charges, n_threads=1, xr_order=0):
     if xr_order != 0:
@@ -215,7 +152,8 @@ def state_gradients(frag_ind, ints, dens_builder_stuff, dens, monomer_charges, n
     #dens[frag_map[1]] = densities.build_tensors(*dens_builder_stuff[frag_map[1]][:-1], options=dens_builder_stuff[frag_map[1]][-1], n_threads=n_threads)
     #dens[frag_map[1]] = densities.build_tensors(*dens_builder_stuff[frag_map[1]][:-1], n_threads=n_threads)
     print(f"contract densities on fragment {frag_map[1]} with d")
-    contract_dens_with_d(dens[frag_map[1]], d, frag_map, d_slices, state_dict)  # alternatively save to new object (less CPU time, but more RAM, since densities dont need to be rebuild)
+    #dens[frag_map[1]] = contract_dens_with_d(dens[frag_map[1]], d, frag_map, d_slices, state_dict)  # alternatively save to new object (less CPU time, but more RAM, since densities dont need to be rebuild)
+    contract_dens_with_d(dens[frag_map[1]], d, frag_map, d_slices, state_dict)
     #contract_mon_with_d(frag_map, dens_builder_stuff, d, state_coeffs, d_slices)
     print(f"build densities between slater determinant and state on fragment {frag_map[0]}")
     # maybe its a good idea to contract d with the ket states here, because it doesnt affect how one has to deal with the

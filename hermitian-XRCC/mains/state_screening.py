@@ -246,15 +246,21 @@ def state_screening(dens_builder_stuff, ints, monomer_charges, n_orbs, frozen, n
     # and then applied, such that the determinant excitations are now only partial excitations as
     # well. It seems appropriate to take an other look at the integrals again though, as this
     # scheme seems awfully arbitrary. Also double check which index of the u integrals is actually the core!!!!!!!!!!!!!!!!!!!!!!!!
+    # To be done...
 
     for frag in range(2):
         for chg in range(min(monomer_charges[frag]), max(monomer_charges[frag])):
-            new_states = dens_builder_stuff[frag][0][chg].coeffs + list(missing_states[frag][chg].values())
+            det_states = []
+            for ind in missing_states[frag][chg].values():
+                det_state = np.zeros_like(dens_builder_stuff[frag][0][chg].configs)
+                det_state[ind] = 1.
+                det_states.append(det_state)
+            new_states = dens_builder_stuff[frag][0][chg].coeffs + det_states #list(missing_states[frag][chg].values())
             new_states = orthogonalize(np.array(new_states))
             dens_builder_stuff[frag][0][chg].coeffs = [i for i in new_states]
 
 
-
+    """
     opt_dens = pickle.load(open("../../../QodeApplications_old/hermitian-XRCC/density_c_a_ca.pkl", mode="rb"))
 
     new_dens_arr = [densities.build_tensors(*dens_builder_stuff[m][:-1], options=[], n_threads=n_threads, screen=True) for m in range(2)]
@@ -273,5 +279,5 @@ def state_screening(dens_builder_stuff, ints, monomer_charges, n_orbs, frozen, n
     #print(h01)
     
     raise ValueError("stop here")
-
+    """
     #return dens_builder_stuff
