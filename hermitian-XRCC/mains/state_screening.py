@@ -101,13 +101,11 @@ def state_screening(dens_builder_stuff, ints, monomer_charges, n_orbs, frozen, n
     # of that would then also speed up the contractions required to build the XR Hamiltonian.
     h01 = raw(ints[0]("T")._as_tuple()[0][(0,1)])
     h01 += raw(ints[0]("U")._as_tuple()[0][(0,1,0)])
-    h01 += raw(ints[0]("U")._as_tuple()[0][(0,1,1)])
-    #print(h01[:9, :9])
-    #print(h01[9:, 9:])
+    h01 += raw(ints[0]("U")._as_tuple()[0][(1,1,0)])
     h01 = get_large(h01)
 
     h10 = raw(ints[0]("T")._as_tuple()[0][(1,0)])
-    h10 += raw(ints[0]("U")._as_tuple()[0][(1,0,0)])
+    h10 += raw(ints[0]("U")._as_tuple()[0][(0,0,1)])
     h10 += raw(ints[0]("U")._as_tuple()[0][(1,0,1)])
     h10 = get_large(h10)
     # it seems like screening over V is not necessary, since h01 captures basically all contributions already...
@@ -118,17 +116,42 @@ def state_screening(dens_builder_stuff, ints, monomer_charges, n_orbs, frozen, n
     v0101 = get_large(raw(ints[0]("V")._as_tuple()[0][(0,1,0,1)]))
 
     dens_arr = [densities.build_tensors(*dens_builder_stuff[m][:-1], options=[], n_threads=n_threads, screen=True) for m in range(2)]
+    #for i in range(len(raw(dens_arr[0]["ca"][(0,0)]))):
+    #    print(raw(dens_arr[0]["ca"][(0,0)][i, i, :9, :9]))
+    #    print(raw(dens_arr[0]["ca"][(0,0)][i, i, 9:, 9:]))
 
+    # building missing states initially from just the determinants seems to not work well...
+    # Therefore here is some heuristic...
+    # It is based on the Be FCI example, where one can see, that the states are not purely alpha
+    # or beta, but rather mixed (often 50/50), so the mixing is determined from the provided
+    # lowest energy states, averaged and then applied. (<--should not be necessary, since as long as
+    # basis functions are provided, the algorithm will build linear combinations itself)
+    # Furthermore, it can be seen, that some
+    # orbitals have large partial shares (due to multi reference character) in many
+    # excitations, so the partial occupancies of the occupied orbitals is also determined, averaged
+    # and then applied, such that the determinant excitations are now only partial excitations as
+    # well. (<--this effect cannot be reintroduced with linear combinations!!!)
+    # It seems appropriate to take an other look at the integrals again though, as this
+    # scheme seems awfully arbitrary. Also double check which index of the u integrals is actually the core!!!!!!!!!!!!!!!!!!!!!!!!
+    # To be done...
+    """
+    mr_occs = [{}, {}]
+    for frag in range(2):
+        dens = raw(dens_arr[frag]["ca"][(0,0)])  # get multi reference character only from neutral one particle densities
+        alpha = [i for i in range(n_occ[0]) if i not in frozen]  # should be enough to only look for valence orbitals
+        beta = [i for i in range(n_orbs, n_occ[1] + n_orbs) if i not in frozen]  # should be enough to only look for valence orbitals
+        val_orbs = alpha + beta
+        for orb in val_orbs:
+            diags = [dens[i, i, orb, orb] for i in range(len(dens))
+                     if dens[i, i, orb, orb] > 0.05 and dens[i, i, orb, orb] < 0.95]  # take this as mr criterion for now
+            if len(diags) < 3:  # this might require quite a lot of initial neutral states to be provided here
+                continue
+            print(diags)
+            mr_occs[frag][orb] = sum(diags) / len(diags)
+        print(f"multi reference contribution for fragment {frag} detected in orbitals {mr_occs[frag]}")
+    """
     # here only the densities are taken into account, for which the initial state (ket) is the neutral state
-    #p0_c_anion = dens_looper(raw(dens[0]["c"][(-1,0)]))
-    #p1_a_cation = dens_looper(raw(dens[1]["a"][(1,0)]))
-    #p1_c_anion = dens_looper(raw(dens[1]["c"][(-1,0)]))
-    #p0_a_cation = dens_looper(raw(dens[0]["a"][(1,0)]))
-    #p0_ca_neutral = dens_looper(raw(dens[0]["ca"][(0,0)]))
-    #p1_ca_neutral = dens_looper(raw(dens[1]["ca"][(0,0)]))
-
     missing_states = [{0: {}, -1: {}}, {0: {}, -1: {}}]  # note, that within the following procedure all missing contributions are captured without appending the most positively charged states
-    #missing_states = [{0: [], -1: []}, {0: [], -1: []}]
 
     # ionization contributions
     beta_gs_config = sum([2**(n_orbs + i) for i in range(n_occ[1])])
@@ -159,10 +182,10 @@ def state_screening(dens_builder_stuff, ints, monomer_charges, n_orbs, frozen, n
                     # positively charged reference ground state is ground state of corresponding spin
                     if elem >= n_orbs:  # appending beta needs alpha ref (except neutral gs)
                         #gs = min(dens_builder_stuff[frag][0][chg + 1].configs)
-                        gs = total_gs_config_neutral - 2**(n_orbs - 1 + n_occ[1])
+                        gs = total_gs_config_neutral - 2**(n_orbs - 1 + n_occ[1])  # one should rather sweep over the available ionized contributions
                     else:  # appending alpha needs beta ref (except neutral gs)
                         #gs = min([abs(i - beta_gs_config) for i in dens_builder_stuff[frag][0][chg + 1].configs]) + beta_gs_config
-                        gs = total_gs_config_neutral - 2**(-1 + n_occ[0])
+                        gs = total_gs_config_neutral - 2**(-1 + n_occ[0])  # one should rather sweep over the available ionized contributions
                 ex = gs + 2**elem
                 #if chg == -1:
                 #    print(elem, ex)
@@ -173,6 +196,7 @@ def state_screening(dens_builder_stuff, ints, monomer_charges, n_orbs, frozen, n
                     missing_states[frag][chg][ex] = dens_builder_stuff[frag][0][chg].configs.index(ex)
 
     # neutral contributions
+    """
     gs = total_gs_config_neutral
     for frag in range(2):
         # the following loop is unique here, because one should also loop over charge 1, but for
@@ -206,9 +230,11 @@ def state_screening(dens_builder_stuff, ints, monomer_charges, n_orbs, frozen, n
                     #det_state[dens_builder_stuff[frag][0][chg].configs.index(ex)] = 1.
                     #missing_states[frag][chg][ex] = det_state
                     missing_states[frag][chg][ex] = dens_builder_stuff[frag][0][chg].configs.index(ex)
-
     """
+
+    
     # neutral spin flip contributions (only for chg 0)
+    """
     gs = total_gs_config_neutral
     for frag in range(2):
         #for chg in range(min(monomer_charges[frag]), max(monomer_charges[frag])):  # loops over -1 and 0
@@ -230,36 +256,74 @@ def state_screening(dens_builder_stuff, ints, monomer_charges, n_orbs, frozen, n
             #else:
             #    raise ValueError(f"chg {chg} not accepted")
             if ex not in missing_states[frag][chg].keys():
-                det_state = np.zeros_like(dens_builder_stuff[frag][0][chg].configs)
-                det_state[dens_builder_stuff[frag][0][chg].configs.index(ex)] = 1.
-                missing_states[frag][chg][ex] = det_state
+                #det_state = np.zeros_like(dens_builder_stuff[frag][0][chg].configs)
+                #det_state[dens_builder_stuff[frag][0][chg].configs.index(ex)] = 1.
+                #missing_states[frag][chg][ex] = det_state
+                missing_states[frag][chg][ex] = dens_builder_stuff[frag][0][chg].configs.index(ex)
     """
     #print(missing_states[0][0].keys(), missing_states[0][-1].keys())
 
-    # building missing states initially from just the determinants seems to not work well...
-    # Therefore here is some heuristic...
-    # It is based on the Be FCI example, where one can see, that the states are not purely alpha
-    # or beta, but rather mixed (often 50/50), so the mixing is determined from the provided
-    # lowest energy states, averaged and then applied. Furthermore, it can be seen, that some
-    # orbitals (mostly the one non-frozen occupied orbital) have large partial shares in many
-    # excitations, so the partial occupancies of the occupied orbitals is also determined, averaged
-    # and then applied, such that the determinant excitations are now only partial excitations as
-    # well. It seems appropriate to take an other look at the integrals again though, as this
-    # scheme seems awfully arbitrary. Also double check which index of the u integrals is actually the core!!!!!!!!!!!!!!!!!!!!!!!!
-    # To be done...
+    def conf_decoder(conf):
+        ret = []
+        for bit in range(n_orbs * 2, -1, -1):
+            if conf - 2**bit < 0:
+                continue
+            conf -= 2**bit
+            ret.append(bit)
+        return sorted(ret)
 
+    """
+    for frag in range(2):
+        for chg in range(1):#range(min(monomer_charges[frag]), max(monomer_charges[frag])):
+            det_states = []
+            for det, ind in missing_states[frag][chg].items():
+                det_states.append(np.zeros_like(dens_builder_stuff[frag][0][chg].coeffs[0]))
+                conf = conf_decoder(det)
+                missing_mr_orbs = [i for i in mr_occs[frag] if not all(np.array(conf) - i)]
+                #print(np.sqrt(mr_occs[frag][missing_mr_orbs[0]]), np.sqrt(1 - mr_occs[frag][missing_mr_orbs[0]]))
+                if len(missing_mr_orbs) == 0:
+                    det_states[-1][ind] = 1
+                    #print(np.linalg.norm(det_states[-1]))
+                    continue
+                elif len(missing_mr_orbs) > 1:
+                    raise NotImplementedError("too many mr orbs encountered. This code needs to be adapted to be able to deal with more than 1")
+                else:                
+                    det_states.append(np.zeros_like(dens_builder_stuff[frag][0][chg].coeffs[0]))
+                    # maybe also allow for lin comb with opposite signs?
+                    # also the following probably doesnt work for all examples, since it employs the mr character for all mr orbs for each guess state
+                    det_states[-1][dens_builder_stuff[frag][0][chg].configs.index(total_gs_config_neutral)] = np.sqrt(mr_occs[frag][missing_mr_orbs[0]])
+                    det_states[-1][ind] = np.sqrt(1 - mr_occs[frag][missing_mr_orbs[0]])
+                    #det_states[-1][dens_builder_stuff[frag][0][chg].configs.index(total_gs_config_neutral)] = 1#np.sqrt(mr_occs[frag][missing_mr_orbs[0]])
+                    #det_states[-1][ind] = 1#np.sqrt(1 - mr_occs[frag][missing_mr_orbs[0]])
+                    #print(det_states[-1])
+                    #print("mr", np.linalg.norm(det_states[-1]))
+            new_states = dens_builder_stuff[frag][0][chg].coeffs + det_states #list(missing_states[frag][chg].values())
+            new_states = orthogonalize(np.array(new_states))
+            dens_builder_stuff[frag][0][chg].coeffs = [i for i in new_states]
+    """
     for frag in range(2):
         for chg in range(min(monomer_charges[frag]), max(monomer_charges[frag])):
             det_states = []
-            for ind in missing_states[frag][chg].values():
-                det_state = np.zeros_like(dens_builder_stuff[frag][0][chg].configs)
-                det_state[ind] = 1.
-                det_states.append(det_state)
+            for det, ind in missing_states[frag][chg].items():
+                det_states.append(np.zeros_like(dens_builder_stuff[frag][0][chg].coeffs[0]))
+                det_states[-1][ind] = 1.
             new_states = dens_builder_stuff[frag][0][chg].coeffs + det_states #list(missing_states[frag][chg].values())
             new_states = orthogonalize(np.array(new_states))
             dens_builder_stuff[frag][0][chg].coeffs = [i for i in new_states]
 
+    """
+    for i, vec in enumerate(dens_builder_stuff[0][0][0].coeffs):
+        big_inds = {ind: elem for ind, elem in enumerate(vec) if abs(elem) > 1e-1}
+        #print(i, [ind for ind, elem in enumerate(vec) if abs(elem) > 1e-1])
+        print(i, {tuple(conf_decoder(dens_builder_stuff[frag][0][chg].configs[j])): val for j, val in big_inds.items()})
 
+    print("now for opt states")
+    for chg in monomer_charges[0]:
+        coeffs = np.load(f"../../../QodeApplications_old/hermitian-XRCC/atomic_states/states/16-115-550/load=states:16-115-550:thresh=1e-6:4.5:u.pickle/4.5/Z_{2 - chg}e.npy")
+        for i, vec in enumerate(coeffs.T):
+            big_inds = {ind: elem for ind, elem in enumerate(vec) if abs(elem) > 1e-1}
+            print(chg, i, {tuple(conf_decoder(dens_builder_stuff[frag][0][chg].configs[j])): val for j, val in big_inds.items()})
+    """
     """
     opt_dens = pickle.load(open("../../../QodeApplications_old/hermitian-XRCC/density_c_a_ca.pkl", mode="rb"))
 
@@ -280,4 +344,5 @@ def state_screening(dens_builder_stuff, ints, monomer_charges, n_orbs, frozen, n
     
     raise ValueError("stop here")
     """
+    #raise ValueError("stop here")
     #return dens_builder_stuff
