@@ -38,9 +38,9 @@ from   build_fci_states import get_fci_states
 import densities
 
 
-def optimize_states(displacement, max_iter, xr_order, conv_thresh=1e-6, dens_filter_thresh=1e-9):
+def optimize_states(displacement, max_iter, xr_order, conv_thresh=1e-6, dens_filter_thresh=1e-8):
     ######################################################
-    # Initialize integrals and densities
+    # Initialize integrals and density preliminaries
     ######################################################
 
     n_frag       = 2
@@ -58,30 +58,17 @@ def optimize_states(displacement, max_iter, xr_order, conv_thresh=1e-6, dens_fil
     dens_builder_stuff = []
     state_coeffs_og = []
     for m in range(int(n_frag)):
-        state_obj, dens_var_1, dens_var_2, n_threads, Be = get_fci_states(displacement, n_state_list=[(1, 4), (0, 9), (-1, 6)])
+        state_obj, dens_var_1, dens_var_2, n_threads, Be = get_fci_states(displacement, n_state_list=[(1, 10), (0, 9), (-1, 6)])
         for elem,coords in Be.atoms:  coords[2] += m * displacement    # displace along z
         BeN.append(Be)
         #dens.append(densities.build_tensors(state_obj, dens_var_1, dens_var_2, options=density_options, n_threads=n_threads))
         dens_builder_stuff.append([state_obj, dens_var_1, dens_var_2, density_options])
         #state_coeffs_og.append({chg: state_obj[chg].coeffs for chg in state_obj})
+        state_coeffs_og.append({chg: state_obj[chg].coeffs for chg in state_obj})
     #print(type(raw(dens[0]["a"][(+1,0)])), raw(dens[0]["a"][(+1,0)]).shape)
 
     int_timer = timer()
     ints = get_ints(BeN, project_core, int_timer)
-
-    state_screening(dens_builder_stuff, ints, monomer_charges, n_orbs, frozen_orbs, n_occ, n_threads=n_threads)  # updates coeffs in dens_builder_stuff in place
-
-    for m in range(int(n_frag)):
-        state_coeffs_og.append({chg: dens_builder_stuff[m][0][chg].coeffs for chg in state_obj})
-        dens.append(densities.build_tensors(*dens_builder_stuff[m][:-1], options=density_options, n_threads=n_threads))
-
-
-    #for i in range(raw(dens[0]["ca"][(0,0)]).shape[0]):
-    #    print(np.diag(raw(dens[0]["ca"][(0,0)][i, i, :, :])))
-    #raise ValueError("stop here")
-
-    state_coeffs_optimized = state_coeffs_og
-
     
     def iteration(frag_ind, dens_builder_stuff, dens, state_coeffs, dens_eigval_thresh=dens_filter_thresh):
         # In the following the variables are named as if frag_ind = 0, but it also works with frag_ind = 1
@@ -281,7 +268,7 @@ def optimize_states(displacement, max_iter, xr_order, conv_thresh=1e-6, dens_fil
         
         #new_large_vecs = dens_mat_a#np.real(dens_eigvecs[n:])
         #print("dropped imag part of eigvecs for new coeffs is", np.linalg.norm(np.imag(dens_eigvecs[n:])))
-        
+        """
         # the following threshold is very delicate, because if its
         # too large -> truncation errors
         # too small -> numerical inconsistencies through terms to small to resolve even
@@ -393,7 +380,6 @@ def optimize_states(displacement, max_iter, xr_order, conv_thresh=1e-6, dens_fil
 
         new_coeffs = {}
         # Apply all the gradients to the subset of states and diagonalize with obtained step size
-        # frag A
         for chg in monomer_charges[frag_ind]:
             #tmp = np.array(state_coeffs[frag_ind][chg])
             #tmp -= 0.2 * gradient_states_a[chg]
@@ -405,7 +391,7 @@ def optimize_states(displacement, max_iter, xr_order, conv_thresh=1e-6, dens_fil
             new_coeffs[chg] = [i for i in orthogonalize(np.array(tmp))]
             #dens_builder_stuff[0][0][chg].coeffs = [i for i in orthogonalize(tmp)]
             #dens_builder_stuff[1][0][chg].coeffs = state_coeffs[1][chg].copy()
-        """
+        
         """
         # frag B
         #for chg in monomer_charges[1]:
@@ -499,21 +485,36 @@ def optimize_states(displacement, max_iter, xr_order, conv_thresh=1e-6, dens_fil
             for chg in monomer_charges[frag]:
                 state_coeffs[frag][chg] = chg_sorted_keepers[frag][chg]
 
+        def conf_decoder(conf):
+            ret = []
+            for bit in range(n_orbs * 2, -1, -1):
+                if conf - 2**bit < 0:
+                    continue
+                conf -= 2**bit
+                ret.append(bit)
+            return sorted(ret)
+
+        for chg in monomer_charges[0]:
+            for i, vec in enumerate(chg_sorted_keepers[0][chg]):
+                big_inds = {ind: elem for ind, elem in enumerate(vec) if abs(elem) > 1e-1}
+                #print(i, [ind for ind, elem in enumerate(vec) if abs(elem) > 1e-1])
+                print(chg, i, {tuple(conf_decoder(dens_builder_stuff[frag][0][chg].configs[j])): val for j, val in big_inds.items()})
+
         #raise ValueError("stop here")
 
         for frag in range(2):
             for chg in monomer_charges[frag]:
                 dens_builder_stuff[frag][0][chg].coeffs = [i for i in state_coeffs[frag][chg]]
-            dens[frag] = densities.build_tensors(*dens_builder_stuff[frag][:-1], options=dens_builder_stuff[frag][-1], n_threads=n_threads)
-        return state_coeffs, dens_builder_stuff, dens, full_eigvals[0]
+            #dens[frag] = densities.build_tensors(*dens_builder_stuff[frag][:-1], options=dens_builder_stuff[frag][-1], n_threads=n_threads)
+        return state_coeffs, dens_builder_stuff, full_eigvals[0]
 
     def postprocessing(en, en_extended, en_history, en_with_grads_history, converged):
         en_history.append(en)
         en_with_grads_history.append(en_extended)
         #printer(en_history, en_with_grads_history)
-        print(f"History of XR[{xr_order}] energies:", en_history)
+        print(f"History of XR[{xr_order}] energies:", en_history[1:])
         print(f"History of XR[{xr_order}] energies with gradients in the Hamiltonian build"
-              "(order is grads on frag 0 then on 1 then on 0 again and so on):", en_with_grads_history)
+              "(order is grads on frag 0 then on 1 then on 0 again and so on):", en_with_grads_history[1:])
 
         if abs(en_history[-1] - en_history[-2]) <= conv_thresh and en_history[-1] - en_with_grads_history[-1] <= conv_thresh:
             if en_history[-1] - en_with_grads_history[-1] < 0.:
@@ -523,16 +524,81 @@ def optimize_states(displacement, max_iter, xr_order, conv_thresh=1e-6, dens_fil
                 converged = True
         return converged
     
+    ######################################################
+    # screen for relevant states
+    ######################################################
+    print("starting screening now")
+
+    additional_states = state_screening(dens_builder_stuff, ints, monomer_charges, n_orbs, frozen_orbs, n_occ, n_threads=n_threads)
+    state_tracker = {frag: {chg: 0 for chg in monomer_charges[frag]} for frag in range(2)}
+    screening_done = np.array([[False for chg in monomer_charges[frag]] for frag in range(2)])
+    state_coeffs_optimized = state_coeffs_og
+    safety_iter = 0
+    screening_energies = []
+
+    # expanding the state space partially to then reduce and expand again saves a lot of CPU time and memory,
+    # but on the other hand some contributions might be lost, since the relevant other state(s) required for
+    # a large contribution with an integral might not appear in the same current state space...
+    # This could be (partially) circumvented in two ways, which can also be applied both
+    # 1. use linear combinations of the basis functions with similar weights for each of the relevant determinants
+    # 2. start by only expanding the neutral space in bigger steps, which probably contains most of the
+    # correlation with itself and then expand the other charges, which can then be applied in larger chunks
+    while safety_iter < 10:#not all(screening_done.flatten()):
+        #if safety_iter >= 10:
+        #    break
+        safety_iter += 1
+        for frag in range(2):
+            for chg in monomer_charges[frag]:
+                print(f"for fragment {frag} with charge {chg} "
+                      f"{len(additional_states[frag][chg]) - state_tracker[frag][chg]}"
+                      " states still need to be included")
+                if len(additional_states[frag][chg]) == state_tracker[frag][chg]:
+                    screening_done[frag][abs(min(monomer_charges[frag])) + chg] = True
+                    continue
+                #n_states = len(dens_builder_stuff[frag][0][chg])
+                # the following thresholds are not set in stone
+                # since the xr evaluation scales as the fourth order in the number of states
+                # we dont want to overdo it here. 20 is still quite acceptable, but maybe not
+                # enough, so a relative increase is provided as well, resulting in an expansion
+                # by 1/3 leading to an increase in CPU time of roughly a factor of 3 for the XR evaluation.
+                # This also caps the amount of densities, which have to be computed at once, which
+                # also saves time, as it roughly scales to the second order in the number of states.
+                max_states = max(len(dens_builder_stuff[frag][0][chg].coeffs) * 4 // 3, 20)  # maybe increase to 25 or 30
+                #print(max_states)
+                max_add = min(max_states - len(dens_builder_stuff[frag][0][chg].coeffs), len(additional_states[frag][chg]) - state_tracker[frag][chg])
+                #print(state_tracker[frag][chg], state_tracker[frag][chg] + max_add)
+                dens_builder_stuff[frag][0][chg].coeffs += additional_states[frag][chg][state_tracker[frag][chg]: state_tracker[frag][chg] + max_add]
+                dens_builder_stuff[frag][0][chg].coeffs = [i for i in orthogonalize(np.array(dens_builder_stuff[frag][0][chg].coeffs))]
+                state_coeffs_optimized[frag][chg] = dens_builder_stuff[frag][0][chg].coeffs.copy()
+                state_tracker[frag][chg] += max_add
+            if safety_iter == 1:
+                dens.append(densities.build_tensors(*dens_builder_stuff[frag][:-1], options=density_options, n_threads=n_threads))
+            else:
+                dens[frag] = densities.build_tensors(*dens_builder_stuff[frag][:-1], options=density_options, n_threads=n_threads)
+
+        if all(screening_done.flatten()):
+            break
+
+        state_coeffs_optimized, dens_builder_stuff, gs_energy = reduce_screened_state_space(dens_builder_stuff, dens, state_coeffs_optimized)
+        screening_energies.append(gs_energy)
+        print("energy development during stepwise incorporation of screened states", screening_energies)
+
+    #for i in range(raw(dens[0]["ca"][(0,0)]).shape[0]):
+    #    print(np.diag(raw(dens[0]["ca"][(0,0)][i, i, :, :])))
+    #raise ValueError("stop here")
 
     ######################################################
     # iterative procedure
     ######################################################
+    print("starting iterative state solver now")
     iter = 0
     converged = False
 
-    state_coeffs_optimized, dens_builder_stuff, dens, gs_energy = reduce_screened_state_space(dens_builder_stuff, dens, state_coeffs_optimized)
+    # not required as current densities are already computed in last iteration of while loop
+    #for frag in range(2):
+    #    dens[frag] = densities.build_tensors(*dens_builder_stuff[frag][:-1], options=density_options, n_threads=n_threads)
 
-    en_history, en_with_grads_history = [gs_energy], [0]
+    en_history, en_with_grads_history = [0], [0]
 
     while iter < max_iter:
         iter += 1
@@ -571,7 +637,7 @@ def optimize_states(displacement, max_iter, xr_order, conv_thresh=1e-6, dens_fil
 
 
 
-optimize_states(4.5, 1, 0)
+optimize_states(4.5, 0, 0)
 
 
 
