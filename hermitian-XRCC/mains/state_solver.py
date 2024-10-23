@@ -58,7 +58,7 @@ def optimize_states(displacement, max_iter, xr_order, conv_thresh=1e-6, dens_fil
     dens_builder_stuff = []
     state_coeffs_og = []
     for m in range(int(n_frag)):
-        state_obj, dens_var_1, dens_var_2, n_threads, Be = get_fci_states(displacement, n_state_list=[(1, 10), (0, 9), (-1, 6)])
+        state_obj, dens_var_1, dens_var_2, n_threads, Be = get_fci_states(displacement, n_state_list=[(1, 16), (0, 9), (-1, 6)])
         for elem,coords in Be.atoms:  coords[2] += m * displacement    # displace along z
         BeN.append(Be)
         #dens.append(densities.build_tensors(state_obj, dens_var_1, dens_var_2, options=density_options, n_threads=n_threads))
@@ -268,7 +268,7 @@ def optimize_states(displacement, max_iter, xr_order, conv_thresh=1e-6, dens_fil
         
         #new_large_vecs = dens_mat_a#np.real(dens_eigvecs[n:])
         #print("dropped imag part of eigvecs for new coeffs is", np.linalg.norm(np.imag(dens_eigvecs[n:])))
-        """
+        
         # the following threshold is very delicate, because if its
         # too large -> truncation errors
         # too small -> numerical inconsistencies through terms to small to resolve even
@@ -392,7 +392,7 @@ def optimize_states(displacement, max_iter, xr_order, conv_thresh=1e-6, dens_fil
             #dens_builder_stuff[0][0][chg].coeffs = [i for i in orthogonalize(tmp)]
             #dens_builder_stuff[1][0][chg].coeffs = state_coeffs[1][chg].copy()
         
-        """
+        
         # frag B
         #for chg in monomer_charges[1]:
         #    tmp = np.array(state_coeffs[1][chg])
@@ -633,11 +633,16 @@ def optimize_states(displacement, max_iter, xr_order, conv_thresh=1e-6, dens_fil
                 dens_builder_stuff[frag][0][chg].coeffs = [i for i in state_coeffs_optimized[frag][chg]]
         dens[1] = densities.build_tensors(*dens_builder_stuff[1][:-1], options=dens_builder_stuff[1][-1], n_threads=n_threads)
 
+    return screening_energies
 
 
+#scan = []
+#for i in range(7):
+#    scan.append(optimize_states(4.0 + i / 2, 0, 0))
 
+#print(scan)
 
-optimize_states(4.5, 0, 0)
+print(optimize_states(4.5, 0, 0))
 
 
 

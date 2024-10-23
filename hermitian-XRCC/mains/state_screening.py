@@ -114,7 +114,8 @@ def state_screening(dens_builder_stuff, ints, monomer_charges, n_orbs, frozen, n
     # maybe instead of screening V one could also screen over the fock operator...
     # one should also screen over 1010 integrals, but this can be neglected, if the integrals are almost hermitian.
     # for strongly interacting fragments this might lead to missing contributions, so one probably needs to revisit this setup.
-    v0101 = get_large(raw(ints[0]("V")._as_tuple()[0][(0,1,0,1)]))
+    #v0101 = get_large(raw(ints[0]("V")._as_tuple()[0][(0,1,0,1)]))
+    v0101 = raw(ints[0]("V")._as_tuple()[0][(0,1,0,1)])
 
     dens_arr = [densities.build_tensors(*dens_builder_stuff[m][:-1], options=[], n_threads=n_threads, screen=True) for m in range(2)]
     #for i in range(len(raw(dens_arr[0]["ca"][(0,0)]))):
@@ -183,10 +184,15 @@ def state_screening(dens_builder_stuff, ints, monomer_charges, n_orbs, frozen, n
                 int = h01
             else:
                 int = h10 
-            for elem in missing_orbs(get_large(int), dens, ref_ind):
+            #for elem in missing_orbs(get_large(int), dens, ref_ind):
+            #print(get_large(int)[ref_ind])
+            #print(missing_orbs(get_large(int), dens, ref_ind))
+            for elem in get_large(int, thresh_frac=1 / 3)[ref_ind]:
                 #for chg in range(min(monomer_charges[0]), max(monomer_charges[0])):
                 # skip frozen core contributions
                 if elem in frozen:
+                    continue
+                if elem in conf_decoder(total_gs_config_neutral):  # filter out occupied orbitals
                     continue
                 # get gs for required spin and assume more positively charged state to be gs
                 if chg == 0:
@@ -204,10 +210,11 @@ def state_screening(dens_builder_stuff, ints, monomer_charges, n_orbs, frozen, n
                     #det_state = np.zeros_like(dens_builder_stuff[frag][0][chg].configs)
                     #det_state[dens_builder_stuff[frag][0][chg].configs.index(ex)] = 1.
                     #missing_states[frag][chg][ex] = det_state
+                    #print(chg, conf_decoder(ex))
                     missing_states[frag][chg][ex] = dens_builder_stuff[frag][0][chg].configs.index(ex)
 
-    # neutral contributions from two el ints for single excitations (seem to not contain crucial extra information...)
-    """
+    # neutral contributions from two el ints for single excitations (less important, but still relevant for high precision...)
+    
     gs = total_gs_config_neutral
     for frag in range(2):
         # the following loop is unique here, because one should also loop over charge 1, but for
@@ -220,8 +227,11 @@ def state_screening(dens_builder_stuff, ints, monomer_charges, n_orbs, frozen, n
         for chg in range(min(monomer_charges[frag]), max(monomer_charges[frag])):  # loops over -1 and 0
             dens = dens_looper(raw(dens_arr[frag]["ca"][(chg,chg)]))
             int = v0101
-            for elem in missing_orbs(int, dens, frag):  # ref_inds 2 and 3 should be equal to 0 and 1
+            #for elem in missing_orbs(int, dens, frag):  # ref_inds 2 and 3 should be equal to 0 and 1
+            for elem in get_large(int)[frag]:
                 if elem in frozen:
+                    continue
+                if elem in conf_decoder(total_gs_config_neutral):  # filter out occupied orbitals
                     continue
                 # build excitation from gs det into singly excited det
                 if elem >= n_orbs:  # beta requires beta excitation
@@ -241,19 +251,22 @@ def state_screening(dens_builder_stuff, ints, monomer_charges, n_orbs, frozen, n
                     #det_state[dens_builder_stuff[frag][0][chg].configs.index(ex)] = 1.
                     #missing_states[frag][chg][ex] = det_state
                     missing_states[frag][chg][ex] = dens_builder_stuff[frag][0][chg].configs.index(ex)
-    """
+    
 
     
-    # neutral spin flip contributions (only for chg 0) from two el ints for single excitations
-    """
+    # neutral spin flip contributions (only for chg 0) from two el ints for single excitations (seems like these are only necessary for 1e-6 Hartree precision)
+    
     gs = total_gs_config_neutral
     for frag in range(2):
         #for chg in range(min(monomer_charges[frag]), max(monomer_charges[frag])):  # loops over -1 and 0
         chg = 0
         dens = dens_looper(raw(dens_arr[frag]["ca"][(chg,chg)]))
         int = v0101
-        for elem in missing_orbs(int, dens, frag):  # ref_inds 2 and 3 should be equal to 0 and 1
+        #for elem in missing_orbs(int, dens, frag):  # ref_inds 2 and 3 should be equal to 0 and 1
+        for elem in get_large(int)[frag]:
             if elem in frozen:
+                continue
+            if elem in conf_decoder(total_gs_config_neutral):  # filter out occupied orbitals
                 continue
             # build excitation from gs det into singly excited det
             if elem >= n_orbs:  # spin flip beta requires alpha hole
@@ -271,9 +284,10 @@ def state_screening(dens_builder_stuff, ints, monomer_charges, n_orbs, frozen, n
                 #det_state[dens_builder_stuff[frag][0][chg].configs.index(ex)] = 1.
                 #missing_states[frag][chg][ex] = det_state
                 missing_states[frag][chg][ex] = dens_builder_stuff[frag][0][chg].configs.index(ex)
-    """
+    
     #print(missing_states[0][0].keys(), missing_states[0][-1].keys())
 
+    """
     # check which double excitations are covered already for neutral and anion
     occ_orbs = [i for i in range(n_occ[0])] + [i + n_orbs for i in range(n_occ[1])]
     for frag in range(2):
@@ -290,6 +304,7 @@ def state_screening(dens_builder_stuff, ints, monomer_charges, n_orbs, frozen, n
                 print("double excitation contributions already encountered in initially provided state"
                       f"numbers {covered_double_exs} of chg {chg} in fragment {frag}."
                       "Note, that for now this is not covered")
+    """
     
     # ionization contributions from one el ints for double excitations without spin flip
     for frag in range(2):
@@ -313,7 +328,7 @@ def state_screening(dens_builder_stuff, ints, monomer_charges, n_orbs, frozen, n
                     continue
                 #if any(elem in frozen for elem in pair):  # filter out forbidden and single excitations
                 #    continue
-                if (pair[0] < n_orbs and pair[1] < n_orbs) or (pair[0] >= n_orbs and pair[1] >= n_orbs):  # filter out spin flip spin flip
+                if (pair[0] < n_orbs and pair[1] < n_orbs) or (pair[0] >= n_orbs and pair[1] >= n_orbs):  # filter out spin flip
                     continue
                 if any(elem in conf_decoder(total_gs_config_neutral) for elem in pair):  # filter out forbidden and single excitations
                     continue
@@ -332,6 +347,39 @@ def state_screening(dens_builder_stuff, ints, monomer_charges, n_orbs, frozen, n
                     #det_state[dens_builder_stuff[frag][0][chg].configs.index(ex)] = 1.
                     #missing_states[frag][chg][ex] = det_state
                     missing_states[frag][chg][ex] = dens_builder_stuff[frag][0][chg].configs.index(ex)
+
+
+    # ionization contributions from one el ints for anionic triple excitations without spin flip
+    for frag in range(2):
+        for chg in [-1]:#range(min(monomer_charges[frag]), max(monomer_charges[frag])):  # loops over -1 and 0
+            # this currently only works with charges +1,0,-1 and densities only with initial neutral state
+            #elif chg == -1:
+            ref_ind = 0
+            # one should actually sweep over all possible reference states
+            gs = total_gs_config_neutral - 2**(n_orbs - 1 + n_occ[1]) - 2**(-1 + n_occ[0])
+            #else:
+            #    raise ValueError("invalid charge provided")
+            if frag == ref_ind:
+                int = h01
+            else:
+                int = h10 
+            for pair in combinations(get_large(int, thresh_frac=1 / 2)[ref_ind], 3):  # we cannot provide whole triple space, so adjust thresh_frac (maybe iteratively)
+                # skip frozen core contributions
+                if pair[0] == pair[1] or (pair[0] == pair[2] or pair[1] == pair[2]):  # cant put two electrons in the same spin orbital
+                    continue
+                #if any(elem in frozen for elem in pair):  # filter out forbidden and single excitations
+                #    continue
+                if all(elem < n_orbs for elem in pair) or all(elem >= n_orbs for elem in pair):  # filter out spin flip
+                    continue
+                if any(elem in conf_decoder(total_gs_config_neutral) for elem in pair):  # filter out forbidden, single and double excitations
+                    continue
+                ex = gs + 2**pair[0] + 2**pair[1] + 2**pair[2]
+                if ex not in missing_states[frag][chg].keys():
+                    #det_state = np.zeros_like(dens_builder_stuff[frag][0][chg].configs)
+                    #det_state[dens_builder_stuff[frag][0][chg].configs.index(ex)] = 1.
+                    #missing_states[frag][chg][ex] = det_state
+                    missing_states[frag][chg][ex] = dens_builder_stuff[frag][0][chg].configs.index(ex)
+
 
     """
     for frag in range(2):
@@ -370,8 +418,9 @@ def state_screening(dens_builder_stuff, ints, monomer_charges, n_orbs, frozen, n
             for det, ind in missing_states[frag][chg].items():
                 det_states.append(np.zeros_like(dens_builder_stuff[frag][0][chg].coeffs[0]))
                 det_states[-1][ind] = 1.
-            if len(det_states) >= 100:
-                raise RuntimeError(f"for fragment {frag} with charge {chg} the additionally screened states exceed 100...this will take forever")
+            if len(det_states) >= 150:
+                print(len(det_states))
+                raise RuntimeError(f"for fragment {frag} with charge {chg} the additionally screened states exceed 150...this will take forever")
             #new_states = dens_builder_stuff[frag][0][chg].coeffs + det_states #list(missing_states[frag][chg].values())
             #new_states = orthogonalize(np.array(new_states))
             #ret[frag][chg] = [i for i in new_states]
