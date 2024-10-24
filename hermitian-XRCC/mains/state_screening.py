@@ -43,7 +43,7 @@ def orthogonalize(U, eps=1e-15):  # with the transpose commented out, it orthogo
     return V#.T
 
 
-def get_large(ten, thresh_frac=1 / 3):
+def get_large(ten, thresh_frac=1 / 3, compress_ouput=True):
     ten = abs(np.array(ten))
     thresh = np.max(ten) * thresh_frac  # for the integrals this equals for t_01 roughly 1e-2 to 1e-3
     ret = []
@@ -63,15 +63,18 @@ def get_large(ten, thresh_frac=1 / 3):
     #return ret
     rec_loop(ten)
     #reduced_ret = {i: [] for i in range(len(ret[0]))}#{"bra": [], "ket": []}
-    for tup in ret:
-        for i in range(len(tup)):
-            if tup[i] not in reduced_ret[i]:
-                reduced_ret[i].append(tup[i])
-        #if tup[0] not in reduced_ret["bra"]:
-        #    reduced_ret["bra"].append(tup[0])
-        #if tup[1] not in reduced_ret["ket"]:
-        #    reduced_ret["ket"].append(tup[1])
-    return {key: sorted(val) for key, val in reduced_ret.items()}
+    if compress_ouput == False:
+        return ret
+    else:
+        for tup in ret:
+            for i in range(len(tup)):
+                if tup[i] not in reduced_ret[i]:
+                    reduced_ret[i].append(tup[i])
+            #if tup[0] not in reduced_ret["bra"]:
+            #    reduced_ret["bra"].append(tup[0])
+            #if tup[1] not in reduced_ret["ket"]:
+            #    reduced_ret["ket"].append(tup[1])
+        return {key: sorted(val) for key, val in reduced_ret.items()}
 
 
 def dens_looper(ten):
@@ -95,7 +98,8 @@ def missing_orbs(ref, big_nums, ref_ind):
     return [i for i in ref[ref_ind] if i not in covered_elems]
 
 
-def state_screening(dens_builder_stuff, ints, monomer_charges, n_orbs, frozen, n_occ, n_threads=1):
+def state_screening(dens_builder_stuff, ints, monomer_charges, n_orbs, frozen, n_occ, n_threads=1,
+                    single_thresh=1/3, double_thresh=1/2):
     # since in this procedure all elements of the integrals are looped over, one could make use of
     # this also build an object storing information on which elements of a certain density to compute
     # and which to neglect, which would speed up the density builder. Making use of sparse backend ontop
@@ -116,6 +120,10 @@ def state_screening(dens_builder_stuff, ints, monomer_charges, n_orbs, frozen, n
     # for strongly interacting fragments this might lead to missing contributions, so one probably needs to revisit this setup.
     #v0101 = get_large(raw(ints[0]("V")._as_tuple()[0][(0,1,0,1)]))
     v0101 = raw(ints[0]("V")._as_tuple()[0][(0,1,0,1)])
+
+    # the following are required to screen for equations B30 and B31
+    def get_v(frag_tuple):
+        return raw(ints[0]("V")._as_tuple()[0][frag_tuple])
 
     dens_arr = [densities.build_tensors(*dens_builder_stuff[m][:-1], options=[], n_threads=n_threads, screen=True) for m in range(2)]
     #for i in range(len(raw(dens_arr[0]["ca"][(0,0)]))):
@@ -163,31 +171,37 @@ def state_screening(dens_builder_stuff, ints, monomer_charges, n_orbs, frozen, n
         return sorted(ret)
 
     # here only the densities are taken into account, for which the initial state (ket) is the neutral state
-    missing_states = [{0: {}, -1: {}}, {0: {}, -1: {}}]  # note, that within the following procedure all missing contributions are captured without appending the most positively charged states
+    #missing_states = [{0: {}, -1: {}}, {0: {}, -1: {}}]  # note, that within the following procedure all missing contributions are captured without appending the most positively charged states
+    missing_states = [{chg: {} for chg in monomer_charges[frag]} for frag in range(2)]
 
-    # ionization contributions form one el ints for single excitations without spin flip
     beta_gs_config = sum([2**(n_orbs + i) for i in range(n_occ[1])])
     total_gs_config_neutral = beta_gs_config + sum([2**(i) for i in range(n_occ[0])])
+
+    # add the ground state (and maybe also multi reference contributions)
+    for frag in range(2):
+        missing_states[frag][0][total_gs_config_neutral] = dens_builder_stuff[frag][0][0].configs.index(total_gs_config_neutral)
+
+
+    # ionization contributions form one el ints for single excitations without spin flip
     for frag in range(2):
         for chg in range(min(monomer_charges[frag]), max(monomer_charges[frag])):  # loops over -1 and 0
             # this currently only works with charges +1,0,-1 and densities only with initial neutral state
             if chg == 0:
-                dens = dens_looper(raw(dens_arr[frag]["a"][(1,0)]))
+                #dens = dens_looper(raw(dens_arr[frag]["a"][(1,0)]))
                 ref_ind = 1
+                thresh=single_thresh
             elif chg == -1:
-                dens = dens_looper(raw(dens_arr[frag]["c"][(-1,0)]))
+                #dens = dens_looper(raw(dens_arr[frag]["c"][(-1,0)]))
                 ref_ind = 0
                 gs = total_gs_config_neutral
+                thresh=single_thresh #/ 2
             else:
                 raise ValueError("invalid charge provided")
             if frag == ref_ind:
                 int = h01
             else:
-                int = h10 
-            #for elem in missing_orbs(get_large(int), dens, ref_ind):
-            #print(get_large(int)[ref_ind])
-            #print(missing_orbs(get_large(int), dens, ref_ind))
-            for elem in get_large(int, thresh_frac=1 / 3)[ref_ind]:
+                int = h10
+            for elem in get_large(int, thresh_frac=thresh)[ref_ind]:
                 #for chg in range(min(monomer_charges[0]), max(monomer_charges[0])):
                 # skip frozen core contributions
                 if elem in frozen:
@@ -224,11 +238,11 @@ def state_screening(dens_builder_stuff, ints, monomer_charges, n_orbs, frozen, n
         # the ambiguity of choosing states, which form densities covering the remaining large contributions
         # of the integrals, only the strongest expected contributions are accounted for, which would be
         # an ionization and excitation in the same spin, which is not possible though for Be with frozen core.
-        for chg in range(min(monomer_charges[frag]), max(monomer_charges[frag])):  # loops over -1 and 0
-            dens = dens_looper(raw(dens_arr[frag]["ca"][(chg,chg)]))
+        for chg in [0]:#range(min(monomer_charges[frag]), max(monomer_charges[frag])):  # loops over -1 and 0
+            #dens = dens_looper(raw(dens_arr[frag]["ca"][(chg,chg)]))
             int = v0101
             #for elem in missing_orbs(int, dens, frag):  # ref_inds 2 and 3 should be equal to 0 and 1
-            for elem in get_large(int)[frag]:
+            for elem in get_large(int, thresh_frac=single_thresh)[frag]:
                 if elem in frozen:
                     continue
                 if elem in conf_decoder(total_gs_config_neutral):  # filter out occupied orbitals
@@ -251,6 +265,66 @@ def state_screening(dens_builder_stuff, ints, monomer_charges, n_orbs, frozen, n
                     #det_state[dens_builder_stuff[frag][0][chg].configs.index(ex)] = 1.
                     #missing_states[frag][chg][ex] = det_state
                     missing_states[frag][chg][ex] = dens_builder_stuff[frag][0][chg].configs.index(ex)
+
+
+    # charged contributions from two el ints for single and double excitations
+    for frag in range(2):
+        frag_inds = [1-frag, 1-frag, 1-frag, 1-frag]
+        for special_ind in [0,2]:
+            frag_inds[special_ind] = frag
+            int = get_v(tuple(frag_inds))
+            for comb in get_large(int, thresh_frac=1/10, compress_ouput=False):
+                # to understand the following sorting you must know, that according to the working equaitons B30 and B31
+                # the last two indices of the two el int always refer to annihilations and the first two always to creations
+                if any(elem in frozen for elem in comb):
+                    continue
+                """
+                # filter out single excitations with ionizations, which are actually only ionizations or completely wrong
+                # ...again I'm not entirely sure, we might miss contributions like this
+                if comb[0] in conf_decoder(total_gs_config_neutral):
+                    continue
+                if comb[1] in conf_decoder(total_gs_config_neutral):
+                    continue
+                if comb[2] not in conf_decoder(total_gs_config_neutral):
+                    continue
+                if comb[3] not in conf_decoder(total_gs_config_neutral):
+                    continue
+                if (special_ind == 0 and comb[2] == comb[3]) or (special_ind == 2 and comb[0] == comb[1]):
+                    continue
+                """
+                if special_ind == 0:
+                    if comb[2] == comb[3]:
+                        continue
+                    if comb[0] in conf_decoder(total_gs_config_neutral):
+                        continue
+                    if comb[1] in conf_decoder(total_gs_config_neutral) and not comb[1] in comb[2:]:
+                        continue
+                    if comb[2] not in conf_decoder(total_gs_config_neutral):# and comb[2] != comb[1]:
+                        continue
+                    if comb[3] not in conf_decoder(total_gs_config_neutral):# and comb[3] != comb[1]:
+                        continue
+                else:
+                    if comb[0] == comb[1]:
+                        continue
+                    if comb[2] not in conf_decoder(total_gs_config_neutral):
+                        continue
+                    if comb[3] not in conf_decoder(total_gs_config_neutral):# and not comb[3] in comb[:2]:
+                        continue
+                    if comb[0] in conf_decoder(total_gs_config_neutral) and comb[0] != comb[3]:
+                        continue
+                    if comb[1] in conf_decoder(total_gs_config_neutral) and comb[1] != comb[3]:
+                        continue
+                print("valid ", frag, special_ind, comb)
+                if special_ind == 0:
+                    ex_minus = total_gs_config_neutral + 2**comb[0]
+                    ex_plus = total_gs_config_neutral + 2**comb[1] - 2**comb[2] - 2**comb[3]
+                else:
+                    ex_plus = total_gs_config_neutral - 2**comb[2]
+                    ex_minus = total_gs_config_neutral + 2**comb[0] + 2**comb[1] - 2**comb[3]
+                #print(conf_decoder(ex_minus), conf_decoder(ex_plus))
+                missing_states[frag][-1][ex_minus] = dens_builder_stuff[frag][0][-1].configs.index(ex_minus)
+                missing_states[frag][1][ex_plus] = dens_builder_stuff[frag][0][1].configs.index(ex_plus)
+    #raise ValueError("stop")
     
 
     
@@ -260,7 +334,7 @@ def state_screening(dens_builder_stuff, ints, monomer_charges, n_orbs, frozen, n
     for frag in range(2):
         #for chg in range(min(monomer_charges[frag]), max(monomer_charges[frag])):  # loops over -1 and 0
         chg = 0
-        dens = dens_looper(raw(dens_arr[frag]["ca"][(chg,chg)]))
+        #dens = dens_looper(raw(dens_arr[frag]["ca"][(chg,chg)]))
         int = v0101
         #for elem in missing_orbs(int, dens, frag):  # ref_inds 2 and 3 should be equal to 0 and 1
         for elem in get_large(int)[frag]:
@@ -314,16 +388,17 @@ def state_screening(dens_builder_stuff, ints, monomer_charges, n_orbs, frozen, n
                 ref_ind = 1
                 # one should actually sweep over all possible reference states
                 gs = total_gs_config_neutral - 2**(n_orbs - 1 + n_occ[1]) - 2**(-1 + n_occ[0])
+                thresh = double_thresh
             elif chg == -1:
                 ref_ind = 0
+                thresh = double_thresh#1/5#single_thresh
             else:
                 raise ValueError("invalid charge provided")
             if frag == ref_ind:
                 int = h01
             else:
                 int = h10 
-            for pair in combinations(get_large(int, thresh_frac=1 / 2)[ref_ind], 2):  # we cannot provide whole double space, so adjust thresh_frac (maybe iteratively)
-                # skip frozen core contributions
+            for pair in combinations(get_large(int, thresh_frac=thresh)[ref_ind], 2):  # we cannot provide whole double space, so adjust thresh_frac (maybe iteratively)
                 if pair[0] == pair[1]:  # cant put two electrons in the same spin orbital
                     continue
                 #if any(elem in frozen for elem in pair):  # filter out forbidden and single excitations
@@ -363,7 +438,7 @@ def state_screening(dens_builder_stuff, ints, monomer_charges, n_orbs, frozen, n
                 int = h01
             else:
                 int = h10 
-            for pair in combinations(get_large(int, thresh_frac=1 / 2)[ref_ind], 3):  # we cannot provide whole triple space, so adjust thresh_frac (maybe iteratively)
+            for pair in combinations(get_large(int, thresh_frac=double_thresh)[ref_ind], 3):  # we cannot provide whole triple space, so adjust thresh_frac (maybe iteratively)
                 # skip frozen core contributions
                 if pair[0] == pair[1] or (pair[0] == pair[2] or pair[1] == pair[2]):  # cant put two electrons in the same spin orbital
                     continue
@@ -413,9 +488,10 @@ def state_screening(dens_builder_stuff, ints, monomer_charges, n_orbs, frozen, n
     ret = {}
     for frag in range(2):
         ret[frag] = {}
-        for chg in range(min(monomer_charges[frag]), max(monomer_charges[frag])):
+        for chg in monomer_charges[frag]:#range(min(monomer_charges[frag]), max(monomer_charges[frag])):
             det_states = []
             for det, ind in missing_states[frag][chg].items():
+                print(chg, conf_decoder(det))
                 det_states.append(np.zeros_like(dens_builder_stuff[frag][0][chg].coeffs[0]))
                 det_states[-1][ind] = 1.
             if len(det_states) >= 150:
@@ -428,9 +504,9 @@ def state_screening(dens_builder_stuff, ints, monomer_charges, n_orbs, frozen, n
             ret[frag][chg] = det_states#[i for i in det_states]
 
     # the upper layer expects lists for every charge, but they can be empty of course
-    for frag in range(2):
-        pos_chg = max(monomer_charges[frag])
-        ret[frag][pos_chg] = []
+    #for frag in range(2):
+    #    pos_chg = max(monomer_charges[frag])
+    #    ret[frag][pos_chg] = []
 
     #for chg in monomer_charges[0]:
     #    for i, vec in enumerate(ret[0][chg]):
