@@ -36,7 +36,6 @@ import S_diagrams               # contains definitions of actual diagrams needed
 import St_diagrams              # contains definitions of actual diagrams needed for SH operator in BO rep
 import Su_diagrams              # contains definitions of actual diagrams needed for SH operator in BO rep
 import Sv_diagrams              # contains definitions of actual diagrams needed for SH operator in BO rep
-import combo_diagram
 from   get_ints import get_ints
 from precontract import precontract
 
@@ -93,9 +92,6 @@ Su_blocks_bior = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=stru
 Sv_blocks_bior = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, V=bior_ints.V),      diagrams=Sv_diagrams, contract_cache=contract_cache, timings=diagram_timings, precon_timings=precontract_timings)
 Sv_blocks_half = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, V=bior_ints.V_half), diagrams=Sv_diagrams, contract_cache=contract_cache, timings=diagram_timings, precon_timings=precontract_timings)
 Sv_blocks_diff = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, V=bior_ints.V_diff), diagrams=Sv_diagrams, contract_cache=contract_cache, timings=diagram_timings, precon_timings=precontract_timings)
-
-Combo_blocks_bior = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, T=bior_ints.T, U=bior_ints.U, V=bior_ints.V),      diagrams=combo_diagram, contract_cache=contract_cache, timings=diagram_timings, precon_timings=precontract_timings)
-
 
 # charges under consideration
 monomer_charges = [0, +1, -1]
@@ -177,7 +173,7 @@ S2H2 += XR_term.dimer_matrix(Su_blocks_symm, {
 S2H2 += XR_term.dimer_matrix(St_blocks_bior, {
                        2: [
                            "s01t00", "s01t11",
-                           #->#"s01t10", 
+                           "s01t10", 
                            "s01t01"
                           ]
                       }, (0,1), all_dimer_charges, matrix_timings)
@@ -185,21 +181,12 @@ S2H2 += XR_term.dimer_matrix(Su_blocks_bior, {
                        2: [
                            "s01u000", "s01u011",
                            "s01u100", "s01u111",
-                           #->#"s01u010", "s01u110", 
+                           "s01u010", "s01u110", 
                            "s01u001", "s01u101"
                           ]
                       }, (0,1), all_dimer_charges, matrix_timings)
 
 print("build S2H2 (2e)")
-
-#S2H2 -= XR_term.dimer_matrix(Sv_blocks_bior, {
-#                       1: [
-#                           "v0000"
-#                          ],
-#                       2: [
-#                           "v0110", "v0010", "v0100", "v0011"
-#                          ]
-#                      }, (0,1), all_dimer_charges, matrix_timings)
 
 S2H2 += XR_term.dimer_matrix(Sv_blocks_diff, {
                        1: [
@@ -214,19 +201,14 @@ S2H2 += XR_term.dimer_matrix(Sv_blocks_bior, {
                        2: [
                            "s01v0000", "s01v1111",
                            "s01v0110", "s01v1110", 
-                           #->#"s01v0100", 
+                           "s01v0100", 
                            "s01v1100", "s01v0010", "s01v0111"#, "s01v0011"
                           ]
                       }, (0,1), all_dimer_charges, matrix_timings)
 
 
-S2H2 += XR_term.dimer_matrix(Combo_blocks_bior, {
-                       2: [
-                          "combo"
-                          ]
-                      }, (0,1), all_dimer_charges, matrix_timings)
 
-
+print("build S2H2 (apply S2inv and subtract monomers)")
 
 H2blocked = S2inv @ S2H2
 
