@@ -197,7 +197,7 @@ print("build S2H2 (2e)")
 #                           "v0000"
 #                          ],
 #                       2: [
-#                           "v0101", "v0010", "v0111", "v0011"
+#                           "v0110", "v0010", "v0100", "v0011"
 #                          ]
 #                      }, (0,1), all_dimer_charges, matrix_timings)
 
@@ -206,15 +206,15 @@ S2H2 += XR_term.dimer_matrix(Sv_blocks_diff, {
                            "v0000"
                           ],
                        2: [
-                           "v0101", "v0010", "v0111", "v0011"
+                           "v0110", "v0010", "v0100", "v0011"
                           ]
                       }, (0,1), all_dimer_charges, matrix_timings)
 
 S2H2 += XR_term.dimer_matrix(Sv_blocks_bior, {
                        2: [
                            "s01v0000", "s01v1111",
-                           "s01v0101", "s01v1101", 
-                           #->#"s01v1000", 
+                           "s01v0110", "s01v1110", 
+                           #->#"s01v0100", 
                            "s01v1100", "s01v0010", "s01v0111"#, "s01v0011"
                           ]
                       }, (0,1), all_dimer_charges, matrix_timings)
@@ -278,7 +278,7 @@ for i,i_ in enumerate(mapping):
     for j,j_ in enumerate(mapping):
         H2[i,j] = H2blocked[i_,j_]
 
-out, resources = qode.util.output(log=qode.util.textlog(echo=True)), qode.util.parallel.resources(1)
+out, resources = struct(log=qode.util.textlog(echo=True)), qode.util.parallel.resources(1)
 E, T = excitonic.ccsd((H1,[[None,H2],[None,None]]), out, resources)
 E += sum(nuc_rep[m1,m2] for m1 in range(n_frag) for m2 in range(m1+1))
 out.log("\nTotal Excitonic CCSD Energy (test) = ", E)
