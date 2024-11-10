@@ -49,15 +49,29 @@ def s01(X, contract_last=False):
         @ X.a1q_S0q(i1,j1,p)
         )
 
-#def s01s10(X, contract_last=False):
-#    if no_result(X, contract_last):  return []
-#    i0, i1, j0, j1 = state_indices(contract_last)
-#    return -1 * scalar_value( X.ca0[i0,j0](p,s) @ X.ca1[i1,j1](r,q) @ X.s01(p,q) @ X.s10(r,s))
+def s01s01(X, contract_last=False):
+    if no_result(X, contract_last):  return []
+    i0, i1, j0, j1 = state_indices(contract_last)
+    return (1/2) * raw(
+        #  X.cc0(i0,j0,p,r)
+        #@ X.aa1(i1,j1,s,q)
+        #@ X.s01(p,q)
+        #@ X.s01(r,s)
+          X.cc0Xr_Sr1(i0,j0,p,s)
+        @ X.aa1Xq_S0q(i1,j1,s,p)
+        )
 
-#def s01s01(X, contract_last=False):
-#    if no_result(X, contract_last):  return []
-#    i0, i1, j0, j1 = state_indices(contract_last)
-#    return (1/2.) * scalar_value( X.cc0[i0,j0](p,r) @ X.aa1[i1,j1](s,q) @ X.s01(p,q) @ X.s01(r,s))
+def s01s10(X, contract_last=False):
+    if no_result(X, contract_last):  return []
+    i0, i1, j0, j1 = state_indices(contract_last)
+    return -1 * raw(
+        #  X.ca0(i0,j0,p,s)
+        #@ X.ca1(i1,j1,r,q)
+        #@ X.s01(p,q)
+        #@ X.s10(r,s)
+          X.ca0Xs_S1s(i0,j0,p,r)
+        @ X.ca1Xq_S0q(i1,j1,r,p)
+        )
 
 #def s01s01s10(X, contract_last=False):
 #    if no_result(X, contract_last):  return []
@@ -89,10 +103,10 @@ catalog[0] = {
     "identity": build_diagram(identity, Dchgs=None, permutations=None)
 }
 catalog[2] = {
-    "s01":          build_diagram(s01,          Dchgs=(-1,+1), permutations=[(0,1),(1,0)]),
-    #"s01s10":       build_diagram(s01s10,       Dchgs=( 0, 0), permutations=[(0,1)]),
-    #"s01s01":       build_diagram(s01s01,       Dchgs=(-2,+2), permutations=[(0,1),(1,0)]),
-    #"s01s01s10":    build_diagram(s01s01s10,    Dchgs=(-1,+1), permutations=[(0,1),(1,0)]),
-    #"s01s01s10s10": build_diagram(s01s01s10s10, Dchgs=( 0, 0), permutations=[(0,1)]),
-    #"s01s01s01s10": build_diagram(s01s01s01s10, Dchgs=(-2,+2), permutations=[(0,1),(1,0)]),
+    "s01":           build_diagram(s01,          Dchgs=(-1,+1), permutations=[(0,1),(1,0)]),
+    "s01s10":        build_diagram(s01s10,       Dchgs=( 0, 0), permutations=[(0,1)]),
+    "s01s01":        build_diagram(s01s01,       Dchgs=(-2,+2), permutations=[(0,1),(1,0)]),
+    #"s01s01s10":     build_diagram(s01s01s10,    Dchgs=(-1,+1), permutations=[(0,1),(1,0)]),
+    #"s01s01s10s10":  build_diagram(s01s01s10s10, Dchgs=( 0, 0), permutations=[(0,1)]),
+    #"s01s01s01s10":  build_diagram(s01s01s01s10, Dchgs=(-2,+2), permutations=[(0,1),(1,0)]),
 }
