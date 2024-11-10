@@ -384,5 +384,5 @@ catalog[2] = {
     "s01s10v0010":  build_diagram(s01s10v0010, Dchgs=(-1,+1), permutations=[(0,1),(1,0)]),
     "s01s10v0011":  build_diagram(s01s10v0011, Dchgs=(-2,+2), permutations=[(0,1),(1,0)]),
     "s01s10v0100":  build_diagram(s01s10v0100, Dchgs=(+1,-1), permutations=[(0,1),(1,0)]),
-    "s01s10v0110":  build_diagram(s01s10v0110, Dchgs=( 0, 0), permutations=[(0,1),(1,0)]),
+    "s01s10v0110":  build_diagram(s01s10v0110, Dchgs=( 0, 0), permutations=[(0,1)]),
 }
