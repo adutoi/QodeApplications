@@ -81,13 +81,13 @@ def _compress(args):
 
 
 
-def build_tensors(states, n_orbs, n_elec_0, thresh=1e-10, options=None, n_threads=1, screen=False):
+def build_tensors(states, n_orbs, n_elec_0, thresh=1e-10, options=None, n_threads=1, dets={}):#, screen=False):
     #pool = multiprocessing.Pool(n_threads)
 
     #op_strings = {2:["aa", "caaa"], 1:["a", "caa", "ccaaa"], 0:["ca", "ccaa"]}
     op_strings = {2:["aa"], 1:["a", "caa"], 0:["ca", "ccaa"]}
-    if screen:
-        op_strings = {1:["a"], 0:["ca"]}
+    #if screen:
+    #    op_strings = {1:["a"], 0:["ca"]}
     densities = {}
     conj_densities = {}
 
@@ -96,7 +96,7 @@ def build_tensors(states, n_orbs, n_elec_0, thresh=1e-10, options=None, n_thread
     antisymm_abstract  = options("abs-anti") is True                    # antisymmetry abstract in final rep, which might be original? (default: no)
     antisymm_numerical = (not antisymm_abstract) or use_natural_orbs    # numerically antisymmetrize in original rep? (default: yes)
     compress_args = options("compress")
-    if options("bra_det"):
+    if options("bra_det") or options("ket_det"):
         op_strings[-1] = ["c", "cca"]
         op_strings[-2] = ["cc"]
     #op_strings = {0: op_strings[0]}
@@ -107,22 +107,33 @@ def build_tensors(states, n_orbs, n_elec_0, thresh=1e-10, options=None, n_thread
         bra_configs = field_op.packed_configs(states[bra_chg].configs)
         if options("bra_det"):
             #print("bra det True")
-            bra_coeffs = [i for i in numpy.eye(len(bra_configs))]
+            if dets:
+                bra_coeffs = dets[bra_chg]
+            else:
+                bra_coeffs = [i for i in numpy.eye(len(bra_configs))]
         else:
             bra_coeffs  = states[bra_chg].coeffs
         for ket_chg in states:
-            ket_coeffs  = states[ket_chg].coeffs
+            #ket_coeffs  = states[ket_chg].coeffs
+            ket_configs = field_op.packed_configs(states[ket_chg].configs)
+            if options("ket_det"):
+                if dets:
+                    ket_coeffs = dets[ket_chg]
+                else:
+                    ket_coeffs = [i for i in numpy.eye(len(ket_configs))]
+            else:
+                ket_coeffs  = states[ket_chg].coeffs
             #if len(coeffs[1].keys()) != 0:
             #    ket_coeffs = coeffs[1][ket_chg]  # also let this allow for differing number of states in the future
             #print("len kets", len(ket_coeffs))
             #if len(bra_coeffs) > 200 and op_string == "ccaa":
-            ket_configs = field_op.packed_configs(states[ket_chg].configs)
+            #ket_configs = field_op.packed_configs(states[ket_chg].configs)
             chg_diff = bra_chg - ket_chg
             if chg_diff in op_strings:
                 for op_string in op_strings[chg_diff]:
                     if op_string not in densities:  densities[op_string] = {}
                     print(bra_chg, ket_chg, op_string)
-                    if (options("bra_det") and op_string == "ccaa") and (bra_chg == -1 and ket_chg == -1):
+                    if ((options("bra_det") or options("ket_det")) and op_string == "ccaa") and (bra_chg == -1 and ket_chg == -1):
                         #print("bra det -1 -1 ccaa")
                         # only do this for ccaa -1 -1
                         tmp = _tens_wrap(numpy.ones(n_orbs) * 1e-10)  # choosing this as actual zeros leads to numerical inconsistencies in the gradients
@@ -177,7 +188,7 @@ def build_tensors(states, n_orbs, n_elec_0, thresh=1e-10, options=None, n_thread
                         #rho_ij = compress.compress(rho_ij, op_string, bra_chg, ket_chg, i, j, compress_args, natural_orbs, antisymm_abstract, _tens_wrap)
                         arguments += [(rho_ij, op_string, bra_chg, ket_chg, i, j, n_bras, n_kets, compress_args, natural_orbs, antisymm_abstract)]
             #if n_bras > 200 and op_string == "ccaa":  # better: if type(rho_ij) == qode.math.tensornet.base.to_contract:
-            if options("bra_det") or compress_args == None:# and bra_chg==ket_chg:  # better also decompose for equal charges, but with bras different from kets the accumulator needs to be populated differently
+            if (options("bra_det") or options("ket_det")) or compress_args == None:# and bra_chg==ket_chg:  # better also decompose for equal charges, but with bras different from kets the accumulator needs to be populated differently
                 values = [(args[4], args[6], args[5], args[7], args[0]) for args in arguments]
             else:
                 values = [_compress(args) for args in arguments]
@@ -189,7 +200,7 @@ def build_tensors(states, n_orbs, n_elec_0, thresh=1e-10, options=None, n_thread
                 temp_ij += _vec(i,n_bras)(0) @ _vec(j,n_kets)(1) @ rho_ij(*indices)
                 #if not options("bra_det"):
                 rev_indices = tuple(reversed(indices))
-                if bra_chg==ket_chg and not options("bra_det"):
+                if bra_chg==ket_chg and not (options("bra_det") or options("ket_det")):
                     if i!=j:# or options("bra_det"):  # if bra_det then bra and ket are not equal
                         #if options("bra_det"):
                         #    print(_vec(j,n_kets).shape, _vec(i,n_bras).shape, raw(rho_ij).shape)
@@ -199,7 +210,7 @@ def build_tensors(states, n_orbs, n_elec_0, thresh=1e-10, options=None, n_thread
                     temp_ji += _vec(j,n_kets)(0) @ _vec(i,n_bras)(1) @ rho_ij(*rev_indices)
             #
             densities[op_string][bra_chg,ket_chg] = temp_ij
-            if bra_chg!=ket_chg and not options("bra_det"):  # bra_det densities are not symmetric!
+            if bra_chg!=ket_chg and not (options("bra_det") or options("ket_det")):  # bra_det densities are not symmetric!
                 rev_op_string = op_string[::-1].replace("c","x").replace("a","c").replace("x","a")
                 if rev_op_string not in conj_densities:  conj_densities[rev_op_string] = {}
                 conj_densities[rev_op_string][ket_chg,bra_chg] = temp_ji
@@ -208,16 +219,26 @@ def build_tensors(states, n_orbs, n_elec_0, thresh=1e-10, options=None, n_thread
 
     densities["n_elec"]    = {chg:(n_elec_0-chg)          for chg in states}
     densities["n_states"]  = {chg:len(states[chg].coeffs) for chg in states}
-    if options("bra_det"):
-        densities["n_states_bra"]  = {chg:len(states[chg].configs) for chg in states}
-    else:
+    if options("bra_det") and not options("ket_det"):
+        if dets:
+            densities["n_states_bra"] = {chg:len(dets[chg]) for chg in dets}
+        else:
+            densities["n_states_bra"]  = {chg:len(states[chg].configs) for chg in states}
+    elif options("ket_det") and not options("bra_det"):
+        if dets:
+            densities["n_states"] = {chg:len(dets[chg]) for chg in dets}
+        else:
+            densities["n_states"]  = {chg:len(states[chg].configs) for chg in states}
+        densities["n_states_bra"]  = {chg:len(states[chg].coeffs) for chg in states}
+    else: #not options("bra_det") and not options("ket_det"):
         densities["n_states_bra"]  = densities["n_states"]
 
-    densities["KetCoeffs"] = {}
-    for ket_chg in states:
-        #temp_i = tensor_sum()
-        #temp_i += _tens_wrap(states[ket_chg].coeffs)
-        densities["KetCoeffs"][(ket_chg,ket_chg)] = _tens_wrap(states[ket_chg].coeffs)
+    densities["KetCoeffs"] = {}  # this name is misleading ... rename to Coeffs or StateCoeffs in next iteration
+    for chg in states:
+        if dets:
+            densities["KetCoeffs"][(chg,chg)] = _tens_wrap(numpy.einsum("kp,ip->ik", dets[chg], states[chg].coeffs))
+        else:
+            densities["KetCoeffs"][(chg,chg)] = _tens_wrap(states[chg].coeffs)
 
     print("Writing to hard drive ...")
     return densities

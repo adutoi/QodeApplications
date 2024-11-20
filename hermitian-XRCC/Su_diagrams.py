@@ -54,16 +54,17 @@ def u100(X, special_processing=None):
             tensor[:,i1,:,j1] = res
     if special_processing is None:
         get_standard(result)
-    else:
-        if no_result(X, contract_last=True):
+    elif special_processing <= 1:
+        if no_result(X, contract="ket"):
             result = []
         else:
             if special_processing == 0 and i1s == j1s:  # state with state on frag 1 -> dirac_delta
                 get_standard(result)
             elif special_processing == 1 and i1s == j1s:  # state with state on frag 1 -> dirac_delta with i0 and i1 permuted
-                for i1 in range(i1s):
-                    j1 = i1
-                    result[:,i1,:,j1] = 1 * raw( X.ca0pq_U1pq )
+                #for i1 in range(i1s):
+                #    j1 = i1
+                #    result[:,i1,:,j1] = 1 * raw( X.ca0pq_U1pq )
+                get_standard(result)
                 result = numpy.transpose(result, (1,0,2,3))  # 2 and 3 dont matter, because they are traced out at the end
             elif special_processing == 0 and i1s != j1s:
                 # do this, since backend might not always be nunmpy...best use would be backend independent post processing though
@@ -75,6 +76,30 @@ def u100(X, special_processing=None):
             else:
                 raise ValueError("One of the if statements needs to be True!")
             result = numpy.einsum("abii->ab", result)
+    elif special_processing > 1:
+        if no_result(X, contract="bra"):
+            result = []
+        else:
+            if special_processing == 2 and i1s == j1s:  # state with state on frag 1 -> dirac_delta
+                get_standard(result)
+            elif special_processing == 3 and i1s == j1s:  # state with state on frag 1 -> dirac_delta with i0 and i1 permuted
+                #for i1 in range(i1s):
+                #    j1 = i1
+                #    result[:,i1,:,j1] = 1 * raw( X.ca0pq_U1pq )
+                get_standard(result)
+                result = numpy.transpose(result, (0,1,3,2))  # 2 and 3 dont matter, because they are traced out at the end
+            elif special_processing == 2 and i1s != j1s:
+                # do this, since backend might not always be nunmpy...best use would be backend independent post processing though
+                result[:,:,:,:] = 1 * raw( X.ca0pq_U1pq(0,2) @ X.KetCoeffs1(1,3) )
+            elif special_processing == 3 and i1s != j1s:
+                # do this, since backend might not always be nunmpy...best use would be backend independent post processing though
+                result[:,:,:,:] = 1 * raw( X.ca0pq_U1pq(0,2) @ X.KetCoeffs1(1,3) )  # 2 and 3 dont matter, because they are traced out at the end
+                result = numpy.transpose(result, (0,1,3,2))
+            else:
+                raise ValueError("One of the if statements needs to be True!")
+            result = numpy.einsum("iiab->ab", result)
+    else:
+        raise ValueError(f"special processing {special_processing} can not be handled")
     return result
     #if i1==j1:
     #    return 1 * scalar_value( X.ca0pq_U1pq[i0,j0] )

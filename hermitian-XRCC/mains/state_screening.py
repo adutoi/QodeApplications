@@ -27,7 +27,7 @@ import densities
 import pickle
 
 
-def orthogonalize(U, eps=1e-15):  # with the transpose commented out, it orthogonalizes rows instead of columns
+def orthogonalize(U, eps=1e-6):  # with the transpose commented out, it orthogonalizes rows instead of columns
     # one should play with eps a little here
     n = len(U)
     V = U#.T
@@ -37,7 +37,9 @@ def orthogonalize(U, eps=1e-15):  # with the transpose commented out, it orthogo
         # subtract projections of V[i] onto already determined basis V[0:i]
         V[i] -= np.dot(coeff_vec, prev_basis).T
         if np.linalg.norm(V[i]) < eps:
-            V[i][V[i] < eps] = 0.   # set the small entries to 0
+            #V[i][V[i] < eps] = 0.   # set the small entries to 0
+            V[i] = np.zeros_like(V[i])
+            #print("zero vector encountered!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
         else:
             V[i] /= np.linalg.norm(V[i])
     return V#.T
@@ -125,7 +127,7 @@ def state_screening(dens_builder_stuff, ints, monomer_charges, n_orbs, frozen, n
     def get_v(frag_tuple):
         return raw(ints[0]("V")._as_tuple()[0][frag_tuple])
 
-    dens_arr = [densities.build_tensors(*dens_builder_stuff[m][:-1], options=[], n_threads=n_threads, screen=True) for m in range(2)]
+    #dens_arr = [densities.build_tensors(*dens_builder_stuff[m][:-1], options=[], n_threads=n_threads, screen=True) for m in range(2)]
     #for i in range(len(raw(dens_arr[0]["ca"][(0,0)]))):
     #    print(raw(dens_arr[0]["ca"][(0,0)][i, i, :9, :9]))
     #    print(raw(dens_arr[0]["ca"][(0,0)][i, i, 9:, 9:]))
@@ -273,14 +275,14 @@ def state_screening(dens_builder_stuff, ints, monomer_charges, n_orbs, frozen, n
         for special_ind in [0,2]:
             frag_inds[special_ind] = frag
             int = get_v(tuple(frag_inds))
-            for comb in get_large(int, thresh_frac=1/10, compress_ouput=False):
+            for comb in get_large(int, thresh_frac=single_thresh / 5, compress_ouput=False):
                 # to understand the following sorting you must know, that according to the working equaitons B30 and B31
                 # the last two indices of the two el int always refer to annihilations and the first two always to creations
                 if any(elem in frozen for elem in comb):
                     continue
                 """
                 # filter out single excitations with ionizations, which are actually only ionizations or completely wrong
-                # ...again I'm not entirely sure, we might miss contributions like this
+                # ...again I'm not entirely sure, we might miss contributions this way
                 if comb[0] in conf_decoder(total_gs_config_neutral):
                     continue
                 if comb[1] in conf_decoder(total_gs_config_neutral):
@@ -314,7 +316,7 @@ def state_screening(dens_builder_stuff, ints, monomer_charges, n_orbs, frozen, n
                         continue
                     if comb[1] in conf_decoder(total_gs_config_neutral) and comb[1] != comb[3]:
                         continue
-                print("valid ", frag, special_ind, comb)
+                #print("valid ", frag, special_ind, comb)
                 if special_ind == 0:
                     ex_minus = total_gs_config_neutral + 2**comb[0]
                     ex_plus = total_gs_config_neutral + 2**comb[1] - 2**comb[2] - 2**comb[3]
@@ -337,7 +339,7 @@ def state_screening(dens_builder_stuff, ints, monomer_charges, n_orbs, frozen, n
         #dens = dens_looper(raw(dens_arr[frag]["ca"][(chg,chg)]))
         int = v0101
         #for elem in missing_orbs(int, dens, frag):  # ref_inds 2 and 3 should be equal to 0 and 1
-        for elem in get_large(int)[frag]:
+        for elem in get_large(int, thresh_frac=single_thresh)[frag]:
             if elem in frozen:
                 continue
             if elem in conf_decoder(total_gs_config_neutral):  # filter out occupied orbitals
@@ -544,4 +546,4 @@ def state_screening(dens_builder_stuff, ints, monomer_charges, n_orbs, frozen, n
     raise ValueError("stop here")
     """
     #raise ValueError("stop here")
-    return ret
+    return ret, missing_states

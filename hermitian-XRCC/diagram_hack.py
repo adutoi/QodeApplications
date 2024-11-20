@@ -23,12 +23,19 @@
 #        (which is a goal that it was notably just shy of after the last overhaul)
 # This is not a completely general solution and it should be replaced by something more philosophically sound once the dust settles on what we need.
 
-def state_indices(contract_last):
+def state_indices(contract):
     i0, i1, j0, j1 = 0, 1, 2, 3    # Just enumerate the free (uncontracted remaining) indices of a two-fragment transition density tensor
-    if contract_last:              # But if we want to contract the last two indices, we can give tensornet these values instead.
+    if contract == "ket":              # But if we want to contract the last two indices, we can give tensornet these values instead.
         j0, j1 = "z", "z"
+    if contract == "bra":
+        i0, i1 = "z", "z"
+        j0, j1 = 0, 1
     return i0, i1, j0, j1
 
-def no_result(X, contract_last):
+def no_result(X, contract):
     (i0s,j0s),(i1s,j1s) = X.n_states[0], X.n_states[1]
-    return (contract_last and j0s!=j1s)    # encapsulates the trigger to return [] in case last indices cannot be contracted due to mismatched lengths
+    if contract == "ket":
+        ind0, ind1 = j0s, j1s
+    elif contract == "bra":
+        ind0, ind1 = i0s, i1s
+    return (contract and ind0!=ind1)    # encapsulates the trigger to return [] in case last indices cannot be contracted due to mismatched lengths

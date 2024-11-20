@@ -34,15 +34,17 @@ def contract_mon_with_d(frag_map, dens_builder_stuff, d, state_coeffs, d_slices)
         dens_builder_stuff[frag_map[1]][0][chg].coeffs = [i for i in adapted_coeffs]  # dont change charge in dens builder here
 """
 
-def get_adapted_overlaps(frag_map, d, state_coeffs, d_slices):
+def get_adapted_overlaps(frag_map, d, d_slices):
     #beware, that the following only works, if both fragments have the same charges, which are symmetrically sampled around zero
     if sum(d_slices[0].keys()) != 0 or sum(d_slices[1].keys()) != 0:
         raise ValueError("charges are not symmtrically sampled around zero...this can be fixed though, by changing this function")
     overlaps = {}
     for chg in d_slices[frag_map[1]].keys():
-        adapted_coeffs = np.tensordot(d[d_slices[frag_map[0]][chg * (-1)], d_slices[frag_map[1]][chg]],
-                                      state_coeffs[frag_map[1]][chg], axes=([1], [0]))
-        overlaps[chg * (-1)] = np.array([[np.dot(i,j) for j in adapted_coeffs] for i in adapted_coeffs])
+        #adapted_coeffs = np.tensordot(d[d_slices[frag_map[0]][chg * (-1)], d_slices[frag_map[1]][chg]],
+        #                              state_coeffs[frag_map[1]][chg], axes=([1], [0]))
+        #overlaps[chg * (-1)] = np.array([[np.dot(i,j) for j in adapted_coeffs] for i in adapted_coeffs])
+        overlaps[chg * (-1)] = np.einsum("kl,il->ki", d[d_slices[frag_map[0]][chg * (-1)], d_slices[frag_map[1]][chg]],
+                                                      d[d_slices[frag_map[0]][chg * (-1)], d_slices[frag_map[1]][chg]])
     return overlaps
 
 def contract_dens_with_d(dens, d, frag_map, d_slices, state_dict):  # updates dens in place
@@ -60,7 +62,9 @@ def contract_dens_with_d(dens, d, frag_map, d_slices, state_dict):  # updates de
     for chg in d_slices[frag_map[0]]:
         dens["n_states"][chg] = state_dict[frag_map[0]][chg * (-1)]
 
-def get_slices(dict, chgs, type="standard"):
+def get_slices(dict, chgs, append=False, type="standard"):
+    if type != "standard" and not append:
+        raise ValueError("all types except standard require a dictionary provided by the append keyword argument")
     dummy_ind = 0
     ret = {}
     for chg in chgs:
@@ -72,10 +76,10 @@ def get_slices(dict, chgs, type="standard"):
         #    dummy_ind += 2 * dict[chg]
         elif type == "first":
             ret[chg] = slice(dummy_ind, dummy_ind + dict[chg])
-            dummy_ind += 2 * dict[chg]
+            dummy_ind += append[chg] + dict[chg]
         elif type == "latter":
-            ret[chg] = slice(dummy_ind + dict[chg], dummy_ind + 2 * dict[chg])
-            dummy_ind += 2 * dict[chg]
+            ret[chg] = slice(dummy_ind + dict[chg], dummy_ind + append[chg] + dict[chg])
+            dummy_ind += append[chg] + dict[chg]
         else:
             raise ValueError(f"type {type} is unknown")
     return ret
@@ -99,7 +103,7 @@ def get_gs(current_state_dict, d_sl, H1_new, H2_new, monomer_charges):
         new_ens, new_states = sort_eigen(np.linalg.eig(H2_new))
         return new_ens[0], new_states[:, 0].T
 
-def state_gradients(frag_ind, ints, dens_builder_stuff, dens, monomer_charges, n_threads=1, xr_order=0):
+def state_gradients(frag_ind, ints, dens_builder_stuff, dens, monomer_charges, n_threads=1, xr_order=0, dets={}):
     if xr_order != 0:
         raise NotImplementedError("gradients for higher orders in S than 0 are not implemented yet")
 
@@ -112,7 +116,10 @@ def state_gradients(frag_ind, ints, dens_builder_stuff, dens, monomer_charges, n
 
     state_dict = [{chg: len(dens_builder_stuff[i][0][chg].coeffs) for chg in monomer_charges[i]} for i in range(2)]
     #state_coeffs = [{chg: dens_builder_stuff[frag_map[i]][0][chg].coeffs for chg in monomer_charges[i]} for i in range(2)]
-    conf_dict = [{chg: len(dens_builder_stuff[i][0][chg].coeffs[0]) for chg in monomer_charges[i]} for i in range(2)]
+    if dets:
+        conf_dict = [{chg: len(dets[chg]) for chg in monomer_charges[i]} for i in range(2)]
+    else:
+        conf_dict = [{chg: len(dens_builder_stuff[i][0][chg].coeffs[0]) for chg in monomer_charges[i]} for i in range(2)]
 
     d_slices = [get_slices(state_dict[i], monomer_charges[i]) for i in range(2)]
     c_slices = [get_slices(conf_dict[i], monomer_charges[i]) for i in range(2)] 
@@ -159,32 +166,68 @@ def state_gradients(frag_ind, ints, dens_builder_stuff, dens, monomer_charges, n
     # maybe its a good idea to contract d with the ket states here, because it doesnt affect how one has to deal with the
     # determinant to state densities, but maybe eases up the building of them, because it might put a lot more elements
     # of the state below the threshold indicating whether the transition density for this element should even be built or not.
-    dens[frag_map[0]] = densities.build_tensors(*dens_builder_stuff[frag_map[0]][:-1], options=dens_builder_stuff[frag_map[0]][-1] + ["bra_det"], n_threads=n_threads)
+    dens[frag_map[0]] = densities.build_tensors(*dens_builder_stuff[frag_map[0]][:-1], options=dens_builder_stuff[frag_map[0]][-1] + ["bra_det"], n_threads=n_threads, dets=dets)
 
     # build gradient
     H1, H2 = get_xr_H(ints, dens, xr_order, monomer_charges, bra_det=True)
 
     print(H1[0].shape, H1[1].shape, H2.shape)
     H2 = H2.reshape((H1[0].shape[0], H1[1].shape[0]))#, H1[0].shape[1], H1[1].shape[1]))
+
+    # the following is the contribution <psi psi | H - E | phi psi>
+    """
+    dens[frag_map[0]] = densities.build_tensors(*dens_builder_stuff[frag_map[0]][:-1], options=dens_builder_stuff[frag_map[0]][-1] + ["ket_det"], n_threads=n_threads)
+    H1_new, H2_new = get_xr_H(ints, dens, xr_order, monomer_charges, ket_det=True)
+    print(H1_new[0].shape, H1_new[1].shape, H2_new.shape)
+    H2_new = H2_new.reshape((H1_new[0].shape[1], H1_new[1].shape[1]))
+    """
     # H1 of frag A can be used as is and H1 of frag B needs to be contracted with the state coeffs of frag A. Note, that this is independent of the XR order 
     gradient_states = {}
-    new_overlaps = get_adapted_overlaps(frag_map, d, state_coeffs, d_slices)
+    new_overlaps = get_adapted_overlaps(frag_map, d, d_slices)
+    #new_overlaps = {}
     
     for chg in monomer_charges[frag_map[0]]:
-        c0 = state_coeffs[frag_map[0]][chg]
+        if dets:
+            # compress state to smaller configuration space
+            c0 = np.einsum("ip,qp->iq", state_coeffs[frag_map[0]][chg], np.array(dets[chg])) 
+            #new_overlaps[chg] = np.einsum("ip,qp->iq", new_overlaps_pre[chg], np.array(dets[chg]))
+        else:
+            c0 = state_coeffs[frag_map[0]][chg]
+            #new_overlaps[chg] = new_overlaps_pre[chg]
         #gradient_states[chg] = H1[frag_map[0]][c_slices[frag_map[0]][chg], d_slices[frag_map[0]][chg]].T  # frag A monomer H term
         gradient_states[chg] = np.einsum("pi,ki->kp", H1[frag_map[0]][c_slices[frag_map[0]][chg], d_slices[frag_map[0]][chg]], new_overlaps[chg])  # frag A monomer H term
+        #print("step1", [np.linalg.norm(i) for i in gradient_states[chg]])
         #gradient_states[chg] -= E * c0  # E term
+        #print(gradient_states[chg].shape, c0.shape, new_overlaps[chg].shape)
         gradient_states[chg] -= np.einsum("ip,ki->kp", c0, new_overlaps[chg]) * E
+        #print("step2", [np.linalg.norm(i) for i in gradient_states[chg]])
         if frag_ind == 0:
             #gradient_states[chg] += np.einsum("pkii->kp", H2[c_slices[frag_map[0]][chg], d_slices[frag_map[0]][chg], :, :])  # dimer H term
             gradient_states[chg] += H2[c_slices[frag_map[0]][chg], d_slices[frag_map[0]][chg]].T  # dimer H term
         else:
             #gradient_states[chg] += np.einsum("kpii->kp", H2[d_slices[frag_map[0]][chg], c_slices[frag_map[0]][chg], :, :])  # dimer H term
             gradient_states[chg] += H2[d_slices[frag_map[0]][chg], c_slices[frag_map[0]][chg]]  # dimer H term
+        #print("step3", [np.linalg.norm(i) for i in gradient_states[chg]])
         # this line also relies on equal charges on fragments A and B
         gradient_states[chg] += np.einsum("ip,ki->kp", c0, H1[frag_map[1]][d_slices[frag_map[0]][chg], d_slices[frag_map[0]][chg]])  # frag B monomer H term
-        gradient_states[chg] *= 2
-    
-    return gs_energy, gradient_states
+        #print("step4", [np.linalg.norm(i) for i in gradient_states[chg]])
+        #gradient_states[chg] *= 2
+        # the following is the contribution <psi psi | H - E | phi psi>
+        """
+        gradient_states[chg] += np.einsum("ip,ki->kp", H1_new[frag_map[0]][d_slices[frag_map[0]][chg], c_slices[frag_map[0]][chg]], new_overlaps[chg])  # frag A monomer H term
+        #print("step1", [np.linalg.norm(i) for i in gradient_states[chg]])
+        #gradient_states[chg] -= E * c0  # E term
+        gradient_states[chg] -= np.einsum("ip,ki->kp", c0, new_overlaps[chg]) * E
+        #print("step2", [np.linalg.norm(i) for i in gradient_states[chg]])
+        if frag_ind == 0:
+            #gradient_states[chg] += np.einsum("pkii->kp", H2[c_slices[frag_map[0]][chg], d_slices[frag_map[0]][chg], :, :])  # dimer H term
+            gradient_states[chg] += H2_new[c_slices[frag_map[0]][chg], d_slices[frag_map[0]][chg]].T  # dimer H term
+        else:
+            #gradient_states[chg] += np.einsum("kpii->kp", H2[d_slices[frag_map[0]][chg], c_slices[frag_map[0]][chg], :, :])  # dimer H term
+            gradient_states[chg] += H2_new[d_slices[frag_map[0]][chg], c_slices[frag_map[0]][chg]]  # dimer H term
+        #print("step3", [np.linalg.norm(i) for i in gradient_states[chg]])
+        # this line also relies on equal charges on fragments A and B
+        gradient_states[chg] += np.einsum("ip,ki->kp", c0, H1_new[frag_map[1]][d_slices[frag_map[0]][chg], d_slices[frag_map[0]][chg]])  # frag B monomer H term
+        """
+    return gs_energy, gradient_states, d
 
