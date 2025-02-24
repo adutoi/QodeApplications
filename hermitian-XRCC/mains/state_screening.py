@@ -101,31 +101,44 @@ def missing_orbs(ref, big_nums, ref_ind):
 
 
 def state_screening(dens_builder_stuff, ints, monomer_charges, n_orbs, frozen, n_occ, n_threads=1,
-                    single_thresh=1/3, double_thresh=1/2):
+                    single_thresh=1/5, double_thresh=1/3.5, triple_thresh=1/2.5):
     # since in this procedure all elements of the integrals are looped over, one could make use of
     # this also build an object storing information on which elements of a certain density to compute
     # and which to neglect, which would speed up the density builder. Making use of sparse backend ontop
     # of that would then also speed up the contractions required to build the XR Hamiltonian.
-    h01 = raw(ints[0]("T")._as_tuple()[0][(0,1)])
-    h01 += raw(ints[0]("U")._as_tuple()[0][(0,1,0)])
-    h01 += raw(ints[0]("U")._as_tuple()[0][(1,1,0)])
+
+    #h01 = raw(ints[0]("T")._as_tuple()[0][(0,1)])
+    #h01 += raw(ints[0]("U")._as_tuple()[0][(0,0,1)])
+    #h01 += raw(ints[0]("U")._as_tuple()[0][(1,0,1)])
     #h01 = get_large(h01)
 
-    h10 = raw(ints[0]("T")._as_tuple()[0][(1,0)])
-    h10 += raw(ints[0]("U")._as_tuple()[0][(0,0,1)])
-    h10 += raw(ints[0]("U")._as_tuple()[0][(1,0,1)])
+    #h10 = raw(ints[0]("T")._as_tuple()[0][(1,0)])
+    #h10 += raw(ints[0]("U")._as_tuple()[0][(0,1,0)])
+    #h10 += raw(ints[0]("U")._as_tuple()[0][(1,1,0)])
     #h10 = get_large(h10)
+    symm_ints, bior_ints, nuc_rep = ints
+    # for the following to work for more than two fragments, one needs to track the fragment indices, such that
+    # e.g. if the dimer contribution between fragment 3 and 7 is required [3, 7] is requested (see XR term)
+    h01 = raw(bior_ints.T[0, 1])
+    h01 += raw(bior_ints.U[0, 0, 1])
+    h01 += raw(bior_ints.U[1, 0, 1])
+
+    h10 = raw(bior_ints.T[1, 0])
+    h10 += raw(bior_ints.U[0, 1, 0])
+    h10 += raw(bior_ints.U[1, 1, 0])
     # it seems like screening over V is not necessary, since h01 captures basically all contributions already...
     # this needs to be further investigated for a larger example, where not all contributions are relevant.
     # maybe instead of screening V one could also screen over the fock operator...
     # one should also screen over 1010 integrals, but this can be neglected, if the integrals are almost hermitian.
     # for strongly interacting fragments this might lead to missing contributions, so one probably needs to revisit this setup.
     #v0101 = get_large(raw(ints[0]("V")._as_tuple()[0][(0,1,0,1)]))
-    v0101 = raw(ints[0]("V")._as_tuple()[0][(0,1,0,1)])
+    #v0101 = raw(ints[0]("V")._as_tuple()[0][(0,1,0,1)])
+    v0101 = raw(bior_ints.V[0,1,0,1])
 
     # the following are required to screen for equations B30 and B31
     def get_v(frag_tuple):
-        return raw(ints[0]("V")._as_tuple()[0][frag_tuple])
+        #return raw(ints[0]("V")._as_tuple()[0][frag_tuple])
+        return raw(bior_ints.V[frag_tuple])
 
     #dens_arr = [densities.build_tensors(*dens_builder_stuff[m][:-1], options=[], n_threads=n_threads, screen=True) for m in range(2)]
     #for i in range(len(raw(dens_arr[0]["ca"][(0,0)]))):
@@ -275,7 +288,7 @@ def state_screening(dens_builder_stuff, ints, monomer_charges, n_orbs, frozen, n
         for special_ind in [0,2]:
             frag_inds[special_ind] = frag
             int = get_v(tuple(frag_inds))
-            for comb in get_large(int, thresh_frac=single_thresh / 5, compress_ouput=False):
+            for comb in get_large(int, thresh_frac=(1/1.5) * single_thresh * double_thresh * triple_thresh, compress_ouput=False):
                 # to understand the following sorting you must know, that according to the working equaitons B30 and B31
                 # the last two indices of the two el int always refer to annihilations and the first two always to creations
                 if any(elem in frozen for elem in comb):
@@ -440,7 +453,7 @@ def state_screening(dens_builder_stuff, ints, monomer_charges, n_orbs, frozen, n
                 int = h01
             else:
                 int = h10 
-            for pair in combinations(get_large(int, thresh_frac=double_thresh)[ref_ind], 3):  # we cannot provide whole triple space, so adjust thresh_frac (maybe iteratively)
+            for pair in combinations(get_large(int, thresh_frac=triple_thresh)[ref_ind], 3):  # we cannot provide whole triple space, so adjust thresh_frac (maybe iteratively)
                 # skip frozen core contributions
                 if pair[0] == pair[1] or (pair[0] == pair[2] or pair[1] == pair[2]):  # cant put two electrons in the same spin orbital
                     continue

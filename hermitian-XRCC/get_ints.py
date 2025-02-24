@@ -117,7 +117,7 @@ def direct_CoreProj(fragments, S):
 
     return Left, Right
 
-def get_ints(fragments, project_core=True, timings=None):
+def get_ints(fragments, project_core=True, timings=None, spin_ints=True):
     # More needs to be done regarding the basis to prevent mismatches with the fragment states
     AO_ints     = AO_integrals(fragments)
     FragMO_ints = fragMO_integrals(AO_ints, [frag.basis.MOcoeffs for frag in fragments], cache=True)     # Cache because multiple calls to each block during biorthogonalization
@@ -132,23 +132,28 @@ def get_ints(fragments, project_core=True, timings=None):
     Sinv = direct_Sinv(fragments, FragMO_ints.S)
     BiFragMO_ints = bra_transformed(Sinv, FragMO_ints, cache=True)
 
-    #-#-# FragMO_spin_ints   = spin_orb_integrals(  FragMO_ints, rule_wrappers=[tensorly_wrapper], cache=True)     # no need to cache? because each block only called once by contraction code
-    #-#-# BiFragMO_spin_ints = spin_orb_integrals(BiFragMO_ints, rule_wrappers=[tensorly_wrapper], cache=True)     # no need to cache? because each block only called once by contraction code
-    FragMO_spin_ints_raw   = spin_orb_integrals(  FragMO_ints, "blocked")     # no need to cache? because each block only called once by contraction code
-    BiFragMO_spin_ints_raw = spin_orb_integrals(BiFragMO_ints, "blocked")     # no need to cache? because each block only called once by contraction code
-    FragMO_spin_ints = struct(
-        S = wrap(FragMO_spin_ints_raw.S,   [cached, tensorly_wrapper(timings)]),
-        T = wrap(FragMO_spin_ints_raw.T,   [cached, tensorly_wrapper(timings)]),
-        U = wrap(FragMO_spin_ints_raw.U,   [cached, tensorly_wrapper(timings)]),
-        V = wrap(FragMO_spin_ints_raw.V,   [cached, tensorly_wrapper2(timings)])
-    )
-    BiFragMO_spin_ints = struct(
-        S      = wrap(BiFragMO_spin_ints_raw.S, [cached, tensorly_wrapper(timings)]),
-        T      = wrap(BiFragMO_spin_ints_raw.T, [cached, tensorly_wrapper(timings)]),
-        U      = wrap(BiFragMO_spin_ints_raw.U, [cached, tensorly_wrapper(timings)]),
-        V      = wrap(BiFragMO_spin_ints_raw.V, [cached, tensorly_wrapper2(timings)]),
-        V_half = wrap(BiFragMO_spin_ints_raw.V_half, [cached, tensorly_wrapper2(timings)]),
-        V_diff = dynamic_array([cached, tensorly_wrapper2(timings), tens_diff(BiFragMO_spin_ints_raw.V_half, BiFragMO_spin_ints_raw.V)], BiFragMO_spin_ints_raw.V.ranges)
-    )
+    if spin_ints:
+        #-#-# FragMO_spin_ints   = spin_orb_integrals(  FragMO_ints, rule_wrappers=[tensorly_wrapper], cache=True)     # no need to cache? because each block only called once by contraction code
+        #-#-# BiFragMO_spin_ints = spin_orb_integrals(BiFragMO_ints, rule_wrappers=[tensorly_wrapper], cache=True)     # no need to cache? because each block only called once by contraction code
+        FragMO_spin_ints_raw   = spin_orb_integrals(  FragMO_ints, "blocked")     # no need to cache? because each block only called once by contraction code
+        BiFragMO_spin_ints_raw = spin_orb_integrals(BiFragMO_ints, "blocked")     # no need to cache? because each block only called once by contraction code
+        FragMO_spin_ints = struct(
+            S = wrap(FragMO_spin_ints_raw.S,   [cached, tensorly_wrapper(timings)]),
+            T = wrap(FragMO_spin_ints_raw.T,   [cached, tensorly_wrapper(timings)]),
+            U = wrap(FragMO_spin_ints_raw.U,   [cached, tensorly_wrapper(timings)]),
+            V = wrap(FragMO_spin_ints_raw.V,   [cached, tensorly_wrapper2(timings)])
+        )
+        BiFragMO_spin_ints = struct(
+            S      = wrap(BiFragMO_spin_ints_raw.S, [cached, tensorly_wrapper(timings)]),
+            T      = wrap(BiFragMO_spin_ints_raw.T, [cached, tensorly_wrapper(timings)]),
+            U      = wrap(BiFragMO_spin_ints_raw.U, [cached, tensorly_wrapper(timings)]),
+            V      = wrap(BiFragMO_spin_ints_raw.V, [cached, tensorly_wrapper2(timings)]),
+            V_half = wrap(BiFragMO_spin_ints_raw.V_half, [cached, tensorly_wrapper2(timings)]),
+            V_diff = dynamic_array([cached, tensorly_wrapper2(timings), tens_diff(BiFragMO_spin_ints_raw.V_half, BiFragMO_spin_ints_raw.V)], BiFragMO_spin_ints_raw.V.ranges),
+            V_half1 = wrap(BiFragMO_spin_ints_raw.V_half1, [cached, tensorly_wrapper2(timings)]),
+            V_half2 = wrap(BiFragMO_spin_ints_raw.V_half2, [cached, tensorly_wrapper2(timings)])
+        )
 
-    return FragMO_spin_ints, BiFragMO_spin_ints, Nuc_repulsion(fragments).matrix
+        return FragMO_spin_ints, BiFragMO_spin_ints, Nuc_repulsion(fragments).matrix
+    else:
+        return FragMO_ints, BiFragMO_ints, Nuc_repulsion(fragments).matrix

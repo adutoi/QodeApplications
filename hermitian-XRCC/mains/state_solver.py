@@ -18,7 +18,7 @@
 
 from   get_ints import get_ints
 from   get_xr_result import get_xr_states, get_xr_H
-from qode.math.tensornet import raw, tl_tensor
+from qode.math.tensornet import raw, tl_tensor, backend_contract_path
 #import qode.util
 from qode.util import timer, sort_eigen
 from state_gradients import state_gradients, get_slices, get_adapted_overlaps
@@ -37,10 +37,13 @@ import pickle
 from   build_fci_states import get_fci_states
 import densities
 
+tl.plugins.use_opt_einsum()
+backend_contract_path(True)
+
 #class empty(object):  pass
 
 
-def optimize_states(displacement, max_iter, xr_order, conv_thresh=1e-6, dens_filter_thresh=1e-9):
+def optimize_states(displacement, max_iter, xr_order, conv_thresh=1e-6, dens_filter_thresh=1e-7):
     ######################################################
     # Initialize integrals and density preliminaries
     ######################################################
@@ -66,7 +69,7 @@ def optimize_states(displacement, max_iter, xr_order, conv_thresh=1e-6, dens_fil
     for m in range(int(n_frag)):
         state_obj, dens_var_1, dens_var_2, n_threads, Be = get_fci_states(displacement, n_state_list=[(1, 2), (0, 10), (-1, 10)])
         #Be.basis.MOcoeffs = ref_mos.copy()
-        #pickle.dump(Be.basis.MOcoeffs, open(f"pre_opt_mos_{m}.pkl", mode="wb"))
+        pickle.dump(Be.basis.MOcoeffs, open(f"pre_opt_mos_{m}.pkl", mode="wb"))
 
         #Be.basis.MOcoeffs = pickle.load(open(f"pre_opt_mos_{m}.pkl", mode="rb"))
         #for chg in monomer_charges[m]:
@@ -813,8 +816,8 @@ def optimize_states(displacement, max_iter, xr_order, conv_thresh=1e-6, dens_fil
     ######################################################
     print("starting screening now")
 
-    additional_states, confs_and_inds = state_screening(dens_builder_stuff, ints, monomer_charges, n_orbs, frozen_orbs, n_occ, n_threads=n_threads,
-                                                        single_thresh=1/3, double_thresh=1/2)
+    additional_states, confs_and_inds = state_screening(dens_builder_stuff, ints, monomer_charges, n_orbs, frozen_orbs, n_occ, n_threads=n_threads)
+                                                        #single_thresh=1/3, double_thresh=1/2, triple_thresh=1/1.5)
     """
     remaining_dets = [{}, {}]
     for frag in range(2):
@@ -843,7 +846,7 @@ def optimize_states(displacement, max_iter, xr_order, conv_thresh=1e-6, dens_fil
     # 1. use linear combinations of the basis functions with similar weights for each of the relevant determinants
     # 2. start by only expanding the neutral space in bigger steps, which probably contains most of the
     # correlation with itself and then expand the other charges, which can then be applied in larger chunks
-    while safety_iter < 0:#not all(screening_done.flatten()):
+    while safety_iter < 20:#not all(screening_done.flatten()):
         #if safety_iter >= 10:
         #    break
         safety_iter += 1
@@ -939,7 +942,7 @@ def optimize_states(displacement, max_iter, xr_order, conv_thresh=1e-6, dens_fil
     iter = 0
     converged = False
 
-    #pickle.dump(state_coeffs_optimized, open("pre_opt_coeffs.pkl", mode="wb"))
+    pickle.dump(state_coeffs_optimized, open("pre_opt_coeffs.pkl", mode="wb"))
     for frag in range(2):
         dens.append(densities.build_tensors(*dens_builder_stuff[frag][:-1], options=density_options, n_threads=n_threads))
 
@@ -1019,20 +1022,21 @@ def optimize_states(displacement, max_iter, xr_order, conv_thresh=1e-6, dens_fil
         dens[1] = densities.build_tensors(*dens_builder_stuff[1][:-1], options=dens_builder_stuff[1][-1], n_threads=n_threads)
     """
 
-    return en_history #screening_energies
-    #return screening_energies
+    #return en_history #screening_energies
+    return screening_energies
 
 
 #scan = []
 #for i in range(12):
-#    scan.append(optimize_states(3.9 + i / 10, 20, 0))
-#scan = [optimize_states(4.5, 0, 0, dens_filter_thresh=1e-6), optimize_states(4.5, 0, 0, dens_filter_thresh=1e-7),
-#        optimize_states(4.5, 0, 0, dens_filter_thresh=1e-8), optimize_states(4.5, 0, 0, dens_filter_thresh=1e-9),
-#        optimize_states(4.5, 0, 0, dens_filter_thresh=1e-10)]
+#    scan.append(optimize_states(3.9 + i / 10, 0, 0))
+
+#scan = [optimize_states(4.5, 20, 0, dens_filter_thresh=1e-6), optimize_states(4.5, 20, 0, dens_filter_thresh=1e-7),
+#        optimize_states(4.5, 20, 0, dens_filter_thresh=1e-8), optimize_states(4.5, 20, 0, dens_filter_thresh=1e-9)]
+        #optimize_states(4.5, 0, 0, dens_filter_thresh=1e-10)]
 
 #print(scan)
 
-print(optimize_states(4.5, 20, 0))#, dens_filter_thresh=3e-9))
+print(optimize_states(4.5, 0, 0))#, dens_filter_thresh=3e-9))
 
 
 

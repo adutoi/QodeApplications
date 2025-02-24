@@ -58,6 +58,11 @@ def precontract(densities, integrals, timings):
                 else:
                     int_indices += [idx]
                     int_blocks += [indices[0]]
+                #try:
+                #    ints = integrals.T[int_blocks]
+                #except:
+                #    print(int_blocks)
+            int_blocks = tuple(int_blocks)
             if int_type=="S":  ints = integrals[int_blocks]    # makes the calling signature inhomogeneous to force error otherwise
             if int_type=="T":  ints = integrals.T[int_blocks]
             if int_type=="U":  ints = integrals.U[int_blocks]
