@@ -970,7 +970,7 @@ class grads_and_hessian(object):
         print("done")
         # enforce antisymmetry, because term can be taken with x_pq, but also with - x_qp not only in the derivate (d/dx), but also in the actual term
         # where x is the transformation matrix for the orbitals ... symmetry will hence be enforced dividing x into two parts and transforming one of them
-        return 0.5 * (grad - grad.T)  #TODO: Original paper also didn't include a "normalization" ... I guess one needs to figure out what works best in the future
+        return 1 * (grad - grad.T)  #TODO: Original paper also didn't include a "normalization" ... I guess one needs to figure out what works best in the future
         #return 0.01 * grad  # without enforcing symmetry smaller imaginary parts are obtained for dl and dr, but enforcing symmetry seems to also yield sufficiently small values
     
     def orb_hess_diag(self, dl, dr, dens, ints):
@@ -989,25 +989,25 @@ class grads_and_hessian(object):
         v_dens = self.two_p_dens(np.zeros(self.ten_shape_large), dl, dr, dens)
         print("computing v")
         v_diagram_hess(hess_diag, v_dens, ints_bior, self.ov_slice, self.mat_ov_slice, self.mat_slice)
-        hess_diag = 1 * (hess_diag + np.transpose(hess_diag, (2,3,0,1)))  # this is actually a term from the equations, so it needs factor 1
+        #hess_diag = 1 * (hess_diag + np.transpose(hess_diag, (2,3,0,1)))  # this is actually a term from the equations, so it needs factor 1
         #v_diagram_hess(hess_diag, dl, dr, dens, ints_bior, ints_symm, s_inv_2, self.d_slices, self.n_occ, self.mat_ov_slice, self.ov_slice)  # update mat in place
         print("computing grad like term")
         grad_term = np.zeros(self.ten_shape)
-        #TODO: the following should be loaded from some cache
+        #TODO: the following should be loaded from cache
         t_diagram2(grad_term, h_dens, ints_bior, self.ov_slice, self.mat_ov_slice, self.mat_slice)  # update mat in place
         u_diagram2(grad_term, h_dens, ints_bior, self.ov_slice, self.mat_ov_slice, self.mat_slice)  # update mat in place
         v_diagram2(grad_term, v_dens, ints_bior, self.ov_slice, self.mat_ov_slice, self.mat_slice)  # update mat in place
         # not sure, if this term is allowed to be (2,3,0,1) transposed or not...
-        hess_diag -= 1 * np.einsum("kj,il->ijkl", np.identity(self.ten_shape[0]), grad_term)  # minus to correct sign compared to gradient and 0.5 because of later transpose(2,3,0,1)
+        for frag in range(2):
+            hess_diag[self.mat_slice[frag],self.mat_slice[frag],self.mat_slice[frag],self.mat_slice[frag]] -= 0.5 * np.einsum("kj,il->ijkl", np.identity(self.n_occ[frag] + self.n_virt[frag]), grad_term[self.mat_slice[frag],self.mat_slice[frag]])
+        #hess_diag -= 0.5 * np.einsum("kj,il->ijkl", np.identity(self.ten_shape[0]), grad_term)  # minus to correct sign compared to gradient and 0.5 because of later transpose(2,3,0,1)
         print("done")
         # since far bigger tensors than those the size of an ERI need to be taken into account for the calculation
         # of the gradients already (2p densities) there is not really a need to only give the diagonal, but rather
-        # to be as precise with little computational effort as possible, so the resulting tensor could also be the full 4d tensor
-        # with ia,ia ia,ai ai,ia and ai,ai computed. If required at least ia,ia and ai,ai can also be handled as 2d matrices
-        # and inverted as such. For now the 4d tensor with actually just the diagonals ia,ia and ai,ai is returned.
-        # enforce antisymmetry like for orb_grads
-        hess_diag = 0.25 * (hess_diag - np.transpose(hess_diag, (1,0,2,3)) - np.transpose(hess_diag, (0,1,3,2)) + np.transpose(hess_diag, (1,0,3,2)))
-        #hess_diag = 1 * (hess_diag + np.transpose(hess_diag, (2,3,0,1)))  # this is actually a term from the equations, so it needs factor 1
+        # to be as precise with little computational effort as possible, so the resulting tensor could also be more
+        # than the diagonal. For now the 4d tensor with full blocks 0,0,0,0 and 1,1,1,1 is returned.
+        hess_diag = 1 * (hess_diag - np.transpose(hess_diag, (1,0,2,3)) - np.transpose(hess_diag, (0,1,3,2)) + np.transpose(hess_diag, (1,0,3,2)))
+        return 1 * (hess_diag + np.transpose(hess_diag, (2,3,0,1)))  # this is actually a term from the equations, so it needs factor 1
         #hess_diag = 0.5 * (hess_diag + np.transpose(hess_diag, (1,0,3,2)))
-        #return 0.5 * (hess_diag + np.transpose(hess_diag, (2,3,0,1)))  # not sure if this is necessary
-        return hess_diag
+        #return 0.5 * (hess_diag + np.transpose(hess_diag, (2,3,0,1)))
+        #return hess_diag

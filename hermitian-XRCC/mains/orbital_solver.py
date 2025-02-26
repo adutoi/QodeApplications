@@ -74,7 +74,7 @@ def optimize_orbs(displacement, max_iter, xr_order, conv_thresh=1e-6, dens_filte
     dens_builder_stuff = []
     state_coeffs_og = []
     XR_energies = []
-    #pre_opt_states = pickle.load(open("pre_opt_coeffs.pkl", mode="rb"))
+    pre_opt_states = pickle.load(open("pre_opt_coeffs.pkl", mode="rb"))
     for m in range(int(n_frag)):
         state_obj, dens_var_1, dens_var_2, n_threads, Be = get_fci_states(displacement, n_state_list=[(1, 0), (0, 11), (-1, 0)])
         #Be.basis.MOcoeffs = ref_mos.copy()
@@ -83,9 +83,9 @@ def optimize_orbs(displacement, max_iter, xr_order, conv_thresh=1e-6, dens_filte
         #print(Be.basis.MOcoeffs.shape)
         #raise ValueError("stop here")
 
-        #Be.basis.MOcoeffs = pickle.load(open(f"pre_opt_mos_{m}.pkl", mode="rb"))
-        #for chg in monomer_charges[m]:
-        #    state_obj[chg].coeffs = pre_opt_states[m][chg].copy()
+        Be.basis.MOcoeffs = pickle.load(open(f"pre_opt_mos_{m}.pkl", mode="rb"))
+        for chg in monomer_charges[m]:
+            state_obj[chg].coeffs = pre_opt_states[m][chg].copy()
 
             #state_obj[chg].coeffs = ref_states[chg].coeffs.copy()
         #    state_obj[chg].configs = ref_states[chg].configs.copy()
@@ -161,14 +161,16 @@ def optimize_orbs(displacement, max_iter, xr_order, conv_thresh=1e-6, dens_filte
 
     b = n_occ[0] * n_virt[0]
 
-    def diag_inv(vec):
+    def diag_inv(vec, set_one=False):
         ret = np.empty_like(vec)
         for i, el in enumerate(vec):
             if abs(el) < 1e-4:
                 ret[i] = 0
             else:
-                # TODO: at the moment the quasi identity matrix is set up, which is not a good guess, but the current hessian diagonal elements seem to be much worse for some reason...probably an error
-                ret[i] = 1 #/ el
+                if set_one:
+                    ret[i] = 1 #/ el
+                else:
+                    ret[i] = 1 / el
                 #print(el)
         return ret
     
@@ -216,7 +218,8 @@ def optimize_orbs(displacement, max_iter, xr_order, conv_thresh=1e-6, dens_filte
     #        if abs(hess_init.reshape(36*36,36*36)[i,j]) > 0.03:
     #            print(i,j)
 
-    hess_inv = np.diag(diag_inv(np.diag(hess_init.reshape((sum(n_occ) + sum(n_virt)) ** 2, (sum(n_occ) + sum(n_virt)) ** 2)))).reshape(hess_init.shape)
+    # start from identity to perform gradient descend first...in case guess is too bad for quasi-newton
+    hess_inv = np.diag(diag_inv(np.diag(hess_init.reshape((sum(n_occ) + sum(n_virt)) ** 2, (sum(n_occ) + sum(n_virt)) ** 2)), set_one=True)).reshape(hess_init.shape)
     #hess_inv = hess_inv / np.linalg.norm(hess_inv)
 
     #hess_init_2 = hess_init.reshape((sum(n_occ) + sum(n_virt)) ** 2, (sum(n_occ) + sum(n_virt)) ** 2)
@@ -478,6 +481,12 @@ def optimize_orbs(displacement, max_iter, xr_order, conv_thresh=1e-6, dens_filte
         #hess_inv = sequential_2b2_invert(hess_init_2).reshape(hess_inv.shape)
         grads = g_and_h.orb_grads(dl, dr, dens, new_ints)
         grad_norm = np.linalg.norm(grads)
+        if iter % 5 == 0:
+            hess_init = g_and_h.orb_hess_diag(dl, dr, dens, new_ints)
+            if iter < 15:
+                hess_inv = np.diag(diag_inv(np.diag(hess_init.reshape((sum(n_occ) + sum(n_virt)) ** 2, (sum(n_occ) + sum(n_virt)) ** 2)))).reshape(hess_init.shape)
+            else:  # do only gradient descent from here, to ensure correspondence
+                hess_inv = np.diag(diag_inv(np.diag(hess_init.reshape((sum(n_occ) + sum(n_virt)) ** 2, (sum(n_occ) + sum(n_virt)) ** 2)), set_one=True)).reshape(hess_init.shape)
         #if np.linalg.norm(grads) > 0.3:
         #    grads *= 0.02
         # Here different literature says to use grads for the gradient and some other would use grads_prev
