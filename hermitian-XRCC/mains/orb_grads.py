@@ -322,104 +322,80 @@ v_catalog_hess = [  # target fragment is 0 ... for target fragment 1 simply put 
 ]
 
 def t_diagram(ret, h_dens, ints_bior, ov_slice, mat_ov_slice, mat_slice):
-    #combs = [(1, ["a", "i"]), (-1, ["i", "a"])]
     combs = [(1, [x, y]) for x in ["a", "i"] for y in ["a", "i"]]
     def t_bior(i, j):
         return ints_bior.T[i,j]
-    #def t_symm(i, j):
-    #    return ints_symm.T[i,j]
-    #def s_inv_2(i, j):
-    #    return s_inv_2_[(i,j)]
     for comb in combs:
         pl, ql = comb[1]
         for s1 in range(2):
             for s2 in range(2):
                 for i in range(2):
                     for j in range(2):
-                        #ret[mat_ov_slice[(j, pl, s1)], mat_ov_slice[(j, ql, s2)]] +=\
-                        #        comb[0] * raw(t_bior(i, j)[:, ov_slice[(j, ql, s2)]](r, 1) @ h_dens[mat_slice[i], mat_ov_slice[(j, pl, s1)]](r, 0))
                         for l in range(2):
                             if l != j:
                                 continue
                             ret[mat_ov_slice[(j, pl, s1)], mat_ov_slice[(l, ql, s2)]] +=\
-                                comb[0] * raw(t_bior(i, l)[:, ov_slice[(l, ql, s2)]](r, 1) @ h_dens[mat_slice[i], mat_ov_slice[(j, pl, s1)]](r, 0)
-                                            - t_bior(j, i)[ov_slice[(j, pl, s1)],:](0, r) @ h_dens[mat_ov_slice[(l, ql, s2)], mat_slice[i]](1, r))
-                        
-                            #for k in range(2):
-                            #    #if k != l:
-                            #    #    continue
-                            #    ret[mat_ov_slice[(k, pl, s1)], mat_ov_slice[(l, ql, s2)]] -=\
-                            #        comb[0] * raw(s_inv_2(i, l)[:, ov_slice[(l, ql, s2)]](r, 1) @ t_symm(k, j)[ov_slice[(k, pl, s1)], :](0, s) @ h_dens[mat_slice[i], mat_slice[j]](r, s))
-    """
-    ret[mat_ov_slice[(0, "a")], mat_ov_slice[(0, "i")]] += t_bior(0, 0)[:, ov_slice[(0, "i")]](r, 1) @ h_dens[mat_slice[0], mat_ov_slice[(0, "a")]](r, 0) \
-    + t_bior(1, 0)[:, ov_slice[(0, "i")]](r, 1) @ h_dens[mat_slice[1], mat_ov_slice[(0, "a")]](r, 0) \
-    + s_inv_2(0, 0)[:, ov_slice[(0, "a")]](r, 0) @ t_symm(0, 0)[ov_slice[(0, "i")], :](1, s) @ h_dens[mat_slice[0], mat_slice[0]](r, s) \
-    + s_inv_2(1, 0)[:, ov_slice[(0, "a")]](r, 0) @ t_symm(0, 0)[ov_slice[(0, "i")], :](1, s) @ h_dens[mat_slice[1], mat_slice[0]](r, s) \
-    + s_inv_2(0, 0)[:, ov_slice[(0, "a")]](r, 0) @ t_symm(0, 1)[ov_slice[(0, "i")], :](1, s) @ h_dens[mat_slice[0], mat_slice[1]](r, s) \
-    + s_inv_2(1, 0)[:, ov_slice[(0, "a")]](r, 0) @ t_symm(0, 1)[ov_slice[(0, "i")], :](1, s) @ h_dens[mat_slice[1], mat_slice[1]](r, s)
-    ret[mat_ov_slice[(1, "a")], mat_ov_slice[(1, "i")]] += t_bior(0, 1)[:, ov_slice[(1, "i")]](r, 1) @ h_dens[mat_slice[0], mat_ov_slice[(1, "a")]](r, 0) \
-    + t_bior(1, 1)[:, ov_slice[(1, "i")]](r, 1) @ h_dens[mat_slice[1], mat_ov_slice[(1, "a")]](r, 0) \
-    + s_inv_2(0, 1)[:, ov_slice[(1, "a")]](r, 0) @ t_symm(1, 0)[ov_slice[(1, "i")], :](1, s) @ h_dens[mat_slice[0], mat_slice[0]](r, s) \
-    + s_inv_2(1, 1)[:, ov_slice[(1, "a")]](r, 0) @ t_symm(1, 0)[ov_slice[(1, "i")], :](1, s) @ h_dens[mat_slice[1], mat_slice[0]](r, s) \
-    + s_inv_2(0, 1)[:, ov_slice[(1, "a")]](r, 0) @ t_symm(1, 1)[ov_slice[(1, "i")], :](1, s) @ h_dens[mat_slice[0], mat_slice[1]](r, s) \
-    + s_inv_2(1, 1)[:, ov_slice[(1, "a")]](r, 0) @ t_symm(1, 1)[ov_slice[(1, "i")], :](1, s) @ h_dens[mat_slice[1], mat_slice[1]](r, s)
-    """
-    #return ret
-
-def t_diagram_hess(ret, h_dens, ints_bior, ints_symm, s_inv_2_, ov_slice, mat_ov_slice, mat_slice):
-    #target_inds_pre = [(0, ["a", "i"]), (1, ["i", "a"])]
-    #combs = [((-1)**(target_inds_pre[x1][0] + target_inds_pre[x2][0]), [*target_inds_pre[x1][1], *target_inds_pre[x2][1]])
-    #         for x1 in range(2) for x2 in range(2)]
+                                comb[0] * raw(t_bior(i, l)[:, ov_slice[(l, ql, s2)]](r, 1) @ h_dens[mat_slice[i], mat_ov_slice[(j, pl, s1)]](r, 0))
+                                            #- t_bior(j, i)[ov_slice[(j, pl, s1)],:](0, r) @ h_dens[mat_ov_slice[(l, ql, s2)], mat_slice[i]](1, r))
+                            
+def t_diagram2(ret, h_dens, ints_bior, ov_slice, mat_ov_slice, mat_slice):
     combs = [(1, [x, y]) for x in ["a", "i"] for y in ["a", "i"]]
-    #combs = [(1, ["i", "a", "i", "a"])]
-    #print(combs)
-    #def t_bior(i, j):
-    #    return ints_bior.T[i,j]
-    def t_symm(i, j):
-        return ints_symm.T[i,j]
-    def s_inv_2(i, j):
-        return s_inv_2_[(i,j)]
-    for j in range(2):
-        for k in range(2):
-            for comb in combs:
-                #if comb[0] == -1:
-                #    continue
-                pl, ql, pr, qr = comb[1]
+    def t_bior(i, j):
+        return ints_bior.T[i,j]
+    for comb in combs:
+        pl, ql = comb[1]
+        for s1 in range(2):
+            for s2 in range(2):
+                for i in range(2):
+                    for j in range(2):
+                        for l in range(2):
+                            if l != j:
+                                continue
+                            ret[mat_ov_slice[(j, pl, s1)], mat_ov_slice[(l, ql, s2)]] -=\
+                                comb[0] * raw(t_bior(j, i)[ov_slice[(j, pl, s1)],:](0, r) @ h_dens[mat_ov_slice[(l, ql, s2)], mat_slice[i]](1, r))
+                        
+
+def t_diagram_hess(ret, h_dens, ints_bior, ov_slice, mat_ov_slice, mat_slice):
+    #combs = [(1, [x, y]) for x in ["a", "i"] for y in ["a", "i"]]
+    #combs = [(1, [x, y, z, z1]) for x in ["a", "i"] for y in ["a", "i"] for z in ["a", "i"] for z1 in ["a", "i"]]
+    def t_bior(i, j):
+        return ints_bior.T[i,j]
+    for k in range(2):
+        ret[mat_slice[k], mat_slice[k], mat_slice[k], mat_slice[k]] -=\
+            1 * raw(t_bior(k, k)[:,:](2, 1) @ h_dens[mat_slice[k], mat_slice[k]](3, 0))
+        """
+        for comb in combs:
+            macrocomb = [comb[1]]
+            #if comb[1][0] == comb[1][1]:
+            #    macrocomb = [comb[1] + comb[1]]
+            #else:
+            #    macrocomb = [comb[1] + comb[1]]#, comb[1] + list(reversed(comb[1]))]
+            for mac in macrocomb:
+                pl, ql, pr, qr = mac
                 for s1 in range(2):
                     for s2 in range(2):
-                        if s2 != s1:
-                            continue
-                        #for s3 in range(2):
-                        #    for s4 in range(2):
+                        #if s2 != s1:
+                        #    continue
                         s3 = s1
                         s4 = s2
-                        #print(pl, ql, pr, qr)
-                        #print(raw(h_dens[mat_slice[j], mat_ov_slice[(k, pr)]]))
-                        #print(ret.shape)
-                        #print([mat_ov_slice[(k, pl)], mat_ov_slice[(k, ql)], mat_ov_slice[(k, pr)], mat_ov_slice[(k, qr)]])
-                        #print(ret[mat_ov_slice[(k, pl)], mat_ov_slice[(k, ql)], mat_ov_slice[(k, pr)], mat_ov_slice[(k, qr)]])
                         ret[mat_ov_slice[(k, pl, s1)], mat_ov_slice[(k, ql, s2)], mat_ov_slice[(k, pr, s3)], mat_ov_slice[(k, qr, s4)]] -=\
-                            comb[0] * raw(s_inv_2(j, k)[:, ov_slice[(k, ql, s2)]](r, 1) @ t_symm(k, k)[ov_slice[(k, pl, s1)], ov_slice[(k, qr, s4)]](0, 3) @ h_dens[mat_slice[j], mat_ov_slice[(k, pr, s3)]](r, 2))
-            """
-            # for building a 2d matrix
-            for i in range(*ov_slice_range[(k, "i")]):
-                i_ = i + mat_ov_slice_range[(k, "i")][0]
-                for a in range(*ov_slice_range[(k, "a")]):
-                    a_ = a + mat_ov_slice_range[(k, "i")][0]
-                    ret[a_, i_] +=\
-                        raw(t_symm(k, k)[i, i] * s_inv_2(j, k)[:, a](r) @ h_dens[mat_slice[j], a_](r))
-            """
+                            comb[0] * raw(t_bior(k, k)[ov_slice[(k, pr, s3)], ov_slice[(k, ql, s2)]](2, 1) @ h_dens[mat_ov_slice[(k, qr, s4)], mat_ov_slice[(k, pl, s1)]](3, 0))
+        """
+        """
+        # for building a 2d matrix
+        for i in range(*ov_slice_range[(k, "i")]):
+            i_ = i + mat_ov_slice_range[(k, "i")][0]
+            for a in range(*ov_slice_range[(k, "a")]):
+                a_ = a + mat_ov_slice_range[(k, "i")][0]
+                ret[a_, i_] +=\
+                    raw(t_symm(k, k)[i, i] * s_inv_2(j, k)[:, a](r) @ h_dens[mat_slice[j], a_](r))
+        """
 
 
 def u_diagram(ret, h_dens, ints_bior, ov_slice, mat_ov_slice, mat_slice):
-    #combs = [(1, ["a", "i"]), (-1, ["i", "a"])]
     combs = [(1, [x, y]) for x in ["a", "i"] for y in ["a", "i"]]
     def u_bior(n, i, j):
         return ints_bior.U[n,i,j]
-    #def u_symm(n, i, j):
-    #    return ints_symm.U[n,i,j]
-    #def s_inv_2(i, j):
-    #    return s_inv_2_[(i,j)]
     for comb in combs:
         pl, ql = comb[1]
         for s1 in range(2):
@@ -427,54 +403,58 @@ def u_diagram(ret, h_dens, ints_bior, ov_slice, mat_ov_slice, mat_slice):
                 for n in range(2):
                     for i in range(2):
                         for j in range(2):
-                            #ret[mat_ov_slice[(j, pl, s1)], mat_ov_slice[(j, ql, s2)]] +=\
-                            #        comb[0] * raw(u_bior(n, i, j)[:, ov_slice[(j, ql, s2)]](r, 1) @ h_dens[mat_slice[i], mat_ov_slice[(j, pl, s1)]](r, 0))
                             for l in range(2):
                                 if l != j:
                                     continue
                                 ret[mat_ov_slice[(j, pl, s1)], mat_ov_slice[(l, ql, s2)]] +=\
-                                    comb[0] * raw(u_bior(n, i, l)[:, ov_slice[(l, ql, s2)]](r, 1) @ h_dens[mat_slice[i], mat_ov_slice[(j, pl, s1)]](r, 0)
-                                                - u_bior(n, j, i)[ov_slice[(j, pl, s1)],:](0, r) @ h_dens[mat_ov_slice[(l, ql, s2)], mat_slice[i]](1, r))
-                                #for k in range(2):
-                                #    #if k != l:
-                                #    #    continue
-                                #    ret[mat_ov_slice[(k, pl, s1)], mat_ov_slice[(l, ql, s2)]] -=\
-                                #        comb[0] * raw(s_inv_2(i, l)[:, ov_slice[(l, ql, s2)]](r, 1) @ u_symm(n, k, j)[ov_slice[(k, pl, s1)], :](0, s) @ h_dens[mat_slice[i], mat_slice[j]](r, s))
+                                    comb[0] * raw(u_bior(n, i, l)[:, ov_slice[(l, ql, s2)]](r, 1) @ h_dens[mat_slice[i], mat_ov_slice[(j, pl, s1)]](r, 0))
+                                                #- u_bior(n, j, i)[ov_slice[(j, pl, s1)],:](0, r) @ h_dens[mat_ov_slice[(l, ql, s2)], mat_slice[i]](1, r))
+                                
+def u_diagram2(ret, h_dens, ints_bior, ov_slice, mat_ov_slice, mat_slice):
+    combs = [(1, [x, y]) for x in ["a", "i"] for y in ["a", "i"]]
+    def u_bior(n, i, j):
+        return ints_bior.U[n,i,j]
+    for comb in combs:
+        pl, ql = comb[1]
+        for s1 in range(2):
+            for s2 in range(2):
+                for n in range(2):
+                    for i in range(2):
+                        for j in range(2):
+                            for l in range(2):
+                                if l != j:
+                                    continue
+                                ret[mat_ov_slice[(j, pl, s1)], mat_ov_slice[(l, ql, s2)]] -=\
+                                    comb[0] * raw(u_bior(n, j, i)[ov_slice[(j, pl, s1)],:](0, r) @ h_dens[mat_ov_slice[(l, ql, s2)], mat_slice[i]](1, r))                                
+                                
 
-def u_diagram_hess(ret, h_dens, ints_bior, ints_symm, s_inv_2_, ov_slice, mat_ov_slice, mat_slice):
-    target_inds_pre = [(0, ["a", "i"]), (1, ["i", "a"])]
-    combs = [((-1)**(target_inds_pre[x1][0] + target_inds_pre[x2][0]), [*target_inds_pre[x1][1], *target_inds_pre[x2][1]])
-             for x1 in range(2) for x2 in range(2)]
-    #combs = [(1, ["i", "a", "i", "a"])]
-    #def u_bior(n, i, j):
-    #    return ints_bior.U[n,i,j]
-    def u_symm(n, i, j):
-        return ints_symm.U[n,i,j]
-    def s_inv_2(i, j):
-        return s_inv_2_[(i,j)]
+def u_diagram_hess(ret, h_dens, ints_bior, ov_slice, mat_ov_slice, mat_slice):
+    #combs = [(1, [x, y]) for x in ["a", "i"] for y in ["a", "i"]]
+    #combs = [(1, [x, y, z, z1]) for x in ["a", "i"] for y in ["a", "i"] for z in ["a", "i"] for z1 in ["a", "i"]]
+    def u_bior(n, i, j):
+        return ints_bior.U[n,i,j]
     for n in range(2):
-        for l in range(2):
-            for k in range(2):
-                for comb in combs:
-                    #if comb[0] == -1:
-                    #    continue
-                    pl, ql, pr, qr = comb[1]
+        for k in range(2):
+            ret[mat_slice[k], mat_slice[k], mat_slice[k], mat_slice[k]] -=\
+                1 * raw(u_bior(n, k, k)[:,:](2, 1) @ h_dens[mat_slice[k], mat_slice[k]](3, 0))
+            """
+            for comb in combs:
+                macrocomb = [comb]
+                #if comb[1][0] == comb[1][1]:
+                #    macrocomb = [comb[1] + comb[1]]
+                #else:
+                #    macrocomb = [comb[1] + comb[1]]#, comb[1] + list(reversed(comb[1]))]
+                for mac in macrocomb:
+                    pl, ql, pr, qr = mac
                     for s1 in range(2):
                         for s2 in range(2):
-                            if s2 != s1:
-                                continue
-                            #for s3 in range(2):
-                            #    for s4 in range(2):
+                            #if s2 != s1:
+                            #    continue
                             s3 = s1
                             s4 = s2
                             ret[mat_ov_slice[(k, pl, s1)], mat_ov_slice[(k, ql, s2)], mat_ov_slice[(k, pr, s3)], mat_ov_slice[(k, qr, s4)]] -=\
-                                comb[0] * raw(s_inv_2(l, k)[:, ov_slice[(k, ql, s2)]](r, 1) @ u_symm(n, k, k)[ov_slice[(k, pl, s1)], ov_slice[(k, qr, s4)]](0, 3) @ h_dens[mat_slice[l], mat_ov_slice[(k, pr, s3)]](r, 2))
-                #for i in range(*ov_slice_range[(k, "i")]):
-                #    i_ = i + mat_ov_slice_range[(k, "i")][0]
-                #    for a in range(*ov_slice_range[(k, "a")]):
-                #        a_ = a + mat_ov_slice_range[(k, "i")][0]
-                #        ret[a_, i_] +=\
-                #            raw(u_symm(n, k, k)[i, i] * s_inv_2(l, k)[:, a](r) @ h_dens[mat_slice[l], a_](r))
+                                comb[0] * raw(u_bior(n, k, k)[ov_slice[(k, pr, s3)], ov_slice[(k, ql, s2)]](2, 1) @ h_dens[mat_ov_slice[(k, qr, s4)], mat_ov_slice[(k, pl, s1)]](3, 0))
+            """
 
 def v_diagram_without_2p_dens(ret, dl_, dr_, dens, ints_bior, ints_symm, s_inv_2_, d_slices, n_occ, mat_ov_slice, ov_slice):
     # TODO: check the convention for v_halfbior, because the convention used here is symm bior symm symm
@@ -645,16 +625,9 @@ def v_diagram_hess_without_2p_dens(ret, dl_, dr_, dens, ints_bior, ints_symm, s_
                                                         ov_slice[(i, pl, s1)], ov_slice[(i, ql, s2)], ov_slice[(i, pr, s3)], ov_slice[(i, qr, s4)])
 
 def v_diagram(ret, v_dens, ints_bior, ov_slice, mat_ov_slice, mat_slice):
-    #combs = [(1, ["a", "i"]), (-1, ["i", "a"])]
     combs = [(1, [x, y]) for x in ["a", "i"] for y in ["a", "i"]]
     def v_bior(i, j, k, l):
         return ints_bior.V[i,j,k,l]
-    #def v_half1(i, j, k, l):
-    #    return ints_bior.V_half1[i,j,k,l]
-    #def v_half2(i, j, k, l):
-    #    return ints_bior.V_half2[i,j,k,l]
-    #def s_inv_2(i, j):
-    #    return s_inv_2_[(i,j)]
     for comb in combs:
         pl, ql = comb[1]
         for s1 in range(2):
@@ -664,12 +637,6 @@ def v_diagram(ret, v_dens, ints_bior, ov_slice, mat_ov_slice, mat_slice):
                         for k in range(2):
                             for l in range(2):
                                 # further restrictions on the loops should be possible
-                                #ret[mat_ov_slice[(l, pl, s1)], mat_ov_slice[(l, ql, s2)]] +=\
-                                #        comb[0] * 2 * raw(v_bior(i, j, k, l)[:,:,:,ov_slice[(l, ql, s2)]](p, q, r, 1)
-                                #                        @ v_dens[mat_slice[i],mat_slice[j],mat_slice[k],mat_ov_slice[(l, pl, s1)]](p, q, r, 0))
-                                #ret[mat_ov_slice[(k, pl, s1)], mat_ov_slice[(k, ql, s2)]] +=\
-                                #        comb[0] * 1 * raw(v_bior(i, j, k, l)[:,:,ov_slice[(k, ql, s2)],:](p, q, 1, s)
-                                #                        @ v_dens[mat_slice[i],mat_slice[j],mat_ov_slice[(k, pl, s1)],mat_slice[l]](p, q, 0, s))
                                 for m in range(2):
                                     if m != l:
                                         continue
@@ -677,19 +644,95 @@ def v_diagram(ret, v_dens, ints_bior, ov_slice, mat_ov_slice, mat_slice):
                                         comb[0] * 1 * raw(v_bior(i, j, k, m)[:,:,:,ov_slice[(m, ql, s2)]](p, q, r, 1)
                                                         @ v_dens[mat_slice[i],mat_slice[j],mat_slice[k],mat_ov_slice[(l, pl, s1)]](p, q, r, 0)
                                                         + v_bior(i, j, m, k)[:,:,ov_slice[(m, ql, s2)],:](p, q, 1, s)
-                                                        @ v_dens[mat_slice[i],mat_slice[j],mat_ov_slice[(l, pl, s1)],mat_slice[k]](p, q, 0, s)
-                                                        - v_bior(l, i, j, k)[ov_slice[(l, pl, s1)],:,:,:](0, q, r, s)
+                                                        @ v_dens[mat_slice[i],mat_slice[j],mat_ov_slice[(l, pl, s1)],mat_slice[k]](p, q, 0, s))
+                                                        #- v_bior(l, i, j, k)[ov_slice[(l, pl, s1)],:,:,:](0, q, r, s)
+                                                        #@ v_dens[mat_ov_slice[(m, ql, s2)],mat_slice[i],mat_slice[j],mat_slice[k]](1, q, r, s)
+                                                        #- v_bior(i, l, j, k)[:,ov_slice[(l, pl, s1)],:,:](p, 0, r, s)
+                                                        #@ v_dens[mat_slice[i],mat_ov_slice[(m, ql, s2)],mat_slice[j],mat_slice[k]](p, 1, r, s))
+
+def v_diagram2(ret, v_dens, ints_bior, ov_slice, mat_ov_slice, mat_slice):
+    combs = [(1, [x, y]) for x in ["a", "i"] for y in ["a", "i"]]
+    def v_bior(i, j, k, l):
+        return ints_bior.V[i,j,k,l]
+    for comb in combs:
+        pl, ql = comb[1]
+        for s1 in range(2):
+            for s2 in range(2):
+                for i in range(2):
+                    for j in range(2):
+                        for k in range(2):
+                            for l in range(2):
+                                # further restrictions on the loops should be possible
+                                for m in range(2):
+                                    if m != l:
+                                        continue
+                                    ret[mat_ov_slice[(l, pl, s1)], mat_ov_slice[(m, ql, s2)]] -=\
+                                        comb[0] * 1 * raw(v_bior(l, i, j, k)[ov_slice[(l, pl, s1)],:,:,:](0, q, r, s)
                                                         @ v_dens[mat_ov_slice[(m, ql, s2)],mat_slice[i],mat_slice[j],mat_slice[k]](1, q, r, s)
-                                                        - v_bior(i, l, j, k)[:,ov_slice[(l, pl, s1)],:,:](p, 0, r, s)
+                                                        + v_bior(i, l, j, k)[:,ov_slice[(l, pl, s1)],:,:](p, 0, r, s)
                                                         @ v_dens[mat_slice[i],mat_ov_slice[(m, ql, s2)],mat_slice[j],mat_slice[k]](p, 1, r, s))
-                                    #for n in range(2):
-                                    #    #if m != n:
-                                    #    #    continue
-                                    #    ret[mat_ov_slice[(m, pl, s1)], mat_ov_slice[(n, ql, s2)]] -=\
-                                    #        comb[0] * 1 * raw(s_inv_2(i, n)[:,ov_slice[(n, ql, s2)]](p, 1) @ v_half2(m, j, k, l)[ov_slice[(m, pl, s1)],:,:,:](0, q, r, s)
-                                    #                        @ v_dens[mat_slice[i],mat_slice[j],mat_slice[k],mat_slice[l]](p, q, r, s)
-                                    #                        + s_inv_2(j, n)[:,ov_slice[(n, ql, s2)]](q, 1) @ v_half1(i, m, k, l)[:,ov_slice[(m, pl, s1)],:,:](p, 0, r, s)
-                                    #                        @ v_dens[mat_slice[i],mat_slice[j],mat_slice[k],mat_slice[l]](p, q, r, s))
+
+def v_diagram_hess(ret, v_dens, ints_bior, ov_slice, mat_ov_slice, mat_slice):
+    #combs = [(1, [x, y]) for x in ["a", "i"] for y in ["a", "i"]]
+    #combs = [(1, [x, y, z, z1]) for x in ["a", "i"] for y in ["a", "i"] for z in ["a", "i"] for z1 in ["a", "i"]]
+    def v_bior(i, j, k, l):
+        return ints_bior.V[i,j,k,l]
+    for i in range(2):
+        for j in range(2):
+            for k in range(2):
+                for m in range(2):
+                    if m != k:
+                        continue
+                    ret[mat_slice[k], mat_slice[m], mat_slice[k], mat_slice[m]] +=\
+                        1 * raw(v_bior(i, j, m, m)[:,:,:,:](p, q, 1, 3)
+                            @ v_dens[mat_slice[i],mat_slice[j],mat_slice[k],mat_slice[k]](p, q, 0, 2)  # both right
+                            + v_bior(k, k, i, j)[:,:,:,:](0, 2, p, q)
+                            @ v_dens[mat_slice[m],mat_slice[m],mat_slice[i],mat_slice[j]](1, 3, p, q)  # both left ... both left on the same index is handled on higher level
+                            - v_bior(i, k, j, m)[:,:,:,:](p, 0, q, 3)
+                            @ v_dens[mat_slice[i],mat_slice[m],mat_slice[j],mat_slice[k]](p, 1, q, 2)  # one right one left
+                            - v_bior(k, i, j, m)[:,:,:,:](0, p, q, 3)
+                            @ v_dens[mat_slice[m],mat_slice[i],mat_slice[j],mat_slice[k]](1, p, q, 2)  # one right one left
+                            - v_bior(i, k, m, j)[:,:,:,:](p, 0, 3, q)
+                            @ v_dens[mat_slice[i],mat_slice[m],mat_slice[k],mat_slice[j]](p, 1, 2, q)  # one right one left
+                            - v_bior(k, i, m, j)[:,:,:,:](0, p, 3, q)
+                            @ v_dens[mat_slice[m],mat_slice[i],mat_slice[k],mat_slice[j]](1, p, 2, q))  # one right one left
+    """
+    for comb in combs:
+        macrocomb = [comb]
+        #pl, ql = comb[1]
+        #if comb[1][0] == comb[1][1]:
+        #    macrocomb = [comb[1] + comb[1]]
+        #else:
+        #    macrocomb = [comb[1] + comb[1]]#, comb[1] + list(reversed(comb[1]))]
+        for mac in macrocomb:
+            pl, ql, pr, qr = mac
+            for s1 in range(2):
+                for s2 in range(2):
+                    for i in range(2):
+                        for j in range(2):
+                            for k in range(2):
+                                # further restrictions on the loops should be possible
+                                for m in range(2):
+                                    if m != k:
+                                        continue
+                                    s3 = s1
+                                    s4 = s2
+                                    ret[mat_ov_slice[(k, pl, s1)], mat_ov_slice[(m, ql, s2)], mat_ov_slice[(k, pr, s3)], mat_ov_slice[(m, qr, s4)]] +=\
+                                        comb[0] * raw(v_bior(i, j, m, m)[:,:,ov_slice[(m, ql, s2)],ov_slice[(m, qr, s4)]](p, q, 1, 3)
+                                                    @ v_dens[mat_slice[i],mat_slice[j],mat_ov_slice[(k, pl, s1)],mat_ov_slice[(k, pr, s3)]](p, q, 0, 2)  # both right
+                                                    + v_bior(k, k, i, j)[ov_slice[(k, pl, s1)],ov_slice[(k, pr, s3)],:,:](0, 2, p, q)
+                                                    @ v_dens[mat_ov_slice[(m, ql, s2)],mat_ov_slice[(m, qr, s4)],mat_slice[i],mat_slice[j]](1, 3, p, q)  # both left ... both left on the same index is handled on higher level
+                                                    - v_bior(i, k, j, m)[:,ov_slice[(k, pl, s1)],:,ov_slice[(m, qr, s4)]](p, 0, q, 3)
+                                                    @ v_dens[mat_slice[i],mat_ov_slice[(m, ql, s2)],mat_slice[j],mat_ov_slice[(k, pr, s3)]](p, 1, q, 2)  # one right one left
+                                                    - v_bior(k, i, j, m)[ov_slice[(k, pl, s1)],:,:,ov_slice[(m, qr, s4)]](0, p, q, 3)
+                                                    @ v_dens[mat_ov_slice[(m, ql, s2)],mat_slice[i],mat_slice[j],mat_ov_slice[(k, pr, s3)]](1, p, q, 2)  # one right one left
+                                                    - v_bior(i, k, m, j)[:,ov_slice[(k, pl, s1)],ov_slice[(m, qr, s4)],:](p, 0, 3, q)
+                                                    @ v_dens[mat_slice[i],mat_ov_slice[(m, ql, s2)],mat_ov_slice[(k, pr, s3)],mat_slice[j]](p, 1, 2, q)  # one right one left
+                                                    - v_bior(k, i, m, j)[ov_slice[(k, pl, s1)],:,ov_slice[(m, qr, s4)],:](0, p, 3, q)
+                                                    @ v_dens[mat_ov_slice[(m, ql, s2)],mat_slice[i],mat_ov_slice[(k, pr, s3)],mat_slice[j]](1, p, 2, q))  # one right one left
+    """
+
+
 
 class grads_and_hessian(object):
     def __init__(self, n_occ, n_virt, n_frozen, d_slices):
@@ -914,19 +957,20 @@ class grads_and_hessian(object):
         #s_inv_2 = self.build_s_inv_2(np.zeros(self.ten_shape), ints_symm.S)
         print("computing t")
         t_diagram(grad, h_dens, ints_bior, self.ov_slice, self.mat_ov_slice, self.mat_slice)  # update mat in place
+        t_diagram2(grad, h_dens, ints_bior, self.ov_slice, self.mat_ov_slice, self.mat_slice)  # update mat in place
         print("computing u")
         u_diagram(grad, h_dens, ints_bior, self.ov_slice, self.mat_ov_slice, self.mat_slice)  # update mat in place
+        u_diagram2(grad, h_dens, ints_bior, self.ov_slice, self.mat_ov_slice, self.mat_slice)  # update mat in place
         print("computing two particle XR density")
         v_dens = self.two_p_dens(np.zeros(self.ten_shape_large), dl, dr, dens)
         print("computing v")
         #v_diagram(grad, dl, dr, dens, ints_bior, ints_symm, s_inv_2, self.d_slices, self.n_occ, self.mat_ov_slice, self.ov_slice)  # update mat in place
         v_diagram(grad, v_dens, ints_bior, self.ov_slice, self.mat_ov_slice, self.mat_slice)  # update mat in place
+        v_diagram2(grad, v_dens, ints_bior, self.ov_slice, self.mat_ov_slice, self.mat_slice)  # update mat in place
         print("done")
-        #lower_tri = np.tril(grad, -1)
-        #grad -= 2 * lower_tri  # all elements in the lower triagonal are positive instead of negative
         # enforce antisymmetry, because term can be taken with x_pq, but also with - x_qp not only in the derivate (d/dx), but also in the actual term
         # where x is the transformation matrix for the orbitals ... symmetry will hence be enforced dividing x into two parts and transforming one of them
-        return 1 * (grad - grad.T)
+        return 0.5 * (grad - grad.T)  #TODO: Original paper also didn't include a "normalization" ... I guess one needs to figure out what works best in the future
         #return 0.01 * grad  # without enforcing symmetry smaller imaginary parts are obtained for dl and dr, but enforcing symmetry seems to also yield sufficiently small values
     
     def orb_hess_diag(self, dl, dr, dens, ints):
@@ -935,14 +979,26 @@ class grads_and_hessian(object):
         hess_diag = np.zeros((*self.ten_shape, *self.ten_shape))
         print("computing one particle XR density")
         h_dens = self.one_p_dens(np.zeros(self.ten_shape), dl, dr, dens)
-        print("computing s ** (-2)")
-        s_inv_2 = self.build_s_inv_2(np.zeros(self.ten_shape), ints_symm.S)
+        #print("computing s ** (-2)")
+        #s_inv_2 = self.build_s_inv_2(np.zeros(self.ten_shape), ints_symm.S)
         print("computing t")
-        t_diagram_hess(hess_diag, h_dens, ints_bior, ints_symm, s_inv_2, self.ov_slice, self.mat_ov_slice, self.mat_slice)  # update mat in place
+        t_diagram_hess(hess_diag, h_dens, ints_bior, self.ov_slice, self.mat_ov_slice, self.mat_slice)  # update mat in place
         print("computing u")
-        u_diagram_hess(hess_diag, h_dens, ints_bior, ints_symm, s_inv_2, self.ov_slice, self.mat_ov_slice, self.mat_slice)  # update mat in place
-        #print("computing v")
+        u_diagram_hess(hess_diag, h_dens, ints_bior, self.ov_slice, self.mat_ov_slice, self.mat_slice)  # update mat in place
+        print("computing two particle XR density")
+        v_dens = self.two_p_dens(np.zeros(self.ten_shape_large), dl, dr, dens)
+        print("computing v")
+        v_diagram_hess(hess_diag, v_dens, ints_bior, self.ov_slice, self.mat_ov_slice, self.mat_slice)
+        hess_diag = 1 * (hess_diag + np.transpose(hess_diag, (2,3,0,1)))  # this is actually a term from the equations, so it needs factor 1
         #v_diagram_hess(hess_diag, dl, dr, dens, ints_bior, ints_symm, s_inv_2, self.d_slices, self.n_occ, self.mat_ov_slice, self.ov_slice)  # update mat in place
+        print("computing grad like term")
+        grad_term = np.zeros(self.ten_shape)
+        #TODO: the following should be loaded from some cache
+        t_diagram2(grad_term, h_dens, ints_bior, self.ov_slice, self.mat_ov_slice, self.mat_slice)  # update mat in place
+        u_diagram2(grad_term, h_dens, ints_bior, self.ov_slice, self.mat_ov_slice, self.mat_slice)  # update mat in place
+        v_diagram2(grad_term, v_dens, ints_bior, self.ov_slice, self.mat_ov_slice, self.mat_slice)  # update mat in place
+        # not sure, if this term is allowed to be (2,3,0,1) transposed or not...
+        hess_diag -= 1 * np.einsum("kj,il->ijkl", np.identity(self.ten_shape[0]), grad_term)  # minus to correct sign compared to gradient and 0.5 because of later transpose(2,3,0,1)
         print("done")
         # since far bigger tensors than those the size of an ERI need to be taken into account for the calculation
         # of the gradients already (2p densities) there is not really a need to only give the diagonal, but rather
@@ -951,6 +1007,7 @@ class grads_and_hessian(object):
         # and inverted as such. For now the 4d tensor with actually just the diagonals ia,ia and ai,ai is returned.
         # enforce antisymmetry like for orb_grads
         hess_diag = 0.25 * (hess_diag - np.transpose(hess_diag, (1,0,2,3)) - np.transpose(hess_diag, (0,1,3,2)) + np.transpose(hess_diag, (1,0,3,2)))
+        #hess_diag = 1 * (hess_diag + np.transpose(hess_diag, (2,3,0,1)))  # this is actually a term from the equations, so it needs factor 1
         #hess_diag = 0.5 * (hess_diag + np.transpose(hess_diag, (1,0,3,2)))
         #return 0.5 * (hess_diag + np.transpose(hess_diag, (2,3,0,1)))  # not sure if this is necessary
         return hess_diag

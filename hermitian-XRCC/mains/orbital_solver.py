@@ -164,7 +164,7 @@ def optimize_orbs(displacement, max_iter, xr_order, conv_thresh=1e-6, dens_filte
     def diag_inv(vec):
         ret = np.empty_like(vec)
         for i, el in enumerate(vec):
-            if abs(el) < 1e-14:
+            if abs(el) < 1e-4:
                 ret[i] = 0
             else:
                 # TODO: at the moment the quasi identity matrix is set up, which is not a good guess, but the current hessian diagonal elements seem to be much worse for some reason...probably an error
@@ -177,7 +177,7 @@ def optimize_orbs(displacement, max_iter, xr_order, conv_thresh=1e-6, dens_filte
         ret = np.zeros_like(mat)
         for i in range(n_orb_tot):
             for j in range(n_orb_tot):
-                if abs(mat[i * n_orb_tot + j, i * n_orb_tot + j]) < 1e-14:
+                if abs(mat[i * n_orb_tot + j, i * n_orb_tot + j]) < 1e-10:
                     continue
                 submat = [[mat[i * n_orb_tot + j, i * n_orb_tot + j], mat[i * n_orb_tot + j, j * n_orb_tot + i]],
                           [mat[j * n_orb_tot + i, i * n_orb_tot + j], mat[j * n_orb_tot + i, j * n_orb_tot + i]]]
@@ -186,12 +186,8 @@ def optimize_orbs(displacement, max_iter, xr_order, conv_thresh=1e-6, dens_filte
                 #e_inv = [1 / x for x in e]
                 #print(e)
                 #e[1] = 1 / e[1]
-                e_inv = np.zeros_like(e)
-                for ind, val in enumerate(e):
-                    if abs(val) < 1e-5:
-                        continue
-                    e_inv[ind] = 1 / val
-                submat_inv = v @ np.diag(e) @ v.T
+                e_inv = diag_inv(e)
+                submat_inv = v @ np.diag(e_inv) @ v.T
                 #submat_inv = np.linalg.inv(submat)
                 ret[i * n_orb_tot + j, i * n_orb_tot + j] = submat_inv[0, 0]
                 ret[i * n_orb_tot + j, j * n_orb_tot + i] = submat_inv[0, 1]
@@ -200,17 +196,34 @@ def optimize_orbs(displacement, max_iter, xr_order, conv_thresh=1e-6, dens_filte
                 #print(submat_inv)
         return ret
     
+    def blockwise_invert(mat):
+        ret = np.zeros_like(mat)
+        n_orb_tot = sum(n_occ) + sum(n_virt)
+        n_orb_a = n_occ[0] + n_virt[0]
+        n_orb_b = n_orb_tot - n_orb_a
+        def symm_block_inv(submat):
+            e, v = sp.linalg.eigh(submat)
+            e_inv = diag_inv(e)
+            return v @ np.diag(e_inv) @ v.T
+        ret[:n_orb_a,:n_orb_a,:n_orb_a,:n_orb_a] = symm_block_inv(mat[:n_orb_a,:n_orb_a,:n_orb_a,:n_orb_a].reshape(n_orb_a**2,n_orb_a**2)).reshape(n_orb_a,n_orb_a,n_orb_a,n_orb_a)
+        ret[n_orb_b:,n_orb_b:,n_orb_b:,n_orb_b:] = symm_block_inv(mat[n_orb_b:,n_orb_b:,n_orb_b:,n_orb_b:].reshape(n_orb_b**2,n_orb_b**2)).reshape(n_orb_b,n_orb_b,n_orb_b,n_orb_b)
+        return ret
+
+    
     #print("norm diff should be zero", np.linalg.norm(np.diag(hess_init.reshape(36*36,36*36))), np.linalg.norm(hess_init))
     #for i in range(36*36):
     #    for j in range(36*36):
     #        if abs(hess_init.reshape(36*36,36*36)[i,j]) > 0.03:
     #            print(i,j)
 
-    #hess_inv = np.diag(diag_inv(np.diag(hess_init.reshape((sum(n_occ) + sum(n_virt)) ** 2, (sum(n_occ) + sum(n_virt)) ** 2)))).reshape(hess_init.shape)
+    hess_inv = np.diag(diag_inv(np.diag(hess_init.reshape((sum(n_occ) + sum(n_virt)) ** 2, (sum(n_occ) + sum(n_virt)) ** 2)))).reshape(hess_init.shape)
     #hess_inv = hess_inv / np.linalg.norm(hess_inv)
 
-    hess_init_2 = hess_init.reshape((sum(n_occ) + sum(n_virt)) ** 2, (sum(n_occ) + sum(n_virt)) ** 2)
-    hess_inv = sequential_2b2_invert(hess_init_2).reshape(hess_init.shape)
+    #hess_init_2 = hess_init.reshape((sum(n_occ) + sum(n_virt)) ** 2, (sum(n_occ) + sum(n_virt)) ** 2)
+    #hess_inv = sequential_2b2_invert(hess_init_2).reshape(hess_init.shape)
+    #hess_init_2 = hess_init.reshape((sum(n_occ) + sum(n_virt)) ** 2, (sum(n_occ) + sum(n_virt)) ** 2)
+    #hess_inv = sp.linalg.inv(hess_init_2).reshape(hess_init.shape)
+    #hess_inv = blockwise_invert(hess_init)
 
     #hess_inv = np.zeros((b*2, b*2))
     #hess_inv[:4,4:18,:4,4:18] = np.diag(diag_inv(np.diag(hess_init[:4,4:18,:4,4:18].reshape(b,b)))).reshape(4,14,4,14)  # ia,ia
@@ -263,7 +276,8 @@ def optimize_orbs(displacement, max_iter, xr_order, conv_thresh=1e-6, dens_filte
     #print(grads_prev[2:9, :2])
     #print(grads_prev[9:11, 2:9])
     # the following is a test
-    x_prev = - grads_prev #np.einsum("pqrs,rs->pq", hess_inv, grads_prev)
+    #x_prev = - grads_prev
+    x_prev = - np.einsum("pqrs,rs->pq", hess_inv, grads_prev)
     print("x + x.T, x - x.T and norm(x)", np.linalg.norm(x_prev + x_prev.T), np.linalg.norm(x_prev - x_prev.T), np.linalg.norm(x_prev))
     #print(x_prev[4:18,:4])
     # this would be the actual thing
@@ -298,7 +312,7 @@ def optimize_orbs(displacement, max_iter, xr_order, conv_thresh=1e-6, dens_filte
     def transform_ints(_U, ints_):
         _U_T = as_frag_blocked_mat(_U.T, BeN)
         #U_T = as_frag_blocked_mat(np.linalg.inv(U), BeN)
-        _U = as_frag_blocked_mat(_U, BeN)
+        #_U = as_frag_blocked_mat(_U, BeN)
         #print(U[0,0][4:,:4])
         #print(U[0,1])
         #print(grads_prev[4:18,:4])
@@ -389,7 +403,8 @@ def optimize_orbs(displacement, max_iter, xr_order, conv_thresh=1e-6, dens_filte
     #    BeN[i].basis.core = [0, 9]
     #new_ints = get_ints(BeN, project_core, int_timer, spin_ints=False)
     
-    _dl, _dr = get_d(new_ints)
+    #_dl, _dr = get_d(new_ints)
+    dl, dr = get_d(new_ints)
 
     # the following could also be implemented more efficiently using the
     # hessian update algorithm as introduced by Fischer and Almlöf using BFGS updates J. Phys. Chem. 1992, 96, 9768-9774
@@ -447,12 +462,12 @@ def optimize_orbs(displacement, max_iter, xr_order, conv_thresh=1e-6, dens_filte
                 #diff.evaluate()
                 #rnorm = np.sqrt(diff.dot(diff))
                 # the following is sum_i c_i x_i - H_n sum_i ci grad_i
-                #x = new_x - np.einsum("pqrs,rs->pq", hess_inv, new_grad)  # for bfgs update
-                x = new_x - new_grad  # for steepest descend update
+                x = new_x - np.einsum("pqrs,rs->pq", hess_inv, new_grad)  # for bfgs update
+                #x = new_x - new_grad  # for steepest descend update
             return x, new_grad, grad_norm
 
     iter = 1  # because initialization is basically the first iteration
-    x_diis = diis(max_vec=20)
+    x_diis = diis()#max_vec=6)
     x_diis.add_vectors(grads_prev, x_prev)
     while iter < max_iter:
         iter += 1
@@ -462,6 +477,7 @@ def optimize_orbs(displacement, max_iter, xr_order, conv_thresh=1e-6, dens_filte
         #hess_init_2 = hess_init.reshape((sum(n_occ) + sum(n_virt)) ** 2, (sum(n_occ) + sum(n_virt)) ** 2)
         #hess_inv = sequential_2b2_invert(hess_init_2).reshape(hess_inv.shape)
         grads = g_and_h.orb_grads(dl, dr, dens, new_ints)
+        grad_norm = np.linalg.norm(grads)
         #if np.linalg.norm(grads) > 0.3:
         #    grads *= 0.02
         # Here different literature says to use grads for the gradient and some other would use grads_prev
@@ -473,13 +489,14 @@ def optimize_orbs(displacement, max_iter, xr_order, conv_thresh=1e-6, dens_filte
         hess_update1 = (1 + alpha * np.einsum("ij,ij->", Delta_g, v)) * alpha * np.einsum("ij,kl->ijkl", delta_x, delta_x)
         hess_update2 = alpha * (np.einsum("ij,kl->ijkl", delta_x, v) + np.einsum("ij,kl->ijkl", v, delta_x))
         #hess_inv += hess_update1 - hess_update2  # without updating this is steepest descend ... maybe useful for checks
-        x_new = - grads#np.einsum("pqrs,rs->pq", hess_inv, grads)
+        #x_new = - grads
+        x_new = - np.einsum("pqrs,rs->pq", hess_inv, grads)
         #x = np.random.rand(*grads.shape)
         #x = x - x.T
         #x = 0.01 * x / np.linalg.norm(x)
-        print("x + x.T, norm(x), norm(grad) and diff norm of grads", np.linalg.norm(x_new + x_new.T), np.linalg.norm(x_new), np.linalg.norm(grads), np.linalg.norm(grads - grads_prev))
+        print("x + x.T, norm(x), norm(grad) and diff norm of grads", np.linalg.norm(x_new + x_new.T), np.linalg.norm(x_new), grad_norm, np.linalg.norm(grads - grads_prev))
         print("norm of x - x_prev", np.linalg.norm(x_new - x_prev))
-        #x_new, grads_diis, grad_norm = x_diis.do_iteration(x_new, grads, 0)#hess_inv)
+        #x_new, grads_diis, grad_norm = x_diis.do_iteration(x_new, grads, hess_inv)
         #print("x + x.T, norm(x) and norm(grad) from diis", np.linalg.norm(x_new + x_new.T), np.linalg.norm(x_new), grad_norm)
         
         def apply_x(_x, _ints, scaling_factor):
@@ -495,22 +512,24 @@ def optimize_orbs(displacement, max_iter, xr_order, conv_thresh=1e-6, dens_filte
         #print("diff x, diff t01", np.linalg.norm(x_try - x_new), np.linalg.norm(new_ints_try_t01 - new_ints[0].T[0,1]))
         while XR_energies[-1] > XR_energies[-2]:
             XR_energies.pop()
-            scale *= 0.1
+            scale *= 0.5
             dl_tmp, dr_tmp, ints_tmp = apply_x(x_new, new_ints, scale)
             if XR_energies[-1] - XR_energies[-2] < 1e-8:
                 break
-        _dl, _dr, new_ints = dl_tmp, dr_tmp, ints_tmp
+        #_dl, _dr, new_ints = dl_tmp, dr_tmp, ints_tmp
+        dl, dr, new_ints = dl_tmp, dr_tmp, ints_tmp
 
         x_prev = x_new
         grads_prev = grads#_diis
         #print(XR_energies)
         try:
             if abs(XR_energies[-4] - XR_energies[-1]) < 1e-6:
-                if np.linalg.norm(grads) < 1e-4:
+                if grad_norm < 1e-3:
                     print("minimum reached")
+                    break
                 else:
-                    print(f"the energy is not getting lower anymore, but the norm of the gradient is still large {np.linalg.norm(grads)}, which means that something is wrong")
-                break
+                    print(f"the energy is hardly getting lower anymore, but the norm of the gradient is still large {grad_norm}...")
+                #break
             else:
                 pass
         except IndexError:
