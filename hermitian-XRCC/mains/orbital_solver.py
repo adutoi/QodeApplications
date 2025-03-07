@@ -23,11 +23,13 @@ from qode.math.tensornet import raw, tl_tensor, backend_contract_path
 from qode.util import timer, sort_eigen
 from qode.util.dynamic_array import dynamic_array, wrap, cached
 from qode.atoms.integrals.fragments import bra_transformed, ket_transformed, as_frag_blocked_mat, as_raw_mat, as_frag_blocked_U, as_raw_U, as_frag_blocked_V, as_raw_V
-from state_gradients import state_gradients, get_slices, get_adapted_overlaps
+from state_gradients import get_slices
 #from state_screening import state_screening, orthogonalize
 from orb_grads import grads_and_hessian
 #from orb_grads_old import grads_and_hessian as grads_and_hessian_wrong
 from get_ints_Be import direct_Sinv
+from state_solver import optimize_states
+#from .state_solver import optimize_states
 
 #import torch
 import numpy as np
@@ -49,7 +51,7 @@ backend_contract_path(True)
 #class empty(object):  pass
 
 
-def optimize_orbs(displacement, max_iter, xr_order, conv_thresh=1e-6, dens_filter_thresh=1e-7):
+def optimize_orbs(displacement, max_iter, xr_order, conv_thresh=1e-6, dens_filter_thresh=1e-7, state_prep_guess=True):#, pen_start=10):
     ######################################################
     # Initialize integrals and density preliminaries
     ######################################################
@@ -57,57 +59,62 @@ def optimize_orbs(displacement, max_iter, xr_order, conv_thresh=1e-6, dens_filte
     n_frag       = 2
     displacement = displacement
     project_core = True
-    #monomer_charges = [[0, +1, -1], [0, +1, -1]]
-    monomer_charges = [[0], [0]]
+    monomer_charges = [[0, +1, -1], [0, +1, -1]]
+    #monomer_charges = [[0], [0]]
     density_options = ["compress=SVD,cc-aa"]
+    #pen = pen_start
     #frozen_orbs = [0, 9]
     #n_orbs = 9
     #n_occ = [2, 2]  # currently only alpha beta separation, but generalize to frag level not done yet!!!
     #n_virt = [7, 7]
+    XR_energies = []
+    adap_xr_energies = []
+    int_timer = timer()
 
     #ref_states = pickle.load(open("ref_states.pkl", mode="rb"))
     #ref_mos = pickle.load(open("ref_mos.pkl", mode="rb"))
 
     # "Assemble" the supersystem for the displaced fragments and get integrals
-    BeN = []
-    dens = []
-    dens_builder_stuff = []
-    state_coeffs_og = []
-    XR_energies = []
-    pre_opt_states = pickle.load(open("pre_opt_coeffs.pkl", mode="rb"))
-    for m in range(int(n_frag)):
-        state_obj, dens_var_1, dens_var_2, n_threads, Be = get_fci_states(displacement, n_state_list=[(1, 0), (0, 11), (-1, 0)])
-        #Be.basis.MOcoeffs = ref_mos.copy()
-        #pickle.dump(Be.basis.MOcoeffs, open(f"pre_opt_mos_{m}.pkl", mode="wb"))
+    if not state_prep_guess:
+        BeN = []
+        dens = []
+        dens_builder_stuff = []
+        state_coeffs_og = []
+        #pre_opt_states = pickle.load(open("pre_opt_coeffs.pkl", mode="rb"))
+        for m in range(int(n_frag)):
+            state_obj, dens_var_1, dens_var_2, n_threads, Be = get_fci_states(displacement, n_state_list=[(1, 4), (0, 11), (-1, 8)])
+            #Be.basis.MOcoeffs = ref_mos.copy()
+            #pickle.dump(Be.basis.MOcoeffs, open(f"pre_opt_mos_{m}.pkl", mode="wb"))
 
-        #print(Be.basis.MOcoeffs.shape)
-        #raise ValueError("stop here")
+            #print(Be.basis.MOcoeffs.shape)
+            #raise ValueError("stop here")
 
-        Be.basis.MOcoeffs = pickle.load(open(f"pre_opt_mos_{m}.pkl", mode="rb"))
-        for chg in monomer_charges[m]:
-            state_obj[chg].coeffs = pre_opt_states[m][chg].copy()
+            #Be.basis.MOcoeffs = pickle.load(open(f"pre_opt_mos_{m}.pkl", mode="rb"))
+            #for chg in monomer_charges[m]:
+            #    state_obj[chg].coeffs = pre_opt_states[m][chg].copy()
 
-            #state_obj[chg].coeffs = ref_states[chg].coeffs.copy()
-        #    state_obj[chg].configs = ref_states[chg].configs.copy()
-            #state_obj[chg].coeffs = [i[:448] for i in state_obj[chg].coeffs]
-            #if m == 0:
-            #    state_obj[chg].coeffs = ref_states[chg].coeffs.copy()
-        #    state_obj[chg].coeffs = ref_states[chg].coeffs[:1]
-        for elem,coords in Be.atoms:  coords[2] += m * displacement    # displace along z
-        BeN.append(Be)
-        del state_obj[+1]
-        del state_obj[-1]
-        #dens.append(densities.build_tensors(state_obj, dens_var_1, dens_var_2, options=density_options, n_threads=n_threads))
-        dens_builder_stuff.append([state_obj, dens_var_1, dens_var_2, density_options])
-        #state_coeffs_og.append({chg: state_obj[chg].coeffs for chg in state_obj})
-        state_coeffs_og.append({chg: state_obj[chg].coeffs for chg in state_obj})
-        #print(Be.basis.MOcoeffs)
-        #raise ValueError("stop here")
-    #print(type(raw(dens[0]["a"][(+1,0)])), raw(dens[0]["a"][(+1,0)]).shape)
+                #state_obj[chg].coeffs = ref_states[chg].coeffs.copy()
+            #    state_obj[chg].configs = ref_states[chg].configs.copy()
+                #state_obj[chg].coeffs = [i[:448] for i in state_obj[chg].coeffs]
+                #if m == 0:
+                #    state_obj[chg].coeffs = ref_states[chg].coeffs.copy()
+            #    state_obj[chg].coeffs = ref_states[chg].coeffs[:1]
+            for elem,coords in Be.atoms:  coords[2] += m * displacement    # displace along z
+            BeN.append(Be)
+            #del state_obj[+1]
+            #del state_obj[-1]
+            #dens.append(densities.build_tensors(state_obj, dens_var_1, dens_var_2, options=density_options, n_threads=n_threads))
+            dens_builder_stuff.append([state_obj, dens_var_1, dens_var_2, density_options])
+            state_coeffs_og.append({chg: state_obj[chg].coeffs for chg in state_obj})
+            #print(Be.basis.MOcoeffs)
+            #raise ValueError("stop here")
+        #print(type(raw(dens[0]["a"][(+1,0)])), raw(dens[0]["a"][(+1,0)]).shape)
 
-    int_timer = timer()
-    ints = get_ints(BeN, project_core, int_timer)
-    dens = [densities.build_tensors(*dens_builder_stuff[frag][:-1], options=density_options, n_threads=n_threads) for frag in range(2)]
+        ints = get_ints(BeN, project_core, int_timer)
+        dens = [densities.build_tensors(*dens_builder_stuff[frag][:-1], options=density_options, n_threads=n_threads) for frag in range(2)]
+    else:
+        screening_energies, BeN, ints, dens, dens_builder_stuff = optimize_states(displacement, 0, xr_order)
+        state_coeffs_og = [[dens_builder_stuff[frag][0][chg].coeffs for chg in monomer_charges[frag]] for frag in range(2)]
 
     n_states = [sum(len(state_coeffs_og[i][chg]) for chg in monomer_charges[i]) for i in range(2)]
     #n_confs = [sum(len(state_coeffs_og[i][chg][0]) for chg in monomer_charges[i]) for i in range(2)]
@@ -144,22 +151,31 @@ def optimize_orbs(displacement, max_iter, xr_order, conv_thresh=1e-6, dens_filte
         print(XR_energies)
         print("dropping imaginary part of non-diagonalized d with norm (left, right)",
             np.linalg.norm(np.imag(full_eigvec_l[0])), np.linalg.norm(np.imag(full_eigvec_r[0])))
+        imag_norm = np.linalg.norm(np.imag(full_eigvec_l[0])) + np.linalg.norm(np.imag(full_eigvec_r[0]))
         dl = np.real(full_eigvec_l[0]).reshape(sum(state_dict[0].values()), sum(state_dict[1].values()))  # maybe 0 and 1 need to be swapped in reshape
         dr = np.real(full_eigvec_r[0]).reshape(sum(state_dict[0].values()), sum(state_dict[1].values()))
-        return dl / np.linalg.norm(dl), dr / np.linalg.norm(dr)
+        return dl / np.linalg.norm(dl), dr / np.linalg.norm(dr), imag_norm
     
-    dl, dr = get_d(ints)
-
     n_occ, n_virt, n_frozen = [[4, 4], [14, 14], [2, 2]]
+    n0 = n_occ[0] + n_virt[0]
 
-    g_and_h = grads_and_hessian(n_occ, n_virt, n_frozen, d_slices)
-    #g_and_h_wrong = grads_and_hessian_wrong([4, 4], [14, 14], d_slices)
-    hess_init = g_and_h.orb_hess_diag(dl, dr, dens, ints)
-    #hess_init = g_and_h_wrong.orb_hess_diag(dl, dr, dens, ints)
-
-    #hess_inv = np.zeros_like(hess_init)
-
-    b = n_occ[0] * n_virt[0]
+    def off_diag_blocks(mat):
+        ret = np.zeros_like(mat)
+        ret[n0:,:n0] = mat[n0:,:n0]
+        ret[:n0,n0:] = mat[:n0,n0:]
+        return ret
+    
+    def diag_blocks(mat):
+        ret = np.zeros_like(mat)
+        ret[n0:,n0:] = mat[n0:,n0:]
+        ret[:n0,:n0] = mat[:n0,:n0]
+        return ret
+    
+    def off_diag_blocks_mo(mat):
+        ret = np.zeros_like(mat)
+        ret[n0:,:n0//2] = mat[n0:,:n0//2]
+        ret[:n0,n0//2:] = mat[:n0,n0//2:]
+        return ret
 
     def diag_inv(vec, set_one=False):
         ret = np.empty_like(vec)
@@ -208,7 +224,7 @@ def optimize_orbs(displacement, max_iter, xr_order, conv_thresh=1e-6, dens_filte
             e_inv = diag_inv(e)
             return v @ np.diag(e_inv) @ v.T
         ret[:n_orb_a,:n_orb_a,:n_orb_a,:n_orb_a] = symm_block_inv(mat[:n_orb_a,:n_orb_a,:n_orb_a,:n_orb_a].reshape(n_orb_a**2,n_orb_a**2)).reshape(n_orb_a,n_orb_a,n_orb_a,n_orb_a)
-        ret[n_orb_b:,n_orb_b:,n_orb_b:,n_orb_b:] = symm_block_inv(mat[n_orb_b:,n_orb_b:,n_orb_b:,n_orb_b:].reshape(n_orb_b**2,n_orb_b**2)).reshape(n_orb_b,n_orb_b,n_orb_b,n_orb_b)
+        ret[n_orb_a:,n_orb_a:,n_orb_a:,n_orb_a:] = symm_block_inv(mat[n_orb_a:,n_orb_a:,n_orb_a:,n_orb_a:].reshape(n_orb_b**2,n_orb_b**2)).reshape(n_orb_b,n_orb_b,n_orb_b,n_orb_b)
         return ret
 
     
@@ -218,16 +234,7 @@ def optimize_orbs(displacement, max_iter, xr_order, conv_thresh=1e-6, dens_filte
     #        if abs(hess_init.reshape(36*36,36*36)[i,j]) > 0.03:
     #            print(i,j)
 
-    # start from identity to perform gradient descend first...in case guess is too bad for quasi-newton
-    hess_inv = np.diag(diag_inv(np.diag(hess_init.reshape((sum(n_occ) + sum(n_virt)) ** 2, (sum(n_occ) + sum(n_virt)) ** 2)), set_one=True)).reshape(hess_init.shape)
-    #hess_inv = hess_inv / np.linalg.norm(hess_inv)
-
-    #hess_init_2 = hess_init.reshape((sum(n_occ) + sum(n_virt)) ** 2, (sum(n_occ) + sum(n_virt)) ** 2)
-    #hess_inv = sequential_2b2_invert(hess_init_2).reshape(hess_init.shape)
-    #hess_init_2 = hess_init.reshape((sum(n_occ) + sum(n_virt)) ** 2, (sum(n_occ) + sum(n_virt)) ** 2)
-    #hess_inv = sp.linalg.inv(hess_init_2).reshape(hess_init.shape)
-    #hess_inv = blockwise_invert(hess_init)
-
+    #b = n_occ[0] * n_virt[0]
     #hess_inv = np.zeros((b*2, b*2))
     #hess_inv[:4,4:18,:4,4:18] = np.diag(diag_inv(np.diag(hess_init[:4,4:18,:4,4:18].reshape(b,b)))).reshape(4,14,4,14)  # ia,ia
     #hess_inv[4:18,:4,4:18,:4] = np.diag(diag_inv(np.diag(hess_init[4:18,:4,4:18,:4].reshape(b,b)))).reshape(14,4,14,4)  # ai,ai
@@ -272,16 +279,6 @@ def optimize_orbs(displacement, max_iter, xr_order, conv_thresh=1e-6, dens_filte
     print(np.linalg.norm(hess_inv))
     """
 
-    grads_prev = g_and_h.orb_grads(dl, dr, dens, ints)
-    #grads_prev *= 0.02
-    print("grads norm", np.linalg.norm(grads_prev))#, np.linalg.norm(grads_prev + grads_prev.T), np.linalg.norm(grads_prev - grads_prev.T))
-    #print(grads_prev[:18, :18])
-    #print(grads_prev[2:9, :2])
-    #print(grads_prev[9:11, 2:9])
-    # the following is a test
-    #x_prev = - grads_prev
-    x_prev = - np.einsum("pqrs,rs->pq", hess_inv, grads_prev)
-    print("x + x.T, x - x.T and norm(x)", np.linalg.norm(x_prev + x_prev.T), np.linalg.norm(x_prev - x_prev.T), np.linalg.norm(x_prev))
     #print(x_prev[4:18,:4])
     # this would be the actual thing
     #x_prev = np.identity(sum(n_occ) + sum(n_virt))
@@ -291,7 +288,7 @@ def optimize_orbs(displacement, max_iter, xr_order, conv_thresh=1e-6, dens_filte
 
     #print(x_prev[4:18,:4])
     #print(x_prev[:4,4:18])
-    U = np.identity(x_prev.shape[0]) + x_prev  # transformation matrix from e^x
+    #U = np.identity(x_prev.shape[0]) + x_prev  # transformation matrix from e^x
 
     # not sure ... paper applies U to the right
     #print("previous MOs")
@@ -397,7 +394,7 @@ def optimize_orbs(displacement, max_iter, xr_order, conv_thresh=1e-6, dens_filte
         new_ints_bior.V_diff = dynamic_array([cached, tensorly_wrapper2(int_timer), tens_diff(new_ints_bior.V_half, new_ints_bior.V)], int_ranges[4])
         return new_ints_symm, new_ints_bior, ints_[2]
 
-    new_ints = transform_ints(U, ints)
+    #new_ints = transform_ints(U, ints)
 
     #for i in range(2):
     #    BeN[i].basis.MOcoeffs = np.concatenate((BeN[i].basis.MOcoeffs, BeN[i].basis.MOcoeffs))
@@ -407,14 +404,89 @@ def optimize_orbs(displacement, max_iter, xr_order, conv_thresh=1e-6, dens_filte
     #new_ints = get_ints(BeN, project_core, int_timer, spin_ints=False)
     
     #_dl, _dr = get_d(new_ints)
-    dl, dr = get_d(new_ints)
+    #dl, dr = get_d(new_ints)
 
-    # the following could also be implemented more efficiently using the
-    # hessian update algorithm as introduced by Fischer and Almlöf using BFGS updates J. Phys. Chem. 1992, 96, 9768-9774
-    # but even though the hessian is not small in terms of memory, it's still smaller than the 2p transition densities
-    # one might also be able to speed up the convergence using a DIIS procedure including the updated hessians,
-    # which is also described in the above mentioned paper.
-
+    def apply_x(_x, _ints, scaling_factor, mo_prev):
+        transform = np.identity(_x.shape[0]) + scaling_factor * _x  # transformation matrix from e^x
+        #if iter == 2:
+        #    U += x
+        ret_ints_ = transform_ints(transform, _ints)
+        dl_, dr_, d_imag_norm = get_d(ret_ints_)
+        mo_new = transform @ mo_prev
+        return dl_, dr_, ret_ints_, mo_new, d_imag_norm
+    
+    def lag_apply(dual_disp, new_ints, lag_prev, scale):
+        safety_iter = 0
+        while safety_iter < 10:
+            safety_iter += 1
+            lag_new = off_diag_blocks(dual_disp[dual_disp.shape[1]:,:])
+            x_new = dual_disp[:dual_disp.shape[1],:]
+            #upper_dual_grad = x_new + lag_prev + scale * lag_new
+            dl_tmp, dr_tmp, ints_tmp = apply_x(x_new, new_ints, scale)
+            #lag_new *= scale
+            XR_energies[-1] += np.einsum("ij,ij->", lag_prev + scale * off_diag_blocks(lag_new), scale * off_diag_blocks(x_new))
+            if XR_energies[-1] - XR_energies[-2] < 1e-8:
+                break
+            scale *= 0.2
+            XR_energies.pop()
+        return lag_prev + scale * off_diag_blocks(lag_new), scale * off_diag_blocks(x_new), dl_tmp, dr_tmp, ints_tmp
+    
+    def pen_apply(grad, new_ints, scale, mo_prev, mo_prevprev, pen=1e+2, hess=""):
+        safety_iter = 0
+        while safety_iter < 5:
+            safety_iter += 1
+            #lag_new = off_diag_blocks(dual_disp[dual_disp.shape[1]:,:])
+            # for squared frob norm
+            #pen_grad = diag_blocks(grad) + 2 * pen * off_diag_blocks()
+            pen_term = 2 * pen * off_diag_blocks_mo(mo_prev) @ mo_prev.T
+            pen_term = 1 * (pen_term - pen_term.T)
+            pen_grad = grad + pen_term
+            if type(hess) != str:
+                #hess_pen_term = np.einsum("sq,pr->pqrs", mo_prevprev @ mo_prevprev.T, np.identity(pen_grad.shape[0]))  # not sure about this one
+                #hess_pen_term = 1 * (hess_pen_term - np.transpose(hess_pen_term, (1,0,2,3)) - np.transpose(hess_pen_term, (0,1,3,2)) + np.transpose(hess_pen_term, (1,0,3,2)))
+                pen_hess = hess #+ hess_pen_term
+            print("grad and pen_grad", np.linalg.norm(grad), np.linalg.norm(pen_grad))
+            # for linear penalty in frob norm
+            #pen_grad = grad - (1/np.linalg.norm(off_diag_blocks_mo(mo_prev))) * pen * off_diag_blocks_mo(mo_prev) @ mo_prevprev.T
+            if type(hess) == str:
+                x_new = - pen_grad
+            else:
+                #x_new = - np.linalg.inv(pen_hess.reshape(hess.shape[0] * hess.shape[1], hess.shape[2] * hess.shape[3])).reshape(hess.shape[0] * hess.shape[1], hess.shape[2] * hess.shape[3]) @ pen_grad
+                x_new = - np.einsum("ijkl,kl->ij", hess, pen_grad)  # this is only correct if hess has already been inverted
+            #upper_dual_grad = x_new + lag_prev + scale * lag_new
+            dl_tmp, dr_tmp, ints_tmp, mo_tmp, d_imag_norm = apply_x(x_new, new_ints, scale, mo_prev)
+            #if safety_iter < 2:
+            #    pen = (d_imag_norm)**(0.3)
+            #lag_new *= scale
+            # for squared frob norm
+            off_diag_norm = np.linalg.norm(off_diag_blocks_mo(mo_tmp))**2
+            # for linear penalty in frob norm
+            #off_diag_norm = np.linalg.norm(off_diag_blocks_mo(mo_tmp))
+            print("penalty factor and whole penalty term", pen, pen * off_diag_norm)
+            adap_xr_energies.append(XR_energies[-1] + pen * off_diag_norm)
+            if (XR_energies[-1] - XR_energies[-2] < 1e-8 and d_imag_norm < 1e-7) and np.max(off_diag_blocks_mo(mo_tmp)) < 1e-5:  # this is what we are looking for, but it might not be fetched out in the other if clause, because the penalty is too large
+                break
+            if adap_xr_energies[-1] - adap_xr_energies[-2] < 1e-6:
+                if d_imag_norm < 1e-7:
+                    break
+                else:
+                    if pen == 0:
+                        scale *= 0.2
+                    else:
+                        pen_add = d_imag_norm / 1e-10
+                        if pen_add < pen:
+                            scale *= 0.2 #** (safety_iter - 1)
+                        pen += pen_add
+                        safety_iter = 0
+                        #XR_energies.pop()
+                        print("reset with higher penalty")
+            else:
+                scale *= 0.2
+            if safety_iter < 5:
+                adap_xr_energies.pop()
+                XR_energies.pop()
+        return dl_tmp, dr_tmp, ints_tmp, mo_tmp, pen
+    
     class diis:
         def __init__(self, max_vec=4):  # value taken from paper
             self.x_history = []
@@ -468,18 +540,92 @@ def optimize_orbs(displacement, max_iter, xr_order, conv_thresh=1e-6, dens_filte
                 x = new_x - np.einsum("pqrs,rs->pq", hess_inv, new_grad)  # for bfgs update
                 #x = new_x - new_grad  # for steepest descend update
             return x, new_grad, grad_norm
+    
+
+    dl, dr, d_imag_norm = get_d(ints)
+    adap_xr_energies.append(XR_energies[-1])
+
+    g_and_h = grads_and_hessian(n_occ, n_virt, n_frozen, d_slices)
+    #hess_init = g_and_h.orb_hess_diag(dl, dr, dens, ints)
+
+    # start from identity to perform gradient descend first...in case guess is too bad for quasi-newton
+    #hess_inv = np.diag(diag_inv(np.diag(hess_init.reshape((sum(n_occ) + sum(n_virt)) ** 2, (sum(n_occ) + sum(n_virt)) ** 2)), set_one=True)).reshape(hess_init.shape)
+
+    #hess_init_2 = hess_init.reshape((sum(n_occ) + sum(n_virt)) ** 2, (sum(n_occ) + sum(n_virt)) ** 2)
+    #hess_inv = sequential_2b2_invert(hess_init_2).reshape(hess_init.shape)
+    #hess_init_2 = hess_init.reshape((sum(n_occ) + sum(n_virt)) ** 2, (sum(n_occ) + sum(n_virt)) ** 2)
+    #hess_inv = sp.linalg.inv(hess_init_2).reshape(hess_init.shape)
+
+    #hess_inv = blockwise_invert(hess_init)
+
+    grads_prev = g_and_h.orb_grads(dl, dr, dens, ints, off_diag=False)
+    #grads_prev *= 0.02
+    print("grads norm", np.linalg.norm(grads_prev))
+    x_prev = - grads_prev
+    #x_prev = - np.einsum("pqrs,rs->pq", hess_inv, grads_prev)
+    print("x + x.T, x - x.T and norm(x)", np.linalg.norm(x_prev + x_prev.T), np.linalg.norm(x_prev - x_prev.T), np.linalg.norm(x_prev))
+    #lag_prev = - off_diag_blocks(grads_prev)
+
+    # here the update is lagrangian based
+    #dual_grad = np.concatenate((grads_prev + off_diag_blocks(lag_prev), off_diag_blocks(x_prev)), axis=0)
+    #grad_norm = np.linalg.norm(dual_grad)
+    #lag_hess = 
+    #dual_disp = - dual_grad
+    
+    scale = 1 #/ 2
+    """
+    #x_try, new_ints_try_t01 = x_new.copy(), raw(new_ints[0].T[0,1]).copy()
+    dl_tmp, dr_tmp, ints_tmp = apply_x(x_prev, ints, scale)
+    #print("diff x, diff t01", np.linalg.norm(x_try - x_new), np.linalg.norm(new_ints_try_t01 - new_ints[0].T[0,1]))
+    while XR_energies[-1] > XR_energies[-2]:
+        XR_energies.pop()
+        scale *= 0.2
+        dl_tmp, dr_tmp, ints_tmp = apply_x(x_prev, ints, scale)
+        if XR_energies[-1] - XR_energies[-2] < 1e-8:
+            break
+    #_dl, _dr, new_ints = dl_tmp, dr_tmp, ints_tmp
+    dl, dr, new_ints = dl_tmp, dr_tmp, ints_tmp
+    """
+    #lag_prev, x_new, dl, dr, new_ints = lag_apply(dual_disp, ints, scale)
+
+    # here instead of a lagrangian a simple penalty is used for the squared frobenius norm of the off-diagonal blocks of the MO coeffs
+    #pen = 1
+    # here no previous x is known and initial mo coeffs are localized, so pen_grad is taken as the normal gradient in the first iteration
+    #pen_grad = grads_prev   #+ pen * np.linalg.norm()
+    mo_init_left = np.concatenate((BeN[0].basis.MOcoeffs, np.zeros_like(BeN[0].basis.MOcoeffs)))
+    mo_init_right = np.concatenate((np.zeros_like(BeN[1].basis.MOcoeffs), BeN[1].basis.MOcoeffs))
+    mo_init = np.concatenate((mo_init_left, mo_init_right), axis=1)
+    dl, dr, new_ints, mo_prev, pen = pen_apply(grads_prev, ints, scale, mo_init, mo_init, pen=0)#, hess=hess_inv)
+    mo_prevprev = mo_init
+
+    # the following could also be implemented more efficiently using the
+    # hessian update algorithm as introduced by Fischer and Almlöf using BFGS updates J. Phys. Chem. 1992, 96, 9768-9774
+    # but even though the hessian is not small in terms of memory, it's still smaller than the 2p transition densities
+    # one might also be able to speed up the convergence using a DIIS procedure including the updated hessians,
+    # which is also described in the above mentioned paper.
 
     iter = 1  # because initialization is basically the first iteration
     x_diis = diis()#max_vec=6)
     x_diis.add_vectors(grads_prev, x_prev)
+    # initialize lagrangian multiplier such that in first lagrangian iteration the x displacement is zero
+    #lag_prev = - grads_prev
     while iter < max_iter:
         iter += 1
+        scale = 1
         #print(iter)
         # naming convention taken from the paper mentioned above
         #hess_init = g_and_h.orb_hess_diag(dl, dr, dens, new_ints)
+        #hess_inv = blockwise_invert(hess_init)
         #hess_init_2 = hess_init.reshape((sum(n_occ) + sum(n_virt)) ** 2, (sum(n_occ) + sum(n_virt)) ** 2)
         #hess_inv = sequential_2b2_invert(hess_init_2).reshape(hess_inv.shape)
-        grads = g_and_h.orb_grads(dl, dr, dens, new_ints)
+        grads = g_and_h.orb_grads(dl, dr, dens, new_ints, off_diag=False)
+        #if iter % 5 == 0:
+        #    hess_init = g_and_h.orb_hess_diag(dl, dr, dens, new_ints)
+        #    #if iter < 15:
+        #    hess_inv = np.diag(diag_inv(np.diag(hess_init.reshape((sum(n_occ) + sum(n_virt)) ** 2, (sum(n_occ) + sum(n_virt)) ** 2)))).reshape(hess_init.shape)
+            #else:  # do only gradient descent from here, to ensure correspondence
+            #    hess_inv = np.diag(diag_inv(np.diag(hess_init.reshape((sum(n_occ) + sum(n_virt)) ** 2, (sum(n_occ) + sum(n_virt)) ** 2)), set_one=True)).reshape(hess_init.shape)
+        """
         grad_norm = np.linalg.norm(grads)
         if iter % 5 == 0:
             hess_init = g_and_h.orb_hess_diag(dl, dr, dens, new_ints)
@@ -507,43 +653,75 @@ def optimize_orbs(displacement, max_iter, xr_order, conv_thresh=1e-6, dens_filte
         print("norm of x - x_prev", np.linalg.norm(x_new - x_prev))
         #x_new, grads_diis, grad_norm = x_diis.do_iteration(x_new, grads, hess_inv)
         #print("x + x.T, norm(x) and norm(grad) from diis", np.linalg.norm(x_new + x_new.T), np.linalg.norm(x_new), grad_norm)
-        
-        def apply_x(_x, _ints, scaling_factor):
-            transform = np.identity(_x.shape[0]) + scaling_factor * _x  # transformation matrix from e^x
-            #if iter == 2:
-            #    U += x
-            ret_ints_ = transform_ints(transform, _ints)
-            dl_, dr_ = get_d(ret_ints_)
-            return dl_, dr_, ret_ints_
+
         scale = 1 #/ 2
         #x_try, new_ints_try_t01 = x_new.copy(), raw(new_ints[0].T[0,1]).copy()
         dl_tmp, dr_tmp, ints_tmp = apply_x(x_new, new_ints, scale)
         #print("diff x, diff t01", np.linalg.norm(x_try - x_new), np.linalg.norm(new_ints_try_t01 - new_ints[0].T[0,1]))
         while XR_energies[-1] > XR_energies[-2]:
             XR_energies.pop()
-            scale *= 0.5
+            scale *= 0.2
             dl_tmp, dr_tmp, ints_tmp = apply_x(x_new, new_ints, scale)
             if XR_energies[-1] - XR_energies[-2] < 1e-8:
                 break
         #_dl, _dr, new_ints = dl_tmp, dr_tmp, ints_tmp
         dl, dr, new_ints = dl_tmp, dr_tmp, ints_tmp
+        """
+        """
+        # here the update is lagrangian based
+        dual_grad = np.concatenate((grads + lag_prev, x_prev), axis=0)
+        grad_norm = np.linalg.norm(dual_grad)
+        #lag_hess = 
+        dual_disp = - dual_grad
 
-        x_prev = x_new
+        def lag_apply(dual_disp, new_ints, scale):
+            safety_iter = 0
+            while safety_iter < 10:
+                safety_iter += 1
+                x_new = dual_disp[:dual_disp.shape[1],:]
+                lag_new = dual_disp[dual_disp.shape[1]:,:]
+                dl_tmp, dr_tmp, ints_tmp = apply_x(x_new, new_ints, scale)
+                #lag_new *= scale
+                XR_energies[-1] += np.einsum("ij,ij->", off_diag_blocks(lag_prev + scale * lag_new), off_diag_blocks(scale * x_new))
+                if XR_energies[-1] - XR_energies[-2] < 1e-8:
+                    break
+                scale *= 0.2
+                XR_energies.pop()
+            return lag_prev + scale * lag_new, scale * x_new, dl_tmp, dr_tmp, ints_tmp
+
+        lag_new, x_new, dl, dr, new_ints = lag_apply(dual_disp, new_ints, scale)
+        """
+
+        # here instead of a lagrangian a simple penalty is used for the squared frobenius norm of the off-diagonal blocks of the MO coeffs
+        #pen = 1
+        # here no previous x is known and initial mo coeffs are localized, so pen_grad is taken as the normal gradient in the first iteration
+        #pen_grad = grads + 2 * pen * off_diag_blocks_mo(mo_prev) @ mo_prevprev.T
+        #grad_norm = np.linalg.norm(pen_grad)
+        dl, dr, new_ints, mo_new, pen = pen_apply(grads, new_ints, scale, mo_prev, mo_prevprev, pen=pen)#, hess=hess_inv)
+        #pen *= 0.5
+        grad_norm = np.linalg.norm(grads)
+
+        #x_prev = x_new
+        #lag_prev = lag_new
         grads_prev = grads#_diis
+        mo_prev = mo_new
+        mo_prevprev = mo_prev
         #print(XR_energies)
         try:
             if abs(XR_energies[-4] - XR_energies[-1]) < 1e-6:
-                if grad_norm < 1e-3:
+                if grad_norm < 1e-4:
                     print("minimum reached")
-                    break
+                    #break
                 else:
                     print(f"the energy is hardly getting lower anymore, but the norm of the gradient is still large {grad_norm}...")
-                #break
+                break
             else:
                 pass
         except IndexError:
             pass
+    return XR_energies[-1]
     
 
 
-optimize_orbs(4.5, 40, 0)
+#print(optimize_orbs(4.5, 20, 0))
+print([optimize_orbs(4.0 + r / 2, 20, 0) for r in range(1)])

@@ -42,8 +42,14 @@ backend_contract_path(True)
 
 #class empty(object):  pass
 
-
-def optimize_states(displacement, max_iter, xr_order, conv_thresh=1e-6, dens_filter_thresh=1e-7):
+def optimize_states(displacement, max_iter, xr_order, conv_thresh=1e-6, dens_filter_thresh=1e-7, begin_from_state_prep=True):
+    """
+    max_iter: defines the max_iter for the state solver using an actual gradient
+    begin_from_state_prep: determines whether previously to the gradient based optimization a guess shall be provided
+                           originating from the same state screening but then optimizing without the gradient (faster but less reliable)
+    the current recommendation is to either only use the solver with a gradient with begin_from_state_prep=False or max_iter=0 with begin_from_state_prep=True.
+    As already mentioned the first one is more reliable, but the latter one is quite a bit faster
+    """
     ######################################################
     # Initialize integrals and density preliminaries
     ######################################################
@@ -833,7 +839,10 @@ def optimize_states(displacement, max_iter, xr_order, conv_thresh=1e-6, dens_fil
     state_tracker = {frag: {chg: 0 for chg in monomer_charges[frag]} for frag in range(2)}
     screening_done = np.array([[False for chg in monomer_charges[frag]] for frag in range(2)])
     state_coeffs_optimized = state_coeffs_og
-    safety_iter = 0
+    if begin_from_state_prep:
+        safety_iter = 0
+    else:
+        safety_iter = 100
     screening_energies = []
 
     # The following code tries to prepare optimized guess states for a solver, by enlarging the state space
@@ -938,28 +947,29 @@ def optimize_states(displacement, max_iter, xr_order, conv_thresh=1e-6, dens_fil
     ######################################################
     # iterative procedure
     ######################################################
-    print("starting iterative state solver now")
-    iter = 0
-    converged = False
+    if max_iter > 0:
+        print("starting iterative state solver now")
+        converged = False
 
-    pickle.dump(state_coeffs_optimized, open("pre_opt_coeffs.pkl", mode="wb"))
-    for frag in range(2):
-        dens.append(densities.build_tensors(*dens_builder_stuff[frag][:-1], options=density_options, n_threads=n_threads))
+        pickle.dump(state_coeffs_optimized, open("pre_opt_coeffs.pkl", mode="wb"))
+        for frag in range(2):
+            dens.append(densities.build_tensors(*dens_builder_stuff[frag][:-1], options=density_options, n_threads=n_threads))
 
-    # not required as current densities are already computed in last iteration of while loop
-    #for frag in range(2):
-    #    dens[frag] = densities.build_tensors(*dens_builder_stuff[frag][:-1], options=density_options, n_threads=n_threads)
+        # not required as current densities are already computed in last iteration of while loop
+        #for frag in range(2):
+        #    dens[frag] = densities.build_tensors(*dens_builder_stuff[frag][:-1], options=density_options, n_threads=n_threads)
 
-    en_history, en_with_grads_history = [0], [0]
+        en_history, en_with_grads_history = [0], [0]
 
-    #for chg in monomer_charges[1]:
-    #    state_coeffs_optimized[1][chg] = ref_states[chg].coeffs.copy()
-    #    dens_builder_stuff[1][0][chg].coeffs = ref_states[chg].coeffs.copy()
-    #dens[1] = densities.build_tensors(*dens_builder_stuff[1][:-1], options=dens_builder_stuff[1][-1], n_threads=n_threads)
+        #for chg in monomer_charges[1]:
+        #    state_coeffs_optimized[1][chg] = ref_states[chg].coeffs.copy()
+        #    dens_builder_stuff[1][0][chg].coeffs = ref_states[chg].coeffs.copy()
+        #dens[1] = densities.build_tensors(*dens_builder_stuff[1][:-1], options=dens_builder_stuff[1][-1], n_threads=n_threads)
     
     # The following variant tries to optimize one fragment by building its gradients, while simultaneously
     # enlarging the state space of the other fragment with states obtained from the screening. Both are
     # then compressed again.
+    iter = 0
     while iter < max_iter:
         iter += 1
         # opt frag 0 and previously enlarge 1
@@ -1023,7 +1033,8 @@ def optimize_states(displacement, max_iter, xr_order, conv_thresh=1e-6, dens_fil
     """
 
     #return en_history #screening_energies
-    return screening_energies
+    #return screening_energies
+    return screening_energies, BeN, ints, dens, dens_builder_stuff
 
 
 #scan = []
@@ -1036,7 +1047,7 @@ def optimize_states(displacement, max_iter, xr_order, conv_thresh=1e-6, dens_fil
 
 #print(scan)
 
-print(optimize_states(4.5, 0, 0))#, dens_filter_thresh=3e-9))
+#print(optimize_states(4.5, 0, 0))#, dens_filter_thresh=3e-9))
 
 
 
