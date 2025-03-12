@@ -22,7 +22,7 @@ from qode.math.tensornet import raw, tl_tensor, backend_contract_path
 #import qode.util
 from qode.util import timer, sort_eigen
 from qode.util.dynamic_array import dynamic_array, wrap, cached
-from qode.atoms.integrals.fragments import bra_transformed, ket_transformed, as_frag_blocked_mat, as_raw_mat, as_frag_blocked_U, as_raw_U, as_frag_blocked_V, as_raw_V
+from qode.atoms.integrals.fragments import bra_transformed, ket_transformed, as_frag_blocked_mat#, as_raw_mat, as_frag_blocked_U, as_raw_U, as_frag_blocked_V, as_raw_V
 from state_gradients import get_slices
 #from state_screening import state_screening, orthogonalize
 from orb_grads import grads_and_hessian
@@ -80,7 +80,7 @@ def optimize_orbs(displacement, max_iter, xr_order, conv_thresh=1e-6, dens_filte
         dens = []
         dens_builder_stuff = []
         state_coeffs_og = []
-        #pre_opt_states = pickle.load(open("pre_opt_coeffs.pkl", mode="rb"))
+        pre_opt_states = pickle.load(open("pre_opt_coeffs.pkl", mode="rb"))
         for m in range(int(n_frag)):
             state_obj, dens_var_1, dens_var_2, n_threads, Be = get_fci_states(displacement, n_state_list=[(1, 4), (0, 11), (-1, 8)])
             #Be.basis.MOcoeffs = ref_mos.copy()
@@ -89,9 +89,9 @@ def optimize_orbs(displacement, max_iter, xr_order, conv_thresh=1e-6, dens_filte
             #print(Be.basis.MOcoeffs.shape)
             #raise ValueError("stop here")
 
-            #Be.basis.MOcoeffs = pickle.load(open(f"pre_opt_mos_{m}.pkl", mode="rb"))
-            #for chg in monomer_charges[m]:
-            #    state_obj[chg].coeffs = pre_opt_states[m][chg].copy()
+            Be.basis.MOcoeffs = pickle.load(open(f"pre_opt_mos_{m}.pkl", mode="rb"))
+            for chg in monomer_charges[m]:
+                state_obj[chg].coeffs = pre_opt_states[m][chg].copy()
 
                 #state_obj[chg].coeffs = ref_states[chg].coeffs.copy()
             #    state_obj[chg].configs = ref_states[chg].configs.copy()
@@ -298,7 +298,8 @@ def optimize_orbs(displacement, max_iter, xr_order, conv_thresh=1e-6, dens_filte
     # transform integrals instead of transforming orbitals and then reevaluate integrals
     # TODO: Behold the super ugly transformation routine of the integrals. Either don't look or clean up!
     for i in range(2):
-        BeN[i].basis.MOcoeffs = np.concatenate((BeN[i].basis.MOcoeffs, BeN[i].basis.MOcoeffs))
+        # Implementation uses MOs with mo,ao inds, but psi4 provides ao,mo, so MOs are transposed here, as they are not used otherwise anymore
+        BeN[i].basis.MOcoeffs = np.concatenate((BeN[i].basis.MOcoeffs.T, BeN[i].basis.MOcoeffs.T))
         BeN[i].basis.n_spatial_orb *= 2
         BeN[i].basis.core = [0, 9]
     ints[0].fragments = BeN
@@ -387,8 +388,8 @@ def optimize_orbs(displacement, max_iter, xr_order, conv_thresh=1e-6, dens_filte
         new_ints_bior.U = tensornet_wrap(new_ints_bior.U, 3)
         new_ints_bior.V = tensornet_wrap(new_ints_bior.V, 4)
         new_ints_bior.V_half = tensornet_wrap(new_ints_bior.V_half, 4)
-        new_ints_bior.V_half1 = tensornet_wrap(new_ints_bior.V_half1, 4)
-        new_ints_bior.V_half2 = tensornet_wrap(new_ints_bior.V_half2, 4)
+        #new_ints_bior.V_half1 = tensornet_wrap(new_ints_bior.V_half1, 4)
+        #new_ints_bior.V_half2 = tensornet_wrap(new_ints_bior.V_half2, 4)
 
         #new_ints_bior.V_diff = dynamic_array([cached, tensorly_wrapper2(int_timer), tens_diff(new_ints_bior.V_half, new_ints_bior.V)], new_ints_bior.V.ranges)
         new_ints_bior.V_diff = dynamic_array([cached, tensorly_wrapper2(int_timer), tens_diff(new_ints_bior.V_half, new_ints_bior.V)], int_ranges[4])
@@ -407,6 +408,16 @@ def optimize_orbs(displacement, max_iter, xr_order, conv_thresh=1e-6, dens_filte
     #dl, dr = get_d(new_ints)
 
     def apply_x(_x, _ints, scaling_factor, mo_prev):
+        #frozen_orbs = [0, 9, 18, 27]
+        #for orbf in frozen_orbs:
+        #    _x[orbf, :] = np.zeros_like(_x[orbf, :])
+        #    _x[:, orbf] = np.zeros_like(_x[:, orbf])
+        #for i in range(len(_x)):
+        #    for j in range(len(_x[i])):
+        #        if abs(_x[i, j]) < 1e-2:
+        #            _x[i, j] = 0.
+        #print("x ul", _x[:18,:18])
+        #print("x lr", _x[18:,18:])
         transform = np.identity(_x.shape[0]) + scaling_factor * _x  # transformation matrix from e^x
         #if iter == 2:
         #    U += x
@@ -431,9 +442,14 @@ def optimize_orbs(displacement, max_iter, xr_order, conv_thresh=1e-6, dens_filte
             XR_energies.pop()
         return lag_prev + scale * off_diag_blocks(lag_new), scale * off_diag_blocks(x_new), dl_tmp, dr_tmp, ints_tmp
     
-    def pen_apply(grad, new_ints, scale, mo_prev, mo_prevprev, pen=1e+2, hess=""):
+    def pen_apply(grad, new_ints, scale, mo_prev, pen=1e+2, hess=""):
+        #for i in range(len(mo_prev)):
+        #    for j in range(len(mo_prev[i])):
+        #        if abs(mo_prev[i, j]) < 1e-9:
+        #            mo_prev[i, j] = 0.
         safety_iter = 0
-        while safety_iter < 5:
+        max_while_iter = 15
+        while safety_iter < max_while_iter:
             safety_iter += 1
             #lag_new = off_diag_blocks(dual_disp[dual_disp.shape[1]:,:])
             # for squared frob norm
@@ -464,27 +480,41 @@ def optimize_orbs(displacement, max_iter, xr_order, conv_thresh=1e-6, dens_filte
             #off_diag_norm = np.linalg.norm(off_diag_blocks_mo(mo_tmp))
             print("penalty factor and whole penalty term", pen, pen * off_diag_norm)
             adap_xr_energies.append(XR_energies[-1] + pen * off_diag_norm)
-            if (XR_energies[-1] - XR_energies[-2] < 1e-8 and d_imag_norm < 1e-7) and np.max(off_diag_blocks_mo(mo_tmp)) < 1e-5:  # this is what we are looking for, but it might not be fetched out in the other if clause, because the penalty is too large
+            if (XR_energies[-1] - XR_energies[-2] < 1e-8 and d_imag_norm < 1e-9) and np.max(off_diag_blocks_mo(mo_tmp)) < 1e-4:  # this is what we are looking for, but it might not be fetched out in the other if clause, because the penalty is too large
                 break
-            if adap_xr_energies[-1] - adap_xr_energies[-2] < 1e-6:
-                if d_imag_norm < 1e-7:
+            if adap_xr_energies[-1] - adap_xr_energies[-2] < 1e-6 and XR_energies[-1] - XR_energies[-2] < 1e-8:
+                #break
+                
+                if d_imag_norm < 1e-9:
                     break
                 else:
-                    if pen == 0:
-                        scale *= 0.2
-                    else:
-                        pen_add = d_imag_norm / 1e-10
-                        if pen_add < pen:
-                            scale *= 0.2 #** (safety_iter - 1)
-                        pen += pen_add
-                        safety_iter = 0
+                    scale *= 0.5
+                    #if pen == 0:
+                    #    scale *= 0.2
+                    #else:
+                        #pen_add = d_imag_norm / 1e-7
+                        #if pen_add < pen:
+                    #    scale *= 0.2 #** (safety_iter - 1)
+                        #pen += pen_add
+                        #pen *= 10
+                    #    safety_iter -= 1
                         #XR_energies.pop()
-                        print("reset with higher penalty")
+                        #print("reset with higher penalty")
+                
             else:
                 scale *= 0.2
-            if safety_iter < 5:
+            if safety_iter < max_while_iter:
                 adap_xr_energies.pop()
                 XR_energies.pop()
+        print("frag0 MOs", mo_prev[:9,:9])
+        #print("frag1 MOs", mo_prev[18:,9:])
+        print("new frag0 MOs", mo_tmp[:9,:9])
+        #diff_mo = mo_prev - mo_tmp
+        #diff_mo_rel = (mo_prev - mo_tmp) / mo_prev
+        #print("frag0 diffMOs", diff_mo[:9,:9])
+        #print("frag1 diffMOs", diff_mo[18:,9:])
+        #print("frag0 diffrelMOs", diff_mo_rel[:9,:9])
+        #print("frag1 diffrelMOs", diff_mo_rel[18:,9:])
         return dl_tmp, dr_tmp, ints_tmp, mo_tmp, pen
     
     class diis:
@@ -546,10 +576,10 @@ def optimize_orbs(displacement, max_iter, xr_order, conv_thresh=1e-6, dens_filte
     adap_xr_energies.append(XR_energies[-1])
 
     g_and_h = grads_and_hessian(n_occ, n_virt, n_frozen, d_slices)
-    #hess_init = g_and_h.orb_hess_diag(dl, dr, dens, ints)
+    #hess_init = g_and_h.orb_hess_diag(dl, dr, dens, ints)#, off_diag=False)
 
     # start from identity to perform gradient descend first...in case guess is too bad for quasi-newton
-    #hess_inv = np.diag(diag_inv(np.diag(hess_init.reshape((sum(n_occ) + sum(n_virt)) ** 2, (sum(n_occ) + sum(n_virt)) ** 2)), set_one=True)).reshape(hess_init.shape)
+    #hess_inv = np.diag(diag_inv(np.diag(hess_init.reshape((sum(n_occ) + sum(n_virt)) ** 2, (sum(n_occ) + sum(n_virt)) ** 2)), set_one=False)).reshape(hess_init.shape)
 
     #hess_init_2 = hess_init.reshape((sum(n_occ) + sum(n_virt)) ** 2, (sum(n_occ) + sum(n_virt)) ** 2)
     #hess_inv = sequential_2b2_invert(hess_init_2).reshape(hess_init.shape)
@@ -558,7 +588,7 @@ def optimize_orbs(displacement, max_iter, xr_order, conv_thresh=1e-6, dens_filte
 
     #hess_inv = blockwise_invert(hess_init)
 
-    grads_prev = g_and_h.orb_grads(dl, dr, dens, ints, off_diag=False)
+    grads_prev = g_and_h.orb_grads(dl, dr, dens, ints)#, off_diag=False)
     #grads_prev *= 0.02
     print("grads norm", np.linalg.norm(grads_prev))
     x_prev = - grads_prev
@@ -595,8 +625,9 @@ def optimize_orbs(displacement, max_iter, xr_order, conv_thresh=1e-6, dens_filte
     mo_init_left = np.concatenate((BeN[0].basis.MOcoeffs, np.zeros_like(BeN[0].basis.MOcoeffs)))
     mo_init_right = np.concatenate((np.zeros_like(BeN[1].basis.MOcoeffs), BeN[1].basis.MOcoeffs))
     mo_init = np.concatenate((mo_init_left, mo_init_right), axis=1)
-    dl, dr, new_ints, mo_prev, pen = pen_apply(grads_prev, ints, scale, mo_init, mo_init, pen=0)#, hess=hess_inv)
-    mo_prevprev = mo_init
+    #dl, dr, new_ints, mo_prev, pen = pen_apply(grads_prev, ints, scale, mo_init)#, pen=0)#, hess=hess_inv)
+    dl, dr, new_ints, mo_prev, pen = pen_apply(grads_prev, ints, scale, mo_init)#, hess=hess_inv)
+    #mo_prevprev = mo_init
 
     # the following could also be implemented more efficiently using the
     # hessian update algorithm as introduced by Fischer and Almlöf using BFGS updates J. Phys. Chem. 1992, 96, 9768-9774
@@ -618,7 +649,7 @@ def optimize_orbs(displacement, max_iter, xr_order, conv_thresh=1e-6, dens_filte
         #hess_inv = blockwise_invert(hess_init)
         #hess_init_2 = hess_init.reshape((sum(n_occ) + sum(n_virt)) ** 2, (sum(n_occ) + sum(n_virt)) ** 2)
         #hess_inv = sequential_2b2_invert(hess_init_2).reshape(hess_inv.shape)
-        grads = g_and_h.orb_grads(dl, dr, dens, new_ints, off_diag=False)
+        grads = g_and_h.orb_grads(dl, dr, dens, new_ints)#, off_diag=False)
         #if iter % 5 == 0:
         #    hess_init = g_and_h.orb_hess_diag(dl, dr, dens, new_ints)
         #    #if iter < 15:
@@ -697,7 +728,8 @@ def optimize_orbs(displacement, max_iter, xr_order, conv_thresh=1e-6, dens_filte
         # here no previous x is known and initial mo coeffs are localized, so pen_grad is taken as the normal gradient in the first iteration
         #pen_grad = grads + 2 * pen * off_diag_blocks_mo(mo_prev) @ mo_prevprev.T
         #grad_norm = np.linalg.norm(pen_grad)
-        dl, dr, new_ints, mo_new, pen = pen_apply(grads, new_ints, scale, mo_prev, mo_prevprev, pen=pen)#, hess=hess_inv)
+        #dl, dr, new_ints, mo_new, pen = pen_apply(grads, new_ints, scale, mo_prev, pen=pen, hess=hess_inv)
+        dl, dr, new_ints, mo_new, pen = pen_apply(grads, new_ints, scale, mo_prev)#, hess=hess_inv)
         #pen *= 0.5
         grad_norm = np.linalg.norm(grads)
 
@@ -705,7 +737,7 @@ def optimize_orbs(displacement, max_iter, xr_order, conv_thresh=1e-6, dens_filte
         #lag_prev = lag_new
         grads_prev = grads#_diis
         mo_prev = mo_new
-        mo_prevprev = mo_prev
+        #mo_prevprev = mo_prev
         #print(XR_energies)
         try:
             if abs(XR_energies[-4] - XR_energies[-1]) < 1e-6:
@@ -723,5 +755,5 @@ def optimize_orbs(displacement, max_iter, xr_order, conv_thresh=1e-6, dens_filte
     
 
 
-#print(optimize_orbs(4.5, 20, 0))
-print([optimize_orbs(4.0 + r / 2, 20, 0) for r in range(1)])
+print(optimize_orbs(4.5, 100, 0, state_prep_guess=False))
+#print([optimize_orbs(5.0 + r / 2, 20, 0) for r in range(1)])

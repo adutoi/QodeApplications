@@ -354,14 +354,17 @@ def t_diagram2(ret, h_dens, ints_bior, ov_slice, mat_ov_slice, mat_slice, off_di
                                 comb[0] * raw(t_bior(j, i)[ov_slice[(j, pl, s1)],:](0, r) @ h_dens[mat_ov_slice[(l, ql, s2)], mat_slice[i]](1, r))
                         
 
-def t_diagram_hess(ret, h_dens, ints_bior, ov_slice, mat_ov_slice, mat_slice):
+def t_diagram_hess(ret, h_dens, ints_bior, ov_slice, mat_ov_slice, mat_slice, off_diag_blocks=True):
     #combs = [(1, [x, y]) for x in ["a", "i"] for y in ["a", "i"]]
     #combs = [(1, [x, y, z, z1]) for x in ["a", "i"] for y in ["a", "i"] for z in ["a", "i"] for z1 in ["a", "i"]]
     def t_bior(i, j):
         return ints_bior.T[i,j]
     for k in range(2):
-        ret[mat_slice[k], mat_slice[k], mat_slice[k], mat_slice[k]] -=\
-            1 * raw(t_bior(k, k)[:,:](2, 1) @ h_dens[mat_slice[k], mat_slice[k]](3, 0))
+        for l in range(2):
+            if not off_diag_blocks and l != k:
+                continue
+            ret[mat_slice[k], mat_slice[l], mat_slice[k], mat_slice[l]] -=\
+                1 * raw(t_bior(k, l)[:,:](2, 1) @ h_dens[mat_slice[l], mat_slice[k]](3, 0))
         """
         for comb in combs:
             macrocomb = [comb[1]]
@@ -427,15 +430,18 @@ def u_diagram2(ret, h_dens, ints_bior, ov_slice, mat_ov_slice, mat_slice, off_di
                                     comb[0] * raw(u_bior(n, j, i)[ov_slice[(j, pl, s1)],:](0, r) @ h_dens[mat_ov_slice[(l, ql, s2)], mat_slice[i]](1, r))                                
                                 
 
-def u_diagram_hess(ret, h_dens, ints_bior, ov_slice, mat_ov_slice, mat_slice):
+def u_diagram_hess(ret, h_dens, ints_bior, ov_slice, mat_ov_slice, mat_slice, off_diag_blocks=True):
     #combs = [(1, [x, y]) for x in ["a", "i"] for y in ["a", "i"]]
     #combs = [(1, [x, y, z, z1]) for x in ["a", "i"] for y in ["a", "i"] for z in ["a", "i"] for z1 in ["a", "i"]]
     def u_bior(n, i, j):
         return ints_bior.U[n,i,j]
     for n in range(2):
         for k in range(2):
-            ret[mat_slice[k], mat_slice[k], mat_slice[k], mat_slice[k]] -=\
-                1 * raw(u_bior(n, k, k)[:,:](2, 1) @ h_dens[mat_slice[k], mat_slice[k]](3, 0))
+            for l in range(2):
+                if not off_diag_blocks and l != k:
+                    continue
+                ret[mat_slice[k], mat_slice[l], mat_slice[k], mat_slice[l]] -=\
+                    1 * raw(u_bior(n, k, l)[:,:](2, 1) @ h_dens[mat_slice[l], mat_slice[k]](3, 0))
             """
             for comb in combs:
                 macrocomb = [comb]
@@ -672,7 +678,7 @@ def v_diagram2(ret, v_dens, ints_bior, ov_slice, mat_ov_slice, mat_slice, off_di
                                                         + v_bior(i, l, j, k)[:,ov_slice[(l, pl, s1)],:,:](p, 0, r, s)
                                                         @ v_dens[mat_slice[i],mat_ov_slice[(m, ql, s2)],mat_slice[j],mat_slice[k]](p, 1, r, s))
 
-def v_diagram_hess(ret, v_dens, ints_bior, ov_slice, mat_ov_slice, mat_slice):
+def v_diagram_hess(ret, v_dens, ints_bior, ov_slice, mat_ov_slice, mat_slice, off_diag_blocks=True):
     #combs = [(1, [x, y]) for x in ["a", "i"] for y in ["a", "i"]]
     #combs = [(1, [x, y, z, z1]) for x in ["a", "i"] for y in ["a", "i"] for z in ["a", "i"] for z1 in ["a", "i"]]
     def v_bior(i, j, k, l):
@@ -681,7 +687,7 @@ def v_diagram_hess(ret, v_dens, ints_bior, ov_slice, mat_ov_slice, mat_slice):
         for j in range(2):
             for k in range(2):
                 for m in range(2):
-                    if m != k:
+                    if not off_diag_blocks and m != k:
                         continue
                     ret[mat_slice[k], mat_slice[m], mat_slice[k], mat_slice[m]] +=\
                         1 * raw(v_bior(i, j, m, m)[:,:,:,:](p, q, 1, 3)
@@ -977,7 +983,7 @@ class grads_and_hessian(object):
         return 1 * (grad - grad.T)  #TODO: Original paper also didn't include a "normalization" ... I guess one needs to figure out what works best in the future, but currently this seems to work with the hessian
         #return 0.01 * grad  # without enforcing symmetry smaller imaginary parts are obtained for dl and dr, but enforcing symmetry seems to also yield sufficiently small values
     
-    def orb_hess_diag(self, dl, dr, dens, ints):
+    def orb_hess_diag(self, dl, dr, dens, ints, off_diag=True):  # note that for now only "diagonal blocks" are implemented like pq,pq or pp,pp but not e.g. pq,pp
         print("start orb_hess routine")
         ints_symm, ints_bior, nuc_rep = ints
         hess_diag = np.zeros((*self.ten_shape, *self.ten_shape))
@@ -986,21 +992,21 @@ class grads_and_hessian(object):
         #print("computing s ** (-2)")
         #s_inv_2 = self.build_s_inv_2(np.zeros(self.ten_shape), ints_symm.S)
         print("computing t")
-        t_diagram_hess(hess_diag, h_dens, ints_bior, self.ov_slice, self.mat_ov_slice, self.mat_slice)  # update mat in place
+        t_diagram_hess(hess_diag, h_dens, ints_bior, self.ov_slice, self.mat_ov_slice, self.mat_slice, off_diag_blocks=off_diag)  # update mat in place
         print("computing u")
-        u_diagram_hess(hess_diag, h_dens, ints_bior, self.ov_slice, self.mat_ov_slice, self.mat_slice)  # update mat in place
+        u_diagram_hess(hess_diag, h_dens, ints_bior, self.ov_slice, self.mat_ov_slice, self.mat_slice, off_diag_blocks=off_diag)  # update mat in place
         print("computing two particle XR density")
         v_dens = self.two_p_dens(np.zeros(self.ten_shape_large), dl, dr, dens)
         print("computing v")
-        v_diagram_hess(hess_diag, v_dens, ints_bior, self.ov_slice, self.mat_ov_slice, self.mat_slice)
+        v_diagram_hess(hess_diag, v_dens, ints_bior, self.ov_slice, self.mat_ov_slice, self.mat_slice, off_diag_blocks=off_diag)
         #hess_diag = 1 * (hess_diag + np.transpose(hess_diag, (2,3,0,1)))  # this is actually a term from the equations, so it needs factor 1
         #v_diagram_hess(hess_diag, dl, dr, dens, ints_bior, ints_symm, s_inv_2, self.d_slices, self.n_occ, self.mat_ov_slice, self.ov_slice)  # update mat in place
         print("computing grad like term")
         grad_term = np.zeros(self.ten_shape)
         #TODO: the following should be loaded from cache
-        t_diagram2(grad_term, h_dens, ints_bior, self.ov_slice, self.mat_ov_slice, self.mat_slice)  # update mat in place
-        u_diagram2(grad_term, h_dens, ints_bior, self.ov_slice, self.mat_ov_slice, self.mat_slice)  # update mat in place
-        v_diagram2(grad_term, v_dens, ints_bior, self.ov_slice, self.mat_ov_slice, self.mat_slice)  # update mat in place
+        t_diagram2(grad_term, h_dens, ints_bior, self.ov_slice, self.mat_ov_slice, self.mat_slice, off_diag_blocks=off_diag)  # update mat in place
+        u_diagram2(grad_term, h_dens, ints_bior, self.ov_slice, self.mat_ov_slice, self.mat_slice, off_diag_blocks=off_diag)  # update mat in place
+        v_diagram2(grad_term, v_dens, ints_bior, self.ov_slice, self.mat_ov_slice, self.mat_slice, off_diag_blocks=off_diag)  # update mat in place
         # not sure, if this term is allowed to be (2,3,0,1) transposed or not...
         for frag in range(2):
             hess_diag[self.mat_slice[frag],self.mat_slice[frag],self.mat_slice[frag],self.mat_slice[frag]] -= 0.5 * np.einsum("kj,il->ijkl", np.identity(self.n_occ[frag] + self.n_virt[frag]), grad_term[self.mat_slice[frag],self.mat_slice[frag]])
