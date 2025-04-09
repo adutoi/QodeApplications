@@ -126,6 +126,14 @@ def state_screening(dens_builder_stuff, ints, monomer_charges, n_orbs, frozen, n
     h10 = raw(bior_ints.T[1, 0])
     h10 += raw(bior_ints.U[0, 1, 0])
     h10 += raw(bior_ints.U[1, 1, 0])
+
+    h00 = raw(bior_ints.T[0, 0])
+    h00 += raw(bior_ints.U[0, 0, 0])
+    h00 += raw(bior_ints.U[1, 0, 0])
+
+    h11 = raw(bior_ints.T[1, 1])
+    h11 += raw(bior_ints.U[0, 1, 1])
+    h11 += raw(bior_ints.U[1, 1, 1])
     # it seems like screening over V is not necessary, since h01 captures basically all contributions already...
     # this needs to be further investigated for a larger example, where not all contributions are relevant.
     # maybe instead of screening V one could also screen over the fock operator...
@@ -145,19 +153,13 @@ def state_screening(dens_builder_stuff, ints, monomer_charges, n_orbs, frozen, n
     #    print(raw(dens_arr[0]["ca"][(0,0)][i, i, :9, :9]))
     #    print(raw(dens_arr[0]["ca"][(0,0)][i, i, 9:, 9:]))
 
-    # building missing states initially from just the determinants seems to not work well...
-    # Therefore here is some heuristic...
-    # It is based on the Be FCI example, where one can see, that the states are not purely alpha
-    # or beta, but rather mixed (often 50/50), so the mixing is determined from the provided
-    # lowest energy states, averaged and then applied. (<--should not be necessary, since as long as
-    # basis functions are provided, the algorithm will build linear combinations itself)
     # Furthermore, it can be seen, that some
     # orbitals have large partial shares (due to multi reference character) in many
     # excitations, so the partial occupancies of the occupied orbitals is also determined, averaged
     # and then applied, such that the determinant excitations are now only partial excitations as
     # well. (<--this effect cannot be reintroduced with linear combinations!!!)
     # It seems appropriate to take an other look at the integrals again though, as this
-    # scheme seems awfully arbitrary. Also double check which index of the u integrals is actually the core!!!!!!!!!!!!!!!!!!!!!!!!
+    # scheme seems awfully arbitrary.
     # To be done...
     """
     mr_occs = [{}, {}]
@@ -195,6 +197,48 @@ def state_screening(dens_builder_stuff, ints, monomer_charges, n_orbs, frozen, n
     # add the ground state (and maybe also multi reference contributions)
     for frag in range(2):
         missing_states[frag][0][total_gs_config_neutral] = dens_builder_stuff[frag][0][0].configs.index(total_gs_config_neutral)
+
+    
+    # add monomer contributions
+    for frag in range(2):
+        chg = 0
+        if frag == 0:
+            one_e_int = h00
+        else:
+            one_e_int = h11
+        two_el_int = get_v((frag, frag, frag, frag))
+        # single excitations
+        for elem in get_large(one_e_int, thresh_frac=single_thresh)[frag] + get_large(two_el_int, thresh_frac=single_thresh)[frag]:  # last two are equal to first two indices of v
+            if elem in frozen:
+                continue
+            if elem in conf_decoder(total_gs_config_neutral):  # filter out occupied orbitals
+                continue
+            # positively charged reference ground state is ground state of corresponding spin
+            if elem >= n_orbs:  # appending beta needs alpha ref
+                gs = total_gs_config_neutral - 2**(n_orbs - 1 + n_occ[1])  # one should rather sweep over the available ionized contributions
+            else:  # appending alpha needs beta ref
+                gs = total_gs_config_neutral - 2**(-1 + n_occ[0])  # one should rather sweep over the available ionized contributions
+            ex = gs + 2**elem
+            if ex not in missing_states[frag][chg].keys():
+                missing_states[frag][chg][ex] = dens_builder_stuff[frag][0][chg].configs.index(ex)
+        # double excitations
+        for comb in get_large(two_el_int, thresh_frac=double_thresh, compress_ouput=False):  # one might also want to build combinations from h00 and h11 here
+            if any(elem in frozen for elem in comb):
+                continue
+            if comb[2] == comb[3]:
+                continue
+            if comb[0] == comb[1]:
+                continue
+            if comb[0] in conf_decoder(total_gs_config_neutral) and not comb[0] in comb[2:]:
+                continue
+            if comb[1] in conf_decoder(total_gs_config_neutral) and not comb[1] in comb[2:]:
+                continue
+            if comb[2] not in conf_decoder(total_gs_config_neutral):
+                continue
+            if comb[3] not in conf_decoder(total_gs_config_neutral):
+                continue
+            ex = total_gs_config_neutral + 2**comb[0] + 2**comb[1] - 2**comb[2] - 2**comb[3]
+            missing_states[frag][0][ex] = dens_builder_stuff[frag][0][0].configs.index(ex)
 
 
     # ionization contributions form one el ints for single excitations without spin flip
@@ -469,6 +513,36 @@ def state_screening(dens_builder_stuff, ints, monomer_charges, n_orbs, frozen, n
                     #det_state[dens_builder_stuff[frag][0][chg].configs.index(ex)] = 1.
                     #missing_states[frag][chg][ex] = det_state
                     missing_states[frag][chg][ex] = dens_builder_stuff[frag][0][chg].configs.index(ex)
+
+
+    # singly and doubly excited anionic determinants from double ionization term
+    gs_list = [2**n_occ[i] for i in range(2)]
+    for frag in range(2):
+        if frag == 0:
+            int = get_v((0, 0, 1, 1))
+        else:
+            int = get_v((1, 1, 0, 0))
+        for comb in get_large(int, thresh_frac=double_thresh, compress_ouput=False):
+            if any(elem in frozen for elem in comb):
+                continue
+            if comb[2] == comb[3]:
+                continue
+            if comb[0] in conf_decoder(total_gs_config_neutral) and not comb[0] in gs_list:
+                continue
+            if comb[1] in conf_decoder(total_gs_config_neutral) and not comb[1] in gs_list:# and not comb[1] in comb[2:]:
+                continue
+            if comb[2] not in conf_decoder(total_gs_config_neutral):# and comb[2] != comb[1]:
+                continue
+            if comb[3] not in conf_decoder(total_gs_config_neutral):# and comb[3] != comb[1]:
+                continue
+            gs1 = total_gs_config_neutral - 2**(n_orbs - 1 + n_occ[1])  # one should rather sweep over the available ionized contributions
+            gs2 = total_gs_config_neutral - 2**(-1 + n_occ[0])  # one should rather sweep over the available ionized contributions
+            ex1 = gs1 + 2**comb[0] + 2**comb[1]
+            ex2 = gs2 + 2**comb[0] + 2**comb[1]
+            #print(conf_decoder(ex_minus), conf_decoder(ex_plus))
+            missing_states[frag][-1][ex1] = dens_builder_stuff[frag][0][-1].configs.index(ex1)
+            missing_states[frag][-1][ex2] = dens_builder_stuff[frag][0][-1].configs.index(ex2)
+        
 
 
     """

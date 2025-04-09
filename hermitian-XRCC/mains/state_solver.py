@@ -54,6 +54,9 @@ def optimize_states(displacement, max_iter, xr_order, conv_thresh=1e-6, dens_fil
     # Initialize integrals and density preliminaries
     ######################################################
 
+    if max_iter > 0 and begin_from_state_prep:
+        raise ValueError("it is recommended to either use the gradient based solver or the state preparer")
+
     n_frag       = 2
     displacement = displacement
     project_core = True
@@ -1034,12 +1037,21 @@ def optimize_states(displacement, max_iter, xr_order, conv_thresh=1e-6, dens_fil
 
     #return en_history #screening_energies
     #return screening_energies
-    return screening_energies, BeN, ints, dens, dens_builder_stuff
+    
+    if len(screening_energies) == 0:
+        return en_history
+    elif len(en_history) == 0:
+        return screening_energies
+    else:
+        return [screening_energies, en_history]
+    
+    #return screening_energies, BeN, ints, dens, dens_builder_stuff  # this is for the orbital solver
 
 
 #scan = []
-#for i in range(12):
-#    scan.append(optimize_states(3.9 + i / 10, 0, 0))
+#for i in range(2):
+#    scan.append(optimize_states(3.8 + i / 10, 40, 0, begin_from_state_prep=False))
+#print(scan)
 
 #scan = [optimize_states(4.5, 20, 0, dens_filter_thresh=1e-6), optimize_states(4.5, 20, 0, dens_filter_thresh=1e-7),
 #        optimize_states(4.5, 20, 0, dens_filter_thresh=1e-8), optimize_states(4.5, 20, 0, dens_filter_thresh=1e-9)]
@@ -1048,7 +1060,7 @@ def optimize_states(displacement, max_iter, xr_order, conv_thresh=1e-6, dens_fil
 #print(scan)
 
 #print(optimize_states(4.5, 0, 0))#, dens_filter_thresh=3e-9))
-
+print(optimize_states(4.5, 30, 0, begin_from_state_prep=False))
 
 
 

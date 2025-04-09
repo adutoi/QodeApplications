@@ -320,6 +320,23 @@ v_catalog_hess = [  # target fragment is 0 ... for target fragment 1 simply put 
 ]
 """
 
+def s_diagram(ret, h_dens, ints_symm, ov_slice, mat_ov_slice, mat_slice):
+    combs = [(1, [x, y]) for x in ["a", "i"] for y in ["a", "i"]]
+    def s_symm(i, j):
+        return ints_symm.S[i,j]
+    for comb in combs:
+        pl, ql = comb[1]
+        for s1 in range(2):
+            for s2 in range(2):
+                for j in range(2):
+                    #for j in range(2):
+                    i = 1 - j
+                    ret[mat_ov_slice[(j, pl, s1)], mat_ov_slice[(j, ql, s2)]] +=\
+                        comb[0] * raw(s_symm(j, i)[ov_slice[(j, pl, s1)], :](0, r) @ h_dens[mat_ov_slice[(j, ql, s2)], mat_slice[i]](1, r))
+                    ret[mat_ov_slice[(i, pl, s1)], mat_ov_slice[(i, ql, s2)]] +=\
+                        comb[0] * raw(s_symm(j, i)[:, ov_slice[(i, ql, s2)]](r, 1) @ h_dens[mat_slice[j], mat_ov_slice[(i, pl, s1)]](r, 0))
+
+
 def t_diagram(ret, h_dens, ints_bior, ov_slice, mat_ov_slice, mat_slice, off_diag_blocks=True):
     combs = [(1, [x, y]) for x in ["a", "i"] for y in ["a", "i"]]
     def t_bior(i, j):
@@ -1021,3 +1038,16 @@ class grads_and_hessian(object):
         #hess_diag = 0.5 * (hess_diag + np.transpose(hess_diag, (1,0,3,2)))
         #return 0.5 * (hess_diag + np.transpose(hess_diag, (2,3,0,1)))
         #return hess_diag
+
+    def S_orb_grads(self, dl, dr, dens, ints):
+        print("start S_orb_grad routine")
+        ints_symm, ints_bior, nuc_rep = ints
+        grad = np.zeros(self.ten_shape)
+        print("computing one particle XR density")
+        h_dens = self.one_p_dens(np.zeros(self.ten_shape), dl, dr, dens)
+        print("computing s term")
+        s_diagram(grad, h_dens, ints_symm, self.ov_slice, self.mat_ov_slice, self.mat_slice)  # update mat in place
+        print("done")
+        return 1 * (grad - grad.T), 0.5 * np.einsum("ii->", grad)
+
+
