@@ -27,8 +27,8 @@ from state_screening import state_screening, orthogonalize
 #import torch
 import numpy as np
 import tensorly as tl
-import pickle
-#import scipy as sp
+#import pickle
+import scipy as sp
 
 #torch.set_num_threads(4)
 #tl.set_backend("pytorch")
@@ -78,7 +78,7 @@ def optimize_states(displacement, max_iter, xr_order, conv_thresh=1e-6, dens_fil
     for m in range(int(n_frag)):
         state_obj, dens_var_1, dens_var_2, n_threads, Be = get_fci_states(displacement, n_state_list=[(1, 2), (0, 10), (-1, 10)])
         #Be.basis.MOcoeffs = ref_mos.copy()
-        pickle.dump(Be.basis.MOcoeffs, open(f"pre_opt_mos_{m}.pkl", mode="wb"))
+        #pickle.dump(Be.basis.MOcoeffs, open(f"pre_opt_mos_{m}.pkl", mode="wb"))
 
         #Be.basis.MOcoeffs = pickle.load(open(f"pre_opt_mos_{m}.pkl", mode="rb"))
         #for chg in monomer_charges[m]:
@@ -513,15 +513,30 @@ def optimize_states(displacement, max_iter, xr_order, conv_thresh=1e-6, dens_fil
         full = full.reshape(n_states[0] * n_states[1],
                             n_states[0] * n_states[1])
 
-        full_eigvals, full_eigvec = sort_eigen(np.linalg.eig(full))
+        full_eigvals_raw, full_eigvec_l_unsorted, full_eigvec_r_unsorted = sp.linalg.eig(full, left=True, right=True)
+        full_eigvals, full_eigvec_l = sort_eigen((full_eigvals_raw, full_eigvec_l_unsorted))
+        full_eigvals_check, full_eigvec_r = sort_eigen((full_eigvals_raw, full_eigvec_r_unsorted))
+        if any(full_eigvals - full_eigvals_check):  # this check should be unnecessary and might need to be refined for fully degenerate states
+            raise ValueError("sorting went wrong with the sorting")
+        #full_eigvals, full_eigvec = sort_eigen(np.linalg.eig(full))
         print(np.min(full_eigvals))
-        if np.linalg.norm(np.imag(full_eigvec[:, 0])) / np.linalg.norm(full_eigvec[:, 0]) > 1e-10:
+        if np.linalg.norm(np.imag(full_eigvec_l[:, 0])) > 1e-10:
+            raise ValueError("imaginary part of eigenvector is not negligible")
+        if np.linalg.norm(np.imag(full_eigvec_r[:, 0])) > 1e-10:
             raise ValueError("imaginary part of eigenvector is not negligible")
 
-        full_gs_vec = np.real(full_eigvec[:, 0].reshape((n_states[0], n_states[1])))
+        full_gs_vec_l = np.real(full_eigvec_l[:, 0].reshape((n_states[0], n_states[1])))
+        full_gs_vec_r = np.real(full_eigvec_r[:, 0].reshape((n_states[0], n_states[1])))
 
-        dens_mat_a = np.einsum("ij,kj->ik", full_gs_vec, full_gs_vec)#np.conj(full_gs_vec))  # contract over frag_b part
-        dens_mat_b = np.einsum("ij,ik->jk", full_gs_vec, full_gs_vec)#np.conj(full_gs_vec))  # contract over frag_a part
+        dens_mat_a_l = np.einsum("ij,kj->ik", full_gs_vec_l, full_gs_vec_l)#np.conj(full_gs_vec))  # contract over frag_b part
+        dens_mat_b_l = np.einsum("ij,ik->jk", full_gs_vec_l, full_gs_vec_l)#np.conj(full_gs_vec))  # contract over frag_a part
+        dens_mat_a_r = np.einsum("ij,kj->ik", full_gs_vec_r, full_gs_vec_r)#np.conj(full_gs_vec))  # contract over frag_b part
+        dens_mat_b_r = np.einsum("ij,ik->jk", full_gs_vec_r, full_gs_vec_r)#np.conj(full_gs_vec))  # contract over frag_a part
+
+        # not sure if this is the appropriate way to build one set of states out of the two densities intead of two sets, which are very similar
+        # maybe better build dens directly as full_gs_vec_l @ full_gs_vec_r.T, but this yields non-hermitian densities and therefore larger model state spaces
+        dens_mat_a = 0.5 * (dens_mat_a_l + dens_mat_a_r)
+        dens_mat_b = 0.5 * (dens_mat_b_l + dens_mat_b_r)
         
         dens_eigvals_a, dens_eigvecs_a = sort_eigen(np.linalg.eigh(dens_mat_a), order="descending")
         dens_eigvals_b, dens_eigvecs_b = sort_eigen(np.linalg.eigh(dens_mat_b), order="descending")
@@ -534,7 +549,6 @@ def optimize_states(displacement, max_iter, xr_order, conv_thresh=1e-6, dens_fil
         # too large -> truncation errors
         # too small -> numerical inconsistencies through terms to small to resolve even
         # with double precision (at least I think so...where else should the numerical instability come from?)
-        # for the first iteration of the Be2 6-31g example something around 1e-9 seems to be the sweet spot
         keepers = [[], []]
         for frag in range(2):
             for i, vec in enumerate(new_large_vecs[frag].T):
@@ -601,7 +615,7 @@ def optimize_states(displacement, max_iter, xr_order, conv_thresh=1e-6, dens_fil
         # Obtaining the derivatives for frag frag_ind
         #############################################
 
-        gs_energy_a, gradient_states_a, d = state_gradients(frag_ind, ints, dens_builder_stuff, dens, monomer_charges, n_threads=n_threads, xr_order=xr_order, dets=dets)
+        gs_energy_a, gradient_states_a, dl_prev, dr_prev = state_gradients(frag_ind, ints, dens_builder_stuff, dens, monomer_charges, n_threads=n_threads, xr_order=xr_order, dets=dets)
         if dets:
             # decompress gradients again into full configuration space
             gradient_states_a = {chg: np.einsum("iq,qp->ip", grad, dets[chg]) for chg, grad in gradient_states_a.items()}
@@ -647,6 +661,8 @@ def optimize_states(displacement, max_iter, xr_order, conv_thresh=1e-6, dens_fil
         mat_sl_latter[1 - frag_ind] = d_slices[1 - frag_ind]
 
         # state gradient provider changes both densities, so the (new) "normal" densities need to be recovered/generated here
+        # TODO: here either recompute the densities for the fragment without gradients, which saves memory, or load these densities
+        # again, which is of course faster but more memory intensive ... probably better take the second option
         for chg in monomer_charges[frag_ind]:
             dens_builder_stuff[frag_ind][0][chg].coeffs = [i.copy() for i in tot_a_coeffs[chg]]
         dens[frag_ind] = densities.build_tensors(*dens_builder_stuff[frag_ind][:-1], options=dens_builder_stuff[frag_ind][-1], n_threads=n_threads)
@@ -694,28 +710,60 @@ def optimize_states(displacement, max_iter, xr_order, conv_thresh=1e-6, dens_fil
         # Solve for state of interest (here ground state)
         #################################################
         
-        full_eigvals, full_eigvec = sort_eigen(np.linalg.eig(full))
+        full_eigvals_raw, full_eigvec_l_unsorted, full_eigvec_r_unsorted = sp.linalg.eig(full, left=True, right=True)
+        full_eigvals, full_eigvec_l = sort_eigen((full_eigvals_raw, full_eigvec_l_unsorted))
+        full_eigvals_check, full_eigvec_r = sort_eigen((full_eigvals_raw, full_eigvec_r_unsorted))
+        if any(full_eigvals - full_eigvals_check):  # this check should be unnecessary and might need to be refined for fully degenerate states
+            raise ValueError("sorting went wrong with the sorting")
+        #full_eigvals, full_eigvec_r = sort_eigen(np.linalg.eig(full))
         print(np.min(full_eigvals))
-        print("relative imag contribution of lowest eigvec of full H with grads with eig", np.linalg.norm(np.imag(full_eigvec[:, 0])) / np.linalg.norm(full_eigvec[:, 0]))
+        print("imag contribution of lowest eigvec of full H with grads with eig", np.linalg.norm(np.imag(full_eigvec_r[:, 0])))#, np.linalg.norm(np.imag(full_eigvec_l[:, 0])))
 
         # now determine which elements of the eigvec to keep
         #full_gs_vec = np.real(full_eigvec[:, 0].reshape((2 - frag_ind) * n_states[0], (1 + frag_ind) * n_states[1]))
-        full_gs_vec = np.real(full_eigvec[:, 0].reshape(n_states[0], n_states[1]))
+        #full_gs_vec = np.real(full_eigvec[:, 0].reshape(n_states[0], n_states[1]))
+        #full_gs_vec_l = np.real(full_eigvec_l[:, 0].reshape((n_states[0], n_states[1])))
+        full_gs_vec_r = np.real(full_eigvec_r[:, 0].reshape((n_states[0], n_states[1])))
 
         #############################
         # Filter which states to keep
         #############################
+        print("currently density filtering is done with only dr and not dl!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+        #"""
+        dens_mat_a = np.einsum("ij,kj->ik", full_gs_vec_r, full_gs_vec_r)#np.conj(full_gs_vec))  # contract over frag_b part
+        dens_mat_b = np.einsum("ij,ik->jk", full_gs_vec_r, full_gs_vec_r)#np.conj(full_gs_vec))  # contract over frag_a part
+        #dens_mat_a_r = np.einsum("ij,kj->ik", full_gs_vec_r, full_gs_vec_r)#np.conj(full_gs_vec))  # contract over frag_b part
+        #dens_mat_b_r = np.einsum("ij,ik->jk", full_gs_vec_r, full_gs_vec_r)#np.conj(full_gs_vec))  # contract over frag_a part
 
-        dens_mat_a = np.einsum("ij,kj->ik", full_gs_vec, full_gs_vec)#np.conj(full_gs_vec))  # contract over frag_b part
-        dens_mat_b = np.einsum("ij,ik->jk", full_gs_vec, full_gs_vec)#np.conj(full_gs_vec))  # contract over frag_a part
+        # not sure if this is the appropriate way to build one set of states out of the two densities intead of two sets, which are very similar
+        # maybe better build dens directly as full_gs_vec_l @ full_gs_vec_r.T, but this yields eigenvectors with large imaginary contributions
+        #dens_mat_a = 0.5 * (dens_mat_a_l + dens_mat_a_r)
+        #dens_mat_b = 0.5 * (dens_mat_b_l + dens_mat_b_r)
+        #"""
+        #dens_mat_a = np.einsum("ij,kj->ik", full_gs_vec_l, full_gs_vec_r)#np.conj(full_gs_vec))  # contract over frag_b part
+        #dens_mat_b = np.einsum("ij,ik->jk", full_gs_vec_l, full_gs_vec_r)#np.conj(full_gs_vec))  # contract over frag_a part
+
+        #dens_mat_a = np.einsum("ij,kj->ik", full_gs_vec, full_gs_vec)#np.conj(full_gs_vec))  # contract over frag_b part
+        #dens_mat_b = np.einsum("ij,ik->jk", full_gs_vec, full_gs_vec)#np.conj(full_gs_vec))  # contract over frag_a part
         
         # the following descending ordering is very important for the later gram-schmidt orthogonalization
         dens_eigvals_a, dens_eigvecs_a = sort_eigen(np.linalg.eigh(dens_mat_a), order="descending")
         dens_eigvals_b, dens_eigvecs_b = sort_eigen(np.linalg.eigh(dens_mat_b), order="descending")
+        #dens_eigvals_a, dens_eigvecs_a = sort_eigen(np.linalg.eigh(dens_mat_a_l), order="descending")
+        #dens_eigvals_b, dens_eigvecs_b = sort_eigen(np.linalg.eigh(dens_mat_b_l), order="descending")
+        #dens_eigvals_a2, dens_eigvecs_a2 = sort_eigen(np.linalg.eigh(dens_mat_a_r), order="descending")
+        #dens_eigvals_b2, dens_eigvecs_b2 = sort_eigen(np.linalg.eigh(dens_mat_b_r), order="descending")
+        #dens_eigvals_a, dens_eigvecs_a = sort_eigen(np.linalg.eig(dens_mat_a), order="descending")
+        #dens_eigvals_b, dens_eigvecs_b = sort_eigen(np.linalg.eig(dens_mat_b), order="descending")
+        #dens_eigvals_a, dens_eigvecs_a, dens_eigvecs_a2 = sort_eigen(sp.linalg.eig(full, left=True, right=True), order="descending")
+        #dens_eigvals_b, dens_eigvecs_b, dens_eigvecs_b2 = sort_eigen(sp.linalg.eig(full, left=True, right=True), order="descending")
+        #print("total imag contr of dens eigvecs a and b", np.linalg.norm(np.imag(dens_eigvecs_a)), np.linalg.norm(np.imag(dens_eigvecs_b)))
         print(dens_eigvals_a)
         print(dens_eigvals_b)
         dens_eigvals = [dens_eigvals_a, dens_eigvals_b]
-        new_large_vecs = [np.real(dens_eigvecs_a), np.real(dens_eigvecs_b)]
+        new_large_vecs = [dens_eigvecs_a, dens_eigvecs_b]
+        #dens_eigvals = [np.concatenate((dens_eigvals_a, dens_eigvals_a2)), np.concatenate((dens_eigvals_b, dens_eigvals_b2))]
+        #new_large_vecs = [np.real(np.concatenate((dens_eigvecs_a, dens_eigvecs_a2), axis=1)), np.real(np.concatenate((dens_eigvecs_b, dens_eigvecs_b2), axis=1))]
         
         # the following threshold is very delicate, because if its
         # too large -> truncation errors
@@ -726,7 +774,9 @@ def optimize_states(displacement, max_iter, xr_order, conv_thresh=1e-6, dens_fil
         for frag in range(2):
             for i, vec in enumerate(new_large_vecs[frag].T):
                 if dens_eigvals[frag][i] >= dens_eigval_thresh:
-                    keepers[frag].append(vec)
+                    if np.linalg.norm(np.imag(vec)) > 1e-7:
+                        raise ValueError(f"imaginary contribution of relevant density eigvec is {np.linalg.norm(np.imag(vec))}, which is too large")
+                    keepers[frag].append(np.real(vec))
             print(f"{len(keepers[frag])} states are kept for frag {frag}")
 
         large_vec_map = [0, 0]
@@ -954,9 +1004,11 @@ def optimize_states(displacement, max_iter, xr_order, conv_thresh=1e-6, dens_fil
         print("starting iterative state solver now")
         converged = False
 
-        pickle.dump(state_coeffs_optimized, open("pre_opt_coeffs.pkl", mode="wb"))
-        for frag in range(2):
-            dens.append(densities.build_tensors(*dens_builder_stuff[frag][:-1], options=density_options, n_threads=n_threads))
+        #pickle.dump(state_coeffs_optimized, open("pre_opt_coeffs.pkl", mode="wb"))
+        #for frag in range(2):
+        #    dens.append(densities.build_tensors(*dens_builder_stuff[frag][:-1], options=density_options, n_threads=n_threads))
+        dens = [[], []]
+        dens[0] = densities.build_tensors(*dens_builder_stuff[0][:-1], options=dens_builder_stuff[0][-1], n_threads=n_threads)
 
         # not required as current densities are already computed in last iteration of while loop
         #for frag in range(2):
@@ -983,16 +1035,18 @@ def optimize_states(displacement, max_iter, xr_order, conv_thresh=1e-6, dens_fil
         if all(screening_done.flatten()):
             break
 
-        for frag in range(2):
-            dens[frag] = densities.build_tensors(*dens_builder_stuff[frag][:-1], options=dens_builder_stuff[frag][-1], n_threads=n_threads)
+        #for frag in range(2):
+        #    dens[frag] = densities.build_tensors(*dens_builder_stuff[frag][:-1], options=dens_builder_stuff[frag][-1], n_threads=n_threads)
+        dens[1] = densities.build_tensors(*dens_builder_stuff[1][:-1], options=dens_builder_stuff[1][-1], n_threads=n_threads)
         
         # opt frag 1 and previously enlarge 0
         state_coeffs_optimized, dens_builder_stuff, dens = enlarge_state_space(0, state_coeffs_optimized, dens_builder_stuff, dens)
         state_coeffs_optimized, dens_builder_stuff, gs_energy_a, gs_en_a_with_grads = alternate_enlarge_and_opt(1, dens_builder_stuff, dens, state_coeffs_optimized, dets=additional_states[1])
         converged = postprocessing(gs_energy_a, gs_en_a_with_grads, en_history, en_with_grads_history, converged)
 
-        for frag in range(2):
-            dens[frag] = densities.build_tensors(*dens_builder_stuff[frag][:-1], options=dens_builder_stuff[frag][-1], n_threads=n_threads)
+        #for frag in range(2):
+        #    dens[frag] = densities.build_tensors(*dens_builder_stuff[frag][:-1], options=dens_builder_stuff[frag][-1], n_threads=n_threads)
+        dens[0] = densities.build_tensors(*dens_builder_stuff[0][:-1], options=dens_builder_stuff[0][-1], n_threads=n_threads)
         
         if all(screening_done.flatten()):
             break
@@ -1040,10 +1094,10 @@ def optimize_states(displacement, max_iter, xr_order, conv_thresh=1e-6, dens_fil
     
     if len(screening_energies) == 0:
         return en_history
-    elif len(en_history) == 0:
-        return screening_energies
     else:
-        return [screening_energies, en_history]
+        return screening_energies
+    #else:
+    #    return [screening_energies, en_history]
     
     #return screening_energies, BeN, ints, dens, dens_builder_stuff  # this is for the orbital solver
 
