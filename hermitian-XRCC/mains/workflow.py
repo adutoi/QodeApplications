@@ -103,7 +103,7 @@ def run_xr(displacement, max_iter, xr_order_final, xr_order_solver=0, dens_filte
                                                    monomer_charges=monomer_charges, density_options=density_options, n_threads=n_threads)
     
     # rebuild densities for appropriate order
-    dens = [densities.build_tensors(*dens_builder_stuff[frag][:-1], options=dens_builder_stuff[frag][-1], n_threads=n_threads, xr_order=0) for frag in range(2)]
+    dens = [densities.build_tensors(*dens_builder_stuff[frag][:-1], options=dens_builder_stuff[frag][-1], n_threads=n_threads, xr_order=xr_order_final) for frag in range(2)]
     
     final_en, final_state = get_xr_states(ints, dens, xr_order_final, monomer_charges)
 
@@ -112,4 +112,4 @@ def run_xr(displacement, max_iter, xr_order_final, xr_order_solver=0, dens_filte
 
 
 
-print(run_xr(4.5, 0, 0, single_thresh=1/5, double_thresh=1/3.5, triple_thresh=1/2.5))
+print(run_xr(4.5, 30, 0, single_thresh=1/5, double_thresh=1/3.5, triple_thresh=1/2.5))
