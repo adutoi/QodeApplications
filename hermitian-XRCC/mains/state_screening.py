@@ -27,7 +27,7 @@ import densities
 import pickle
 
 
-def orthogonalize(U, eps=1e-6):  # with the transpose commented out, it orthogonalizes rows instead of columns
+def orthogonalize(U, eps=1e-6, normalize=True):  # with the transpose commented out, it orthogonalizes rows instead of columns
     # one should play with eps a little here
     n = len(U)
     V = U#.T
@@ -36,12 +36,16 @@ def orthogonalize(U, eps=1e-6):  # with the transpose commented out, it orthogon
         coeff_vec = np.dot(prev_basis, V[i].T)  # each entry is np.dot(V[j], V[i]) for all j < i
         # subtract projections of V[i] onto already determined basis V[0:i]
         V[i] -= np.dot(coeff_vec, prev_basis).T
-        if np.linalg.norm(V[i]) < eps:
-            #V[i][V[i] < eps] = 0.   # set the small entries to 0
-            V[i] = np.zeros_like(V[i])
-            #print("zero vector encountered!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+        if normalize:
+            if np.linalg.norm(V[i]) < eps:
+                #V[i][V[i] < eps] = 0.   # set the small entries to 0
+                V[i] = np.zeros_like(V[i])
+                #print("zero vector encountered!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+            else:
+                V[i] /= np.linalg.norm(V[i])
         else:
-            V[i] /= np.linalg.norm(V[i])
+            if np.linalg.norm(V[i]) < eps:
+                V[i] = np.zeros_like(V[i])
     return V#.T
 
 

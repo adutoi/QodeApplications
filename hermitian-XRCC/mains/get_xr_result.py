@@ -457,6 +457,6 @@ def get_xr_states_from_H(H1, H2):
 
     return E, T
 
-def get_xr_states(ints, dens, xr_order):
-    H1, H2 = get_xr_H(ints, dens, xr_order)
+def get_xr_states(ints, dens, xr_order, monomer_charges):
+    H1, H2 = get_xr_H(ints, dens, xr_order, monomer_charges)
     return get_xr_states_from_H(H1, H2)

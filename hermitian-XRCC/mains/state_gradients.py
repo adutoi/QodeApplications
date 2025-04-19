@@ -109,7 +109,7 @@ def get_gs(current_state_dict, d_sl, H1_new, H2_new, monomer_charges):
         #full_eigvals, full_eigvec_r = sort_eigen(np.linalg.eig(H2_new))
         #return full_eigvals[0], H2_new, full_eigvec_l[:, 0].T / np.linalg.norm(full_eigvec_l[:, 0]), full_eigvec_r[:, 0].T
         print("currently state gradients are build with only dr and not dl!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
-        return full_eigvals[0], H2_new, full_eigvec_r[:, 0].T, full_eigvec_r[:, 0].T
+        return full_eigvals[0], H2_new, full_eigvec_r[:, 0].T, full_eigvec_r[:, 0].T, full_eigvec_l[:, 0].T / np.linalg.norm(full_eigvec_l[:, 0])
 
 def state_gradients(frag_ind, ints, dens_builder_stuff, dens, monomer_charges, n_threads=1, xr_order=0, dets={}):
     if xr_order != 0:
@@ -136,19 +136,22 @@ def state_gradients(frag_ind, ints, dens_builder_stuff, dens, monomer_charges, n
 
     #gs_energy, gs_state = get_xr_states(ints, dens, xr_order)
     H1_for_d, H2_for_d = get_xr_H(ints, dens, xr_order, monomer_charges)
-    gs_energy, H_no_dets, dl, dr = get_gs(state_dict, d_slices, H1_for_d, H2_for_d, monomer_charges)
+    gs_energy, H_no_dets, dl, dr, dl_extra = get_gs(state_dict, d_slices, H1_for_d, H2_for_d, monomer_charges)
     E = np.real(gs_energy)
     #dl, dr = gs_state
     print("dropping imaginary part of non-diagonalized d with norm", np.linalg.norm(np.imag(dl)), np.linalg.norm(np.imag(dr)))
     dl = np.real(dl).reshape(sum(state_dict[0].values()), sum(state_dict[1].values()))
     dr = np.real(dr).reshape(sum(state_dict[0].values()), sum(state_dict[1].values()))
+    dl_extra = np.real(dl_extra).reshape(sum(state_dict[0].values()), sum(state_dict[1].values()))
     if frag_ind == 1:
-        dl, dr = dl.T, dr.T
+        dl, dr, dl_extra = dl.T, dr.T, dl_extra.T
 
     # normalize d
     # careful, this doesn't yield <Psi_D|Psi_D> = 1, because dl @ dr.T != 1
+    # also dr should already be normalized and dl should be normalized from get_gs()
     dl = dl / np.linalg.norm(dl)
     dr = dr / np.linalg.norm(dr)
+    #dl_extra = dl_extra / np.linalg.norm(dl_extra)
     
     #print(d)
     #print(d_slices)
@@ -189,15 +192,15 @@ def state_gradients(frag_ind, ints, dens_builder_stuff, dens, monomer_charges, n
     H1_new, H2_new = get_xr_H(ints, dens, xr_order, monomer_charges, ket_det=True)
     print(H1_new[0].shape, H1_new[1].shape, H2_new.shape)
     H2_new = H2_new.reshape((H1_new[0].shape[1], H1_new[1].shape[1]))
-    """
+    #"""
     # H1 of frag A can be used as is and H1 of frag B needs to be contracted with the state coeffs of frag A. Note, that this is independent of the XR order 
     gradient_states = {}
     new_overlaps = get_adapted_overlaps(frag_map, dl, dr, d_slices)
     #new_overlaps = {}
 
     # intermediates for S^{-1} terms
-    H_dr = np.einsum("ik,k->i", H_no_dets, dr.reshape((H_no_dets.shape[1])))
-    dl_partial_H_dr = np.einsum("il,ml->im", dl, H_dr.reshape(dl.shape))  #(sum(state_dict[0].values()), sum(state_dict[1].values())))
+    #H_dr = np.einsum("ik,k->i", H_no_dets, dr.reshape((H_no_dets.shape[1])))
+    #dl_partial_H_dr = np.einsum("il,ml->im", dl_extra, H_dr.reshape(dl_extra.shape))  #(sum(state_dict[0].values()), sum(state_dict[1].values())))
     
     for chg in monomer_charges[frag_map[0]]:
         if dets:
@@ -242,11 +245,11 @@ def state_gradients(frag_ind, ints, dens_builder_stuff, dens, monomer_charges, n
         #print("step3", [np.linalg.norm(i) for i in gradient_states[chg]])
         # this line also relies on equal charges on fragments A and B
         gradient_states[chg] += np.einsum("ip,ki->kp", c0, H1_new[frag_map[1]][d_slices[frag_map[0]][chg], d_slices[frag_map[0]][chg]])  # frag B monomer H term
-        """
+        #"""
         # the following are the two terms from the derivative with respect to S^{-1}
         """
         gradient_states[chg] -= np.einsum("mp,im->ip", c0, dl_partial_H_dr[d_slices[frag_map[0]][chg], d_slices[frag_map[0]][chg]])
         gradient_states[chg] -= np.einsum("kp,ki->ip", c0, dl_partial_H_dr[d_slices[frag_map[0]][chg], d_slices[frag_map[0]][chg]])
-        """
+        #"""
     return gs_energy, gradient_states, dl, dr
 

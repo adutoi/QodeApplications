@@ -16,12 +16,12 @@
 #    along with QodeApplications.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-from   get_ints import get_ints
-from   get_xr_result import get_xr_states, get_xr_H
-from qode.math.tensornet import raw, tl_tensor, backend_contract_path
+#from   get_ints import get_ints
+from   get_xr_result import get_xr_H#, get_xr_states
+from qode.math.tensornet import backend_contract_path#, raw, tl_tensor
 #import qode.util
 from qode.util import timer, sort_eigen
-from state_gradients import state_gradients, get_slices, get_adapted_overlaps
+from state_gradients import state_gradients, get_slices#, get_adapted_overlaps
 from state_screening import state_screening, orthogonalize
 
 #import torch
@@ -34,7 +34,7 @@ import scipy as sp
 #tl.set_backend("pytorch")
 #tl.set_backend("numpy")
 
-from   build_fci_states import get_fci_states
+#from   build_fci_states import get_fci_states
 import densities
 
 tl.plugins.use_opt_einsum()
@@ -42,21 +42,26 @@ backend_contract_path(True)
 
 #class empty(object):  pass
 
-def optimize_states(displacement, max_iter, xr_order, conv_thresh=1e-6, dens_filter_thresh=1e-7, begin_from_state_prep=True):
+def optimize_states(max_iter, xr_order, dens_builder_stuff, ints, n_occ, n_orbs, frozen_orbs, additional_states,
+                    conv_thresh=1e-6, dens_filter_thresh=1e-7, begin_from_state_prep=False,
+                    monomer_charges=[[0, +1, -1], [0, +1, -1]], density_options=["compress=SVD,cc-aa"], n_threads=1):
     """
     max_iter: defines the max_iter for the state solver using an actual gradient
     begin_from_state_prep: determines whether previously to the gradient based optimization a guess shall be provided
                            originating from the same state screening but then optimizing without the gradient (faster but less reliable)
     the current recommendation is to either only use the solver with a gradient with begin_from_state_prep=False or max_iter=0 with begin_from_state_prep=True.
-    As already mentioned the first one is more reliable, but the latter one is quite a bit faster
+    As already mentioned the first one is more accurate, but the latter one is quite a bit faster
     """
     ######################################################
     # Initialize integrals and density preliminaries
     ######################################################
 
     if max_iter > 0 and begin_from_state_prep:
-        raise ValueError("it is recommended to either use the gradient based solver or the state preparer")
+        raise ValueError("it is recommended to either use the gradient based solver or the state preparer, not both")
+    
+    state_coeffs_og = [{chg: dens_builder_stuff[m][0][chg].coeffs for chg in monomer_charges[m]} for m in range(2)]
 
+    """
     n_frag       = 2
     displacement = displacement
     project_core = True
@@ -78,7 +83,7 @@ def optimize_states(displacement, max_iter, xr_order, conv_thresh=1e-6, dens_fil
     for m in range(int(n_frag)):
         state_obj, dens_var_1, dens_var_2, n_threads, Be = get_fci_states(displacement, n_state_list=[(1, 2), (0, 10), (-1, 10)])
         #Be.basis.MOcoeffs = ref_mos.copy()
-        #pickle.dump(Be.basis.MOcoeffs, open(f"pre_opt_mos_{m}.pkl", mode="wb"))
+        pickle.dump(Be.basis.MOcoeffs, open(f"pre_opt_mos_{m}.pkl", mode="wb"))
 
         #Be.basis.MOcoeffs = pickle.load(open(f"pre_opt_mos_{m}.pkl", mode="rb"))
         #for chg in monomer_charges[m]:
@@ -102,7 +107,7 @@ def optimize_states(displacement, max_iter, xr_order, conv_thresh=1e-6, dens_fil
 
     int_timer = timer()
     ints = get_ints(BeN, project_core, int_timer)
-    
+    """
     def iteration(frag_ind, dens_builder_stuff, dens, state_coeffs, dens_eigval_thresh=dens_filter_thresh, dets={}):
         # In the following the variables are named as if frag_ind = 0, but it also works with frag_ind = 1
         print(f"opt frag {frag_ind}")
@@ -722,49 +727,62 @@ def optimize_states(displacement, max_iter, xr_order, conv_thresh=1e-6, dens_fil
         # now determine which elements of the eigvec to keep
         #full_gs_vec = np.real(full_eigvec[:, 0].reshape((2 - frag_ind) * n_states[0], (1 + frag_ind) * n_states[1]))
         #full_gs_vec = np.real(full_eigvec[:, 0].reshape(n_states[0], n_states[1]))
-        #full_gs_vec_l = np.real(full_eigvec_l[:, 0].reshape((n_states[0], n_states[1])))
+        full_gs_vec_l = np.real(full_eigvec_l[:, 0].reshape((n_states[0], n_states[1])))
         full_gs_vec_r = np.real(full_eigvec_r[:, 0].reshape((n_states[0], n_states[1])))
 
         #############################
         # Filter which states to keep
         #############################
-        print("currently density filtering is done with only dr and not dl!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+        #print("currently density filtering is done with only dr and not dl!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
         #"""
-        dens_mat_a = np.einsum("ij,kj->ik", full_gs_vec_r, full_gs_vec_r)#np.conj(full_gs_vec))  # contract over frag_b part
-        dens_mat_b = np.einsum("ij,ik->jk", full_gs_vec_r, full_gs_vec_r)#np.conj(full_gs_vec))  # contract over frag_a part
-        #dens_mat_a_r = np.einsum("ij,kj->ik", full_gs_vec_r, full_gs_vec_r)#np.conj(full_gs_vec))  # contract over frag_b part
-        #dens_mat_b_r = np.einsum("ij,ik->jk", full_gs_vec_r, full_gs_vec_r)#np.conj(full_gs_vec))  # contract over frag_a part
+        dens_mat_a_l = np.einsum("ij,kj->ik", full_gs_vec_l, full_gs_vec_l)#np.conj(full_gs_vec))  # contract over frag_b part
+        dens_mat_b_l = np.einsum("ij,ik->jk", full_gs_vec_l, full_gs_vec_l)#np.conj(full_gs_vec))  # contract over frag_a part
+        dens_mat_a_r = np.einsum("ij,kj->ik", full_gs_vec_r, full_gs_vec_r)#np.conj(full_gs_vec))  # contract over frag_b part
+        dens_mat_b_r = np.einsum("ij,ik->jk", full_gs_vec_r, full_gs_vec_r)#np.conj(full_gs_vec))  # contract over frag_a part
 
         # not sure if this is the appropriate way to build one set of states out of the two densities intead of two sets, which are very similar
         # maybe better build dens directly as full_gs_vec_l @ full_gs_vec_r.T, but this yields eigenvectors with large imaginary contributions
         #dens_mat_a = 0.5 * (dens_mat_a_l + dens_mat_a_r)
         #dens_mat_b = 0.5 * (dens_mat_b_l + dens_mat_b_r)
         #"""
-        #dens_mat_a = np.einsum("ij,kj->ik", full_gs_vec_l, full_gs_vec_r)#np.conj(full_gs_vec))  # contract over frag_b part
-        #dens_mat_b = np.einsum("ij,ik->jk", full_gs_vec_l, full_gs_vec_r)#np.conj(full_gs_vec))  # contract over frag_a part
+        #dens_mat_a = np.einsum("ij,kj->ik", full_gs_vec_r, full_gs_vec_r)#np.conj(full_gs_vec))  # contract over frag_b part
+        #dens_mat_b = np.einsum("ij,ik->jk", full_gs_vec_r, full_gs_vec_r)#np.conj(full_gs_vec))  # contract over frag_a part
 
         #dens_mat_a = np.einsum("ij,kj->ik", full_gs_vec, full_gs_vec)#np.conj(full_gs_vec))  # contract over frag_b part
         #dens_mat_b = np.einsum("ij,ik->jk", full_gs_vec, full_gs_vec)#np.conj(full_gs_vec))  # contract over frag_a part
         
         # the following descending ordering is very important for the later gram-schmidt orthogonalization
-        dens_eigvals_a, dens_eigvecs_a = sort_eigen(np.linalg.eigh(dens_mat_a), order="descending")
-        dens_eigvals_b, dens_eigvecs_b = sort_eigen(np.linalg.eigh(dens_mat_b), order="descending")
-        #dens_eigvals_a, dens_eigvecs_a = sort_eigen(np.linalg.eigh(dens_mat_a_l), order="descending")
-        #dens_eigvals_b, dens_eigvecs_b = sort_eigen(np.linalg.eigh(dens_mat_b_l), order="descending")
-        #dens_eigvals_a2, dens_eigvecs_a2 = sort_eigen(np.linalg.eigh(dens_mat_a_r), order="descending")
-        #dens_eigvals_b2, dens_eigvecs_b2 = sort_eigen(np.linalg.eigh(dens_mat_b_r), order="descending")
+        #dens_eigvals_a, dens_eigvecs_a = sort_eigen(np.linalg.eigh(dens_mat_a), order="descending")
+        #dens_eigvals_b, dens_eigvecs_b = sort_eigen(np.linalg.eigh(dens_mat_b), order="descending")
+        dens_eigvals_a, dens_eigvecs_a = sort_eigen(np.linalg.eigh(dens_mat_a_r), order="descending")
+        dens_eigvals_b, dens_eigvecs_b = sort_eigen(np.linalg.eigh(dens_mat_b_r), order="descending")
+        dens_eigvals_a2, dens_eigvecs_a2 = sort_eigen(np.linalg.eigh(dens_mat_a_l), order="descending")
+        dens_eigvals_b2, dens_eigvecs_b2 = sort_eigen(np.linalg.eigh(dens_mat_b_l), order="descending")
         #dens_eigvals_a, dens_eigvecs_a = sort_eigen(np.linalg.eig(dens_mat_a), order="descending")
         #dens_eigvals_b, dens_eigvecs_b = sort_eigen(np.linalg.eig(dens_mat_b), order="descending")
-        #dens_eigvals_a, dens_eigvecs_a, dens_eigvecs_a2 = sort_eigen(sp.linalg.eig(full, left=True, right=True), order="descending")
-        #dens_eigvals_b, dens_eigvecs_b, dens_eigvecs_b2 = sort_eigen(sp.linalg.eig(full, left=True, right=True), order="descending")
+        #dens_eigvals_a, dens_eigvecs_a2, dens_eigvecs_a = sort_eigen(sp.linalg.eig(dens_mat_a, left=True, right=True), order="descending")
+        #dens_eigvals_b, dens_eigvecs_b2, dens_eigvecs_b = sort_eigen(sp.linalg.eig(dens_mat_b, left=True, right=True), order="descending")
+        #dens_eigvals_a, dens_eigvecs_a = sort_eigen(sp.linalg.eig(dens_mat_a, left=False, right=True), order="descending")
+        #dens_eigvals_b, dens_eigvecs_b = sort_eigen(sp.linalg.eig(dens_mat_b, left=False, right=True), order="descending")
         #print("total imag contr of dens eigvecs a and b", np.linalg.norm(np.imag(dens_eigvecs_a)), np.linalg.norm(np.imag(dens_eigvecs_b)))
         print(dens_eigvals_a)
         print(dens_eigvals_b)
         dens_eigvals = [dens_eigvals_a, dens_eigvals_b]
         new_large_vecs = [dens_eigvecs_a, dens_eigvecs_b]
-        #dens_eigvals = [np.concatenate((dens_eigvals_a, dens_eigvals_a2)), np.concatenate((dens_eigvals_b, dens_eigvals_b2))]
-        #new_large_vecs = [np.real(np.concatenate((dens_eigvecs_a, dens_eigvecs_a2), axis=1)), np.real(np.concatenate((dens_eigvecs_b, dens_eigvecs_b2), axis=1))]
-        
+
+        # check new contribution from left eigenvector density filtering
+        new_large_vecs_full = [np.real(np.concatenate((dens_eigvecs_a, dens_eigvecs_a2), axis=1)),
+                               np.real(np.concatenate((dens_eigvecs_b, dens_eigvecs_b2), axis=1))]
+        dens_eigvals_extra = [dens_eigvals_a2, dens_eigvals_b2]
+        for frag in range(2):
+            for ind, new_l_contr in enumerate(orthogonalize(new_large_vecs_full[frag].T, normalize=False)[len(dens_eigvals[frag]):, :]):
+                # this seems unnecessary, since the left eigvecs seem to be too close to the right eigvecs for the given threshold.
+                # if the threshold is lowered, beware that the orthogonalizer also has a threshold for setting parallel vectors to zero
+                if np.linalg.norm(new_l_contr) > 1e-5:
+                    new_large_vecs[frag] = np.concatenate((new_large_vecs[frag], new_l_contr.T), axis=1)
+                    dens_eigvals[frag] = np.concatenate((dens_eigvals[frag], dens_eigvals_extra[frag][ind]))
+                    print("right eigvec set has been appended with left eigvec")
+
         # the following threshold is very delicate, because if its
         # too large -> truncation errors
         # too small -> numerical inconsistencies through terms to small to resolve even
@@ -875,7 +893,7 @@ def optimize_states(displacement, max_iter, xr_order, conv_thresh=1e-6, dens_fil
     ######################################################
     print("starting screening now")
 
-    additional_states, confs_and_inds = state_screening(dens_builder_stuff, ints, monomer_charges, n_orbs, frozen_orbs, n_occ, n_threads=n_threads)
+    #additional_states, confs_and_inds = state_screening(dens_builder_stuff, ints, monomer_charges, n_orbs, frozen_orbs, n_occ, n_threads=n_threads)
                                                         #single_thresh=1/3, double_thresh=1/2, triple_thresh=1/1.5)
     """
     remaining_dets = [{}, {}]
@@ -1014,8 +1032,6 @@ def optimize_states(displacement, max_iter, xr_order, conv_thresh=1e-6, dens_fil
         #for frag in range(2):
         #    dens[frag] = densities.build_tensors(*dens_builder_stuff[frag][:-1], options=density_options, n_threads=n_threads)
 
-        en_history, en_with_grads_history = [0], [0]
-
         #for chg in monomer_charges[1]:
         #    state_coeffs_optimized[1][chg] = ref_states[chg].coeffs.copy()
         #    dens_builder_stuff[1][0][chg].coeffs = ref_states[chg].coeffs.copy()
@@ -1024,6 +1040,7 @@ def optimize_states(displacement, max_iter, xr_order, conv_thresh=1e-6, dens_fil
     # The following variant tries to optimize one fragment by building its gradients, while simultaneously
     # enlarging the state space of the other fragment with states obtained from the screening. Both are
     # then compressed again.
+    en_history, en_with_grads_history = [0], [0]
     iter = 0
     while iter < max_iter:
         iter += 1
@@ -1091,15 +1108,24 @@ def optimize_states(displacement, max_iter, xr_order, conv_thresh=1e-6, dens_fil
 
     #return en_history #screening_energies
     #return screening_energies
-    
+    """
+    final_state_coeffs, final_state_configs = {}, {}
+    for frag in range(2):
+        final_state_coeffs[frag], final_state_configs[frag] = {}, {}
+        for chg in monomer_charges[frag]:
+            final_state_coeffs[frag][chg] = dens_builder_stuff[frag][0][chg].coeffs
+            final_state_configs[frag][chg] = dens_builder_stuff[frag][0][chg].configs
+    pickle.dump([final_state_coeffs, final_state_configs], open("opt_state_coeffs_configs.pkl", mode="wb"))
+    """
     if len(screening_energies) == 0:
-        return en_history
+        ret_energies = en_history
     else:
-        return screening_energies
+        ret_energies =  screening_energies
     #else:
     #    return [screening_energies, en_history]
     
     #return screening_energies, BeN, ints, dens, dens_builder_stuff  # this is for the orbital solver
+    return ret_energies, dens_builder_stuff
 
 
 #scan = []
@@ -1114,7 +1140,7 @@ def optimize_states(displacement, max_iter, xr_order, conv_thresh=1e-6, dens_fil
 #print(scan)
 
 #print(optimize_states(4.5, 0, 0))#, dens_filter_thresh=3e-9))
-print(optimize_states(4.5, 30, 0, begin_from_state_prep=False))
+#print(optimize_states(4.5, 0, 0, begin_from_state_prep=False))
 
 
 
