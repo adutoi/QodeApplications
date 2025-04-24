@@ -38,9 +38,11 @@ def get_fci_states(dist, n_state_list=[(+1, 4), (0, 11), (-1, 8)]):
     class empty(object):  pass
 
 
-
+    #basis_label = "cc-pvtz"  # according to alavi paper aug-cc-pvtz should be slightly better
     basis_label = "6-31G"
-    n_spatial_orb = 9
+    #basis_label = "cc-pvdz"
+    #n_spatial_orb = 14
+    n_spatial_orb = 9  #30  # 9 for 6-31g and 46 for aug-cc-pvtz
     n_threads = 4
     #dist = float(sys.argv[1])
     #if len(sys.argv)==3:  n_threads = int(sys.argv[2])
@@ -85,7 +87,6 @@ def get_fci_states(dist, n_state_list=[(+1, 4), (0, 11), (-1, 8)]):
 
     states = {}
     for charge, n_subset in n_state_list:
-
         n_elec        = frag0.n_elec_ref - charge
         n_active_elec = n_elec - len(spin_core)
         configs = configurations.all_configs(n_spin_orb, n_active_elec, frozen_occ_orbs=spin_core)
@@ -102,16 +103,39 @@ def get_fci_states(dist, n_state_list=[(+1, 4), (0, 11), (-1, 8)]):
             for i,v in enumerate(CI_basis):
                 Hmat[i,j] += v|Hw
 
-        evals, evecs = qode.util.sort_eigen(numpy.linalg.eigh(Hmat))
-        print()
-        print(evals)
-        print(evals[0])
+        #evals, evecs = qode.util.sort_eigen(numpy.linalg.eigh(Hmat))
+        if charge <= 0:
+            if n_subset % 2 != 0:
+                raise NotImplementedError("pick an even number of guess vectors for each charge")
+            guess = []
+            if charge == 0:
+                ref = [0, n_spatial_orb+0]
+                for ex in range(n_subset // 2):
+                    ex += 2
+                    guess.append(CI_space_atom.member(CI_space_atom.aux.basis_vec(ref + [ex, n_spatial_orb+1])))  # alpha excitation
+                    guess.append(CI_space_atom.member(CI_space_atom.aux.basis_vec(ref + [n_spatial_orb + ex, 1])))  # beta excitation
+            if charge == -1:
+                ref = [0, 1, n_spatial_orb+0, n_spatial_orb+1]
+                for ex in range(n_subset // 2):
+                    ex += 2
+                    guess.append(CI_space_atom.member(CI_space_atom.aux.basis_vec(ref + [ex])))  # alpha excitation
+                    guess.append(CI_space_atom.member(CI_space_atom.aux.basis_vec(ref + [n_spatial_orb + ex])))  # beta excitation
+            eigpairs = numpy.array(qode.math.lanczos.lowest_eigen_one_by_one(H, guess, num=n_subset, thresh=1e-8))
+            evals, evecs = eigpairs[:, 0], eigpairs[:, 1]
+            print()
+            #print(evals)
+            print(evals[0])
+            #print(evecs)
 
-        states[charge] = empty()
-        states[charge].configs = configs
-        states[charge].coeffs = [evecs[:,i] for i in range(n_subset)]
-
-
+            states[charge] = empty()
+            states[charge].configs = configs
+            states[charge].coeffs = [i.v for i in evecs]
+        else:  # the cation matrix cannot be diagonalized with lanczos for Be with frozen core
+            evals, evecs = qode.util.sort_eigen(numpy.linalg.eigh(Hmat))
+            print(evals[0])
+            states[charge] = empty()
+            states[charge].configs = configs
+            states[charge].coeffs = [evecs[:,i] for i in range(n_subset)]
 
     #rho = densities.build_tensors(states, n_spin_orb, n_elec)
     return states, n_spin_orb, n_elec, n_threads, frag0

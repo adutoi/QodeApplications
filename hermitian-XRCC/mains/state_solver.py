@@ -43,7 +43,7 @@ backend_contract_path(True)
 #class empty(object):  pass
 
 def optimize_states(max_iter, xr_order, dens_builder_stuff, ints, n_occ, n_orbs, frozen_orbs, additional_states,
-                    conv_thresh=1e-6, dens_filter_thresh=1e-7, begin_from_state_prep=False,
+                    conv_thresh=1e-6, dens_filter_thresh=1e-7, begin_from_state_prep=False, grad_level="herm",
                     monomer_charges=[[0, +1, -1], [0, +1, -1]], density_options=["compress=SVD,cc-aa"], n_threads=1):
     """
     max_iter: defines the max_iter for the state solver using an actual gradient
@@ -540,15 +540,37 @@ def optimize_states(max_iter, xr_order, dens_builder_stuff, ints, n_occ, n_orbs,
 
         # not sure if this is the appropriate way to build one set of states out of the two densities intead of two sets, which are very similar
         # maybe better build dens directly as full_gs_vec_l @ full_gs_vec_r.T, but this yields non-hermitian densities and therefore larger model state spaces
-        dens_mat_a = 0.5 * (dens_mat_a_l + dens_mat_a_r)
-        dens_mat_b = 0.5 * (dens_mat_b_l + dens_mat_b_r)
-        
-        dens_eigvals_a, dens_eigvecs_a = sort_eigen(np.linalg.eigh(dens_mat_a), order="descending")
-        dens_eigvals_b, dens_eigvecs_b = sort_eigen(np.linalg.eigh(dens_mat_b), order="descending")
+        #dens_mat_a = 0.5 * (dens_mat_a_l + dens_mat_a_r)
+        #dens_mat_b = 0.5 * (dens_mat_b_l + dens_mat_b_r)
+
+        dens_eigvals_a, dens_eigvecs_a = sort_eigen(np.linalg.eigh(dens_mat_a_r), order="descending")
+        dens_eigvals_b, dens_eigvecs_b = sort_eigen(np.linalg.eigh(dens_mat_b_r), order="descending")
+        dens_eigvals_a2, dens_eigvecs_a2 = sort_eigen(np.linalg.eigh(dens_mat_a_l), order="descending")
+        dens_eigvals_b2, dens_eigvecs_b2 = sort_eigen(np.linalg.eigh(dens_mat_b_l), order="descending")
         print(dens_eigvals_a)
         print(dens_eigvals_b)
         dens_eigvals = [dens_eigvals_a, dens_eigvals_b]
-        new_large_vecs = [np.real(dens_eigvecs_a), np.real(dens_eigvecs_b)]
+        new_large_vecs = [dens_eigvecs_a, dens_eigvecs_b]
+
+        # check new contribution from left eigenvector density filtering
+        new_large_vecs_full = [np.real(np.concatenate((dens_eigvecs_a, dens_eigvecs_a2), axis=1)),
+                               np.real(np.concatenate((dens_eigvecs_b, dens_eigvecs_b2), axis=1))]
+        dens_eigvals_extra = [dens_eigvals_a2, dens_eigvals_b2]
+        for frag in range(2):
+            for ind, new_l_contr in enumerate(orthogonalize(new_large_vecs_full[frag].T, normalize=False)[len(dens_eigvals[frag]):, :]):
+                # this seems unnecessary, since the left eigvecs seem to be too close to the right eigvecs for the given threshold.
+                # if the threshold is lowered, beware that the orthogonalizer also has a threshold for setting parallel vectors to zero
+                if np.linalg.norm(new_l_contr) > 1e-5:
+                    new_large_vecs[frag] = np.concatenate((new_large_vecs[frag], new_l_contr.T), axis=1)
+                    dens_eigvals[frag] = np.concatenate((dens_eigvals[frag], dens_eigvals_extra[frag][ind]))
+                    print("right eigvec set has been appended with left eigvec")
+        
+        #dens_eigvals_a, dens_eigvecs_a = sort_eigen(np.linalg.eigh(dens_mat_a), order="descending")
+        #dens_eigvals_b, dens_eigvecs_b = sort_eigen(np.linalg.eigh(dens_mat_b), order="descending")
+        #print(dens_eigvals_a)
+        #print(dens_eigvals_b)
+        #dens_eigvals = [dens_eigvals_a, dens_eigvals_b]
+        #new_large_vecs = [np.real(dens_eigvecs_a), np.real(dens_eigvecs_b)]
         
         # the following threshold is very delicate, because if its
         # too large -> truncation errors
@@ -620,7 +642,7 @@ def optimize_states(max_iter, xr_order, dens_builder_stuff, ints, n_occ, n_orbs,
         # Obtaining the derivatives for frag frag_ind
         #############################################
 
-        gs_energy_a, gradient_states_a, dl_prev, dr_prev = state_gradients(frag_ind, ints, dens_builder_stuff, dens, monomer_charges, n_threads=n_threads, xr_order=xr_order, dets=dets)
+        gs_energy_a, gradient_states_a, dl_prev, dr_prev = state_gradients(frag_ind, ints, dens_builder_stuff, dens, monomer_charges, n_threads=n_threads, xr_order=xr_order, dets=dets, grad_level=grad_level)
         if dets:
             # decompress gradients again into full configuration space
             gradient_states_a = {chg: np.einsum("iq,qp->ip", grad, dets[chg]) for chg, grad in gradient_states_a.items()}
@@ -926,6 +948,7 @@ def optimize_states(max_iter, xr_order, dens_builder_stuff, ints, n_occ, n_orbs,
     # 1. use linear combinations of the basis functions with similar weights for each of the relevant determinants
     # 2. start by only expanding the neutral space in bigger steps, which probably contains most of the
     # correlation with itself and then expand the other charges, which can then be applied in larger chunks
+    dens = []
     while safety_iter < 20:#not all(screening_done.flatten()):
         #if safety_iter >= 10:
         #    break

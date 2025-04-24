@@ -44,15 +44,12 @@ backend_contract_path(True)
 #class empty(object):  pass
 
 def run_xr(displacement, max_iter, xr_order_final, xr_order_solver=0, dens_filter_thresh_solver=1e-7,
-           single_thresh=1/5, double_thresh=1/3.5, triple_thresh=1/2.5):#, n_threads):
+           single_thresh=1/5, double_thresh=1/3.5, triple_thresh=1/2.5, grad_level="herm", state_prep=False):#, n_threads):
     n_frag       = 2
     displacement = displacement
     project_core = True
     monomer_charges = [[0, +1, -1], [0, +1, -1]]
     density_options = ["compress=SVD,cc-aa"]
-    frozen_orbs = [0, 9]
-    n_orbs = 9
-    n_occ = [2, 2]  # currently only alpha beta separation, but generalize to frag level not done yet!!!
 
     #ref_states = pickle.load(open("ref_states.pkl", mode="rb"))
     #ref_mos = pickle.load(open("ref_mos.pkl", mode="rb"))
@@ -82,6 +79,13 @@ def run_xr(displacement, max_iter, xr_order_final, xr_order_solver=0, dens_filte
             #if m == 0:
             #    state_obj[chg].coeffs = ref_states[chg].coeffs.copy()
         #    state_obj[chg].coeffs = ref_states[chg].coeffs[:1]
+
+        # TODO: the following and the rest of the code currently only work for equal fragments
+        n_orbs = Be.basis.n_spatial_orb
+        n_occ = [Be.n_elec_ref // 2, Be.n_elec_ref // 2]  # alpha and beta
+        frozen_orbs = Be.basis.core.copy()
+        frozen_orbs += [i + n_orbs for i in Be.basis.core]  # append by beta frozen orb numbers
+
         for elem,coords in Be.atoms:  coords[2] += m * displacement    # displace along z
         BeN.append(Be)
         #dens.append(densities.build_tensors(state_obj, dens_var_1, dens_var_2, options=density_options, n_threads=n_threads))
@@ -97,9 +101,9 @@ def run_xr(displacement, max_iter, xr_order_final, xr_order_solver=0, dens_filte
 
     additional_states, confs_and_inds = state_screening(dens_builder_stuff, ints, monomer_charges, n_orbs, frozen_orbs, n_occ, n_threads=n_threads,
                                                         single_thresh=single_thresh, double_thresh=double_thresh, triple_thresh=triple_thresh)
-
+    
     energies, dens_builder_stuff = optimize_states(max_iter, xr_order_solver, dens_builder_stuff, ints, n_occ, n_orbs, frozen_orbs, additional_states,
-                                                   dens_filter_thresh=dens_filter_thresh_solver,# begin_from_state_prep=False,
+                                                   dens_filter_thresh=dens_filter_thresh_solver, grad_level=grad_level, begin_from_state_prep=state_prep,
                                                    monomer_charges=monomer_charges, density_options=density_options, n_threads=n_threads)
     
     # rebuild densities for appropriate order
@@ -112,4 +116,4 @@ def run_xr(displacement, max_iter, xr_order_final, xr_order_solver=0, dens_filte
 
 
 
-print(run_xr(4.5, 30, 0, single_thresh=1/5, double_thresh=1/3.5, triple_thresh=1/2.5))
+print(run_xr(4.5, 30, 0, single_thresh=1/5, double_thresh=1/3.5, triple_thresh=1/2.5, grad_level="herm", state_prep=False))
