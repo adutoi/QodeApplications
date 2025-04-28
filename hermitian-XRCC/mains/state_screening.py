@@ -103,6 +103,21 @@ def missing_orbs(ref, big_nums, ref_ind):
                     covered_elems.append(number)
     return [i for i in ref[ref_ind] if i not in covered_elems]
 
+def conf_decoder(conf, n_orbs):
+    ret = []
+    for bit in range(n_orbs * 2, -1, -1):
+        if conf - 2**bit < 0:
+            continue
+        conf -= 2**bit
+        ret.append(bit)
+    return sorted(ret)
+
+def is_singlet(det, n_orbs):
+    alpha_det = [occ for occ in det if occ < n_orbs]
+    beta_det = det[len(alpha_det):]
+    pair = sum([2**(i - n_orbs) for i in beta_det] + [2**(i + n_orbs) for i in alpha_det])
+    return len(alpha_det) == len(beta_det), pair
+
 
 def state_screening(dens_builder_stuff, ints, monomer_charges, n_orbs, frozen, n_occ, n_threads=1,
                     single_thresh=1/5, double_thresh=1/3.5, triple_thresh=1/2.5):
@@ -182,15 +197,6 @@ def state_screening(dens_builder_stuff, ints, monomer_charges, n_orbs, frozen, n
         print(f"multi reference contribution for fragment {frag} detected in orbitals {mr_occs[frag]}")
     """
 
-    def conf_decoder(conf):
-        ret = []
-        for bit in range(n_orbs * 2, -1, -1):
-            if conf - 2**bit < 0:
-                continue
-            conf -= 2**bit
-            ret.append(bit)
-        return sorted(ret)
-
     # here only the densities are taken into account, for which the initial state (ket) is the neutral state
     #missing_states = [{0: {}, -1: {}}, {0: {}, -1: {}}]  # note, that within the following procedure all missing contributions are captured without appending the most positively charged states
     missing_states = [{chg: {} for chg in monomer_charges[frag]} for frag in range(2)]
@@ -215,7 +221,7 @@ def state_screening(dens_builder_stuff, ints, monomer_charges, n_orbs, frozen, n
         for elem in get_large(one_e_int, thresh_frac=single_thresh)[frag] + get_large(two_el_int, thresh_frac=single_thresh)[frag]:  # last two are equal to first two indices of v
             if elem in frozen:
                 continue
-            if elem in conf_decoder(total_gs_config_neutral):  # filter out occupied orbitals
+            if elem in conf_decoder(total_gs_config_neutral, n_orbs):  # filter out occupied orbitals
                 continue
             # positively charged reference ground state is ground state of corresponding spin
             if elem >= n_orbs:  # appending beta needs alpha ref
@@ -233,16 +239,18 @@ def state_screening(dens_builder_stuff, ints, monomer_charges, n_orbs, frozen, n
                 continue
             if comb[0] == comb[1]:
                 continue
-            if comb[0] in conf_decoder(total_gs_config_neutral) and not comb[0] in comb[2:]:
+            if comb[0] in conf_decoder(total_gs_config_neutral, n_orbs) and not comb[0] in comb[2:]:
                 continue
-            if comb[1] in conf_decoder(total_gs_config_neutral) and not comb[1] in comb[2:]:
+            if comb[1] in conf_decoder(total_gs_config_neutral, n_orbs) and not comb[1] in comb[2:]:
                 continue
-            if comb[2] not in conf_decoder(total_gs_config_neutral):
+            if comb[2] not in conf_decoder(total_gs_config_neutral, n_orbs):
                 continue
-            if comb[3] not in conf_decoder(total_gs_config_neutral):
+            if comb[3] not in conf_decoder(total_gs_config_neutral, n_orbs):
                 continue
             ex = total_gs_config_neutral + 2**comb[0] + 2**comb[1] - 2**comb[2] - 2**comb[3]
             missing_states[frag][0][ex] = dens_builder_stuff[frag][0][0].configs.index(ex)
+
+    #print(missing_states[0])
 
 
     # ionization contributions form one el ints for single excitations without spin flip
@@ -269,7 +277,7 @@ def state_screening(dens_builder_stuff, ints, monomer_charges, n_orbs, frozen, n
                 # skip frozen core contributions
                 if elem in frozen:
                     continue
-                if elem in conf_decoder(total_gs_config_neutral):  # filter out occupied orbitals
+                if elem in conf_decoder(total_gs_config_neutral, n_orbs):  # filter out occupied orbitals
                     continue
                 # get gs for required spin and assume more positively charged state to be gs
                 if chg == 0:
@@ -290,6 +298,8 @@ def state_screening(dens_builder_stuff, ints, monomer_charges, n_orbs, frozen, n
                     #print(chg, conf_decoder(ex))
                     missing_states[frag][chg][ex] = dens_builder_stuff[frag][0][chg].configs.index(ex)
 
+    #print(missing_states[0])
+
     # neutral contributions from two el ints for single excitations (less important, but still relevant for high precision...)
     
     gs = total_gs_config_neutral
@@ -308,7 +318,7 @@ def state_screening(dens_builder_stuff, ints, monomer_charges, n_orbs, frozen, n
             for elem in get_large(int, thresh_frac=single_thresh)[frag]:
                 if elem in frozen:
                     continue
-                if elem in conf_decoder(total_gs_config_neutral):  # filter out occupied orbitals
+                if elem in conf_decoder(total_gs_config_neutral, n_orbs):  # filter out occupied orbitals
                     continue
                 # build excitation from gs det into singly excited det
                 if elem >= n_orbs:  # beta requires beta excitation
@@ -329,6 +339,7 @@ def state_screening(dens_builder_stuff, ints, monomer_charges, n_orbs, frozen, n
                     #missing_states[frag][chg][ex] = det_state
                     missing_states[frag][chg][ex] = dens_builder_stuff[frag][0][chg].configs.index(ex)
 
+    #print(missing_states[0])
 
     # charged contributions from two el ints for single and double excitations
     for frag in range(2):
@@ -358,24 +369,24 @@ def state_screening(dens_builder_stuff, ints, monomer_charges, n_orbs, frozen, n
                 if special_ind == 0:
                     if comb[2] == comb[3]:
                         continue
-                    if comb[0] in conf_decoder(total_gs_config_neutral):
+                    if comb[0] in conf_decoder(total_gs_config_neutral, n_orbs):
                         continue
-                    if comb[1] in conf_decoder(total_gs_config_neutral) and not comb[1] in comb[2:]:
+                    if comb[1] in conf_decoder(total_gs_config_neutral, n_orbs) and not comb[1] in comb[2:]:
                         continue
-                    if comb[2] not in conf_decoder(total_gs_config_neutral):# and comb[2] != comb[1]:
+                    if comb[2] not in conf_decoder(total_gs_config_neutral, n_orbs):# and comb[2] != comb[1]:
                         continue
-                    if comb[3] not in conf_decoder(total_gs_config_neutral):# and comb[3] != comb[1]:
+                    if comb[3] not in conf_decoder(total_gs_config_neutral, n_orbs):# and comb[3] != comb[1]:
                         continue
                 else:
                     if comb[0] == comb[1]:
                         continue
-                    if comb[2] not in conf_decoder(total_gs_config_neutral):
+                    if comb[2] not in conf_decoder(total_gs_config_neutral, n_orbs):
                         continue
-                    if comb[3] not in conf_decoder(total_gs_config_neutral):# and not comb[3] in comb[:2]:
+                    if comb[3] not in conf_decoder(total_gs_config_neutral, n_orbs):# and not comb[3] in comb[:2]:
                         continue
-                    if comb[0] in conf_decoder(total_gs_config_neutral) and comb[0] != comb[3]:
+                    if comb[0] in conf_decoder(total_gs_config_neutral, n_orbs) and comb[0] != comb[3]:
                         continue
-                    if comb[1] in conf_decoder(total_gs_config_neutral) and comb[1] != comb[3]:
+                    if comb[1] in conf_decoder(total_gs_config_neutral, n_orbs) and comb[1] != comb[3]:
                         continue
                 #print("valid ", frag, special_ind, comb)
                 if special_ind == 0:
@@ -389,7 +400,7 @@ def state_screening(dens_builder_stuff, ints, monomer_charges, n_orbs, frozen, n
                 missing_states[frag][1][ex_plus] = dens_builder_stuff[frag][0][1].configs.index(ex_plus)
     #raise ValueError("stop")
     
-
+    #print(missing_states[0])
     
     # neutral spin flip contributions (only for chg 0) from two el ints for single excitations (seems like these are only necessary for 1e-6 Hartree precision)
     
@@ -400,10 +411,10 @@ def state_screening(dens_builder_stuff, ints, monomer_charges, n_orbs, frozen, n
         #dens = dens_looper(raw(dens_arr[frag]["ca"][(chg,chg)]))
         int = v0101
         #for elem in missing_orbs(int, dens, frag):  # ref_inds 2 and 3 should be equal to 0 and 1
-        for elem in get_large(int, thresh_frac=single_thresh)[frag]:
+        for elem in get_large(int, thresh_frac=double_thresh)[frag]:  # spin flip is reduced to lower threshold than single here!!!!!!!!!!!!!!!!!!!!!!!!!
             if elem in frozen:
                 continue
-            if elem in conf_decoder(total_gs_config_neutral):  # filter out occupied orbitals
+            if elem in conf_decoder(total_gs_config_neutral, n_orbs):  # filter out occupied orbitals
                 continue
             # build excitation from gs det into singly excited det
             if elem >= n_orbs:  # spin flip beta requires alpha hole
@@ -422,6 +433,7 @@ def state_screening(dens_builder_stuff, ints, monomer_charges, n_orbs, frozen, n
                 #missing_states[frag][chg][ex] = det_state
                 missing_states[frag][chg][ex] = dens_builder_stuff[frag][0][chg].configs.index(ex)
     
+    #print(missing_states[0])
     #print(missing_states[0][0].keys(), missing_states[0][-1].keys())
 
     """
@@ -468,7 +480,7 @@ def state_screening(dens_builder_stuff, ints, monomer_charges, n_orbs, frozen, n
                 #    continue
                 if (pair[0] < n_orbs and pair[1] < n_orbs) or (pair[0] >= n_orbs and pair[1] >= n_orbs):  # filter out spin flip
                     continue
-                if any(elem in conf_decoder(total_gs_config_neutral) for elem in pair):  # filter out forbidden and single excitations
+                if any(elem in conf_decoder(total_gs_config_neutral, n_orbs) for elem in pair):  # filter out forbidden and single excitations
                     continue
                 # get gs for required spin and assume more positively charged state to be gs
                 if chg == -1:
@@ -486,6 +498,7 @@ def state_screening(dens_builder_stuff, ints, monomer_charges, n_orbs, frozen, n
                     #missing_states[frag][chg][ex] = det_state
                     missing_states[frag][chg][ex] = dens_builder_stuff[frag][0][chg].configs.index(ex)
 
+    #print(missing_states[0])
 
     # ionization contributions from one el ints for anionic triple excitations without spin flip
     for frag in range(2):
@@ -509,7 +522,7 @@ def state_screening(dens_builder_stuff, ints, monomer_charges, n_orbs, frozen, n
                 #    continue
                 if all(elem < n_orbs for elem in pair) or all(elem >= n_orbs for elem in pair):  # filter out spin flip
                     continue
-                if any(elem in conf_decoder(total_gs_config_neutral) for elem in pair):  # filter out forbidden, single and double excitations
+                if any(elem in conf_decoder(total_gs_config_neutral, n_orbs) for elem in pair):  # filter out forbidden, single and double excitations
                     continue
                 ex = gs + 2**pair[0] + 2**pair[1] + 2**pair[2]
                 if ex not in missing_states[frag][chg].keys():
@@ -518,6 +531,7 @@ def state_screening(dens_builder_stuff, ints, monomer_charges, n_orbs, frozen, n
                     #missing_states[frag][chg][ex] = det_state
                     missing_states[frag][chg][ex] = dens_builder_stuff[frag][0][chg].configs.index(ex)
 
+    #print(missing_states[0])
 
     # singly and doubly excited anionic determinants from double ionization term
     gs_list = [2**n_occ[i] for i in range(2)]
@@ -531,13 +545,13 @@ def state_screening(dens_builder_stuff, ints, monomer_charges, n_orbs, frozen, n
                 continue
             if comb[2] == comb[3]:
                 continue
-            if comb[0] in conf_decoder(total_gs_config_neutral) and not comb[0] in gs_list:
+            if comb[0] in conf_decoder(total_gs_config_neutral, n_orbs) and not comb[0] in gs_list:
                 continue
-            if comb[1] in conf_decoder(total_gs_config_neutral) and not comb[1] in gs_list:# and not comb[1] in comb[2:]:
+            if comb[1] in conf_decoder(total_gs_config_neutral, n_orbs) and not comb[1] in gs_list:# and not comb[1] in comb[2:]:
                 continue
-            if comb[2] not in conf_decoder(total_gs_config_neutral):# and comb[2] != comb[1]:
+            if comb[2] not in conf_decoder(total_gs_config_neutral, n_orbs):# and comb[2] != comb[1]:
                 continue
-            if comb[3] not in conf_decoder(total_gs_config_neutral):# and comb[3] != comb[1]:
+            if comb[3] not in conf_decoder(total_gs_config_neutral, n_orbs):# and comb[3] != comb[1]:
                 continue
             gs1 = total_gs_config_neutral - 2**(n_orbs - 1 + n_occ[1])  # one should rather sweep over the available ionized contributions
             gs2 = total_gs_config_neutral - 2**(-1 + n_occ[0])  # one should rather sweep over the available ionized contributions
@@ -547,7 +561,7 @@ def state_screening(dens_builder_stuff, ints, monomer_charges, n_orbs, frozen, n
             missing_states[frag][-1][ex1] = dens_builder_stuff[frag][0][-1].configs.index(ex1)
             missing_states[frag][-1][ex2] = dens_builder_stuff[frag][0][-1].configs.index(ex2)
         
-
+    #print(missing_states[0])
 
     """
     for frag in range(2):
@@ -583,10 +597,32 @@ def state_screening(dens_builder_stuff, ints, monomer_charges, n_orbs, frozen, n
         ret[frag] = {}
         for chg in monomer_charges[frag]:#range(min(monomer_charges[frag]), max(monomer_charges[frag])):
             det_states = []
+            already_included = []
             for det, ind in missing_states[frag][chg].items():
-                print(chg, conf_decoder(det))
+                if det in already_included:
+                    continue
+                det_dec = conf_decoder(det, n_orbs)
+                print(chg, det_dec)
                 det_states.append(np.zeros_like(dens_builder_stuff[frag][0][chg].coeffs[0]))
                 det_states[-1][ind] = 1.
+                already_included.append(det)
+                # the following part "sorts" the filtered determinants such that every non-singlet determinant is followed by its counterpart,
+                # e.g. the alpha HOMO -> beta LUMO determinant is followed by the beta HOMO -> alpha LUMO determinant for a singlet reference system.
+                # This is important for the stability of the solver later, where these determinants are explicitly provided, but cannot be taken into
+                # the model state space all at once.
+                it_is_singlet, pair = is_singlet(det_dec, n_orbs)
+                if pair in already_included:
+                    continue
+                if it_is_singlet:
+                    continue
+                try:
+                    mirror_det_ind = missing_states[frag][chg][pair]
+                    print(chg, conf_decoder(pair, n_orbs))
+                    det_states.append(np.zeros_like(dens_builder_stuff[frag][0][chg].coeffs[0]))
+                    det_states[-1][mirror_det_ind] = 1.
+                    already_included.append(pair)
+                except KeyError:
+                    continue
             if len(det_states) >= 150:
                 print(len(det_states))
                 raise RuntimeError(f"for fragment {frag} with charge {chg} the additionally screened states exceed 150...this will take forever")

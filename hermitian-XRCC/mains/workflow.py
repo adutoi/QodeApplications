@@ -49,7 +49,7 @@ def run_xr(displacement, max_iter, xr_order_final, xr_order_solver=0, dens_filte
     displacement = displacement
     project_core = True
     monomer_charges = [[0, +1, -1], [0, +1, -1]]
-    density_options = ["compress=SVD,cc-aa"]
+    density_options = []#["compress=SVD,cc-aa"]
 
     #ref_states = pickle.load(open("ref_states.pkl", mode="rb"))
     #ref_mos = pickle.load(open("ref_mos.pkl", mode="rb"))
@@ -99,10 +99,10 @@ def run_xr(displacement, max_iter, xr_order_final, xr_order_solver=0, dens_filte
     int_timer = timer()
     ints = get_ints(BeN, project_core, int_timer)
 
-    additional_states, confs_and_inds = state_screening(dens_builder_stuff, ints, monomer_charges, n_orbs, frozen_orbs, n_occ, n_threads=n_threads,
+    relevant_determinants, confs_and_inds = state_screening(dens_builder_stuff, ints, monomer_charges, n_orbs, frozen_orbs, n_occ, n_threads=n_threads,
                                                         single_thresh=single_thresh, double_thresh=double_thresh, triple_thresh=triple_thresh)
     
-    energies, dens_builder_stuff = optimize_states(max_iter, xr_order_solver, dens_builder_stuff, ints, n_occ, n_orbs, frozen_orbs, additional_states,
+    energies, dens_builder_stuff = optimize_states(max_iter, xr_order_solver, dens_builder_stuff, ints, n_occ, n_orbs, frozen_orbs, relevant_determinants,
                                                    dens_filter_thresh=dens_filter_thresh_solver, grad_level=grad_level, begin_from_state_prep=state_prep,
                                                    monomer_charges=monomer_charges, density_options=density_options, n_threads=n_threads)
     
@@ -116,4 +116,4 @@ def run_xr(displacement, max_iter, xr_order_final, xr_order_solver=0, dens_filte
 
 
 
-print(run_xr(4.5, 30, 0, single_thresh=1/5, double_thresh=1/3.5, triple_thresh=1/2.5, grad_level="herm", state_prep=False))
+print(run_xr(2.5, 0, 0, single_thresh=1/5, double_thresh=1/3.5, triple_thresh=1/2.5, grad_level="herm", state_prep=True))

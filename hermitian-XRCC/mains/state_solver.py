@@ -22,7 +22,7 @@ from qode.math.tensornet import backend_contract_path#, raw, tl_tensor
 #import qode.util
 from qode.util import timer, sort_eigen
 from state_gradients import state_gradients, get_slices#, get_adapted_overlaps
-from state_screening import state_screening, orthogonalize
+from state_screening import state_screening, orthogonalize, conf_decoder, is_singlet
 
 #import torch
 import numpy as np
@@ -973,6 +973,11 @@ def optimize_states(max_iter, xr_order, dens_builder_stuff, ints, n_occ, n_orbs,
                 #print(max_states)
                 max_add = min(max_states - len(dens_builder_stuff[frag][0][chg].coeffs), len(additional_states[frag][chg]) - state_tracker[frag][chg])
                 #print(state_tracker[frag][chg], state_tracker[frag][chg] + max_add)
+                conf_ind = np.argmax(additional_states[frag][chg][state_tracker[frag][chg] + max_add - 1])
+                conf_ind_pre = np.argmax(additional_states[frag][chg][state_tracker[frag][chg] + max_add - 2])
+                singlet, pair = is_singlet(conf_decoder(dens_builder_stuff[frag][0][chg].configs[conf_ind], n_orbs), n_orbs)
+                if pair != dens_builder_stuff[frag][0][chg].configs[conf_ind_pre] and max_add > len(additional_states[frag][chg]) - state_tracker[frag][chg]:
+                    max_add += 1
                 dens_builder_stuff[frag][0][chg].coeffs += additional_states[frag][chg][state_tracker[frag][chg]: state_tracker[frag][chg] + max_add]
                 dens_builder_stuff[frag][0][chg].coeffs = [i for i in orthogonalize(np.array(dens_builder_stuff[frag][0][chg].coeffs)) if np.linalg.norm(i) > 0.99]
                 state_coeffs_optimized[frag][chg] = dens_builder_stuff[frag][0][chg].coeffs.copy()
@@ -1009,6 +1014,11 @@ def optimize_states(max_iter, xr_order, dens_builder_stuff, ints, n_occ, n_orbs,
             #print(max_states)
             max_add = min(max_states - len(dens_builder_stuff[frag][0][chg].coeffs), len(additional_states[frag][chg]) - state_tracker[frag][chg])
             #print(state_tracker[frag][chg], state_tracker[frag][chg] + max_add)
+            conf_ind = np.argmax(additional_states[frag][chg][state_tracker[frag][chg] + max_add - 1])
+            conf_ind_pre = np.argmax(additional_states[frag][chg][state_tracker[frag][chg] + max_add - 2])
+            singlet, pair = is_singlet(conf_decoder(dens_builder_stuff[frag][0][chg].configs[conf_ind], n_orbs), n_orbs)
+            if pair != dens_builder_stuff[frag][0][chg].configs[conf_ind_pre] and max_add > len(additional_states[frag][chg]) - state_tracker[frag][chg]:
+                max_add += 1
             dens_builder_stuff[frag][0][chg].coeffs += additional_states[frag][chg][state_tracker[frag][chg]: state_tracker[frag][chg] + max_add]
             dens_builder_stuff[frag][0][chg].coeffs = [i for i in orthogonalize(np.array(dens_builder_stuff[frag][0][chg].coeffs)) if np.linalg.norm(i) > 0.99]
             state_coeffs_optimized[frag][chg] = dens_builder_stuff[frag][0][chg].coeffs.copy()
