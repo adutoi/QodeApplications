@@ -162,24 +162,30 @@ def get_xr_H(ints, dens, xr_order, monomer_charges, bra_det=False, ket_det=False
 
         H1 = []
         for m in [0,1]:
-            H1_m  = XR_term.monomer_matrix(St_blocks_symm, {
+            #H1_m  = XR_term.monomer_matrix(Sn_blocks, {
+            #                    1: [
+            #                        "n00"
+            #                        ]
+            #                    }, m, monomer_charges)
+            
+            H1_m = XR_term.monomer_matrix(St_blocks_bior, {
                                 1: [
                                     "t00"
                                     ]
-                                }, m, monomer_charges, matrix_timer)
-            H1_m += XR_term.monomer_matrix(Su_blocks_symm, {
+                                }, m, monomer_charges[m], matrix_timer)
+            H1_m += XR_term.monomer_matrix(Su_blocks_bior, {
                                 1: [
                                     "u000"
                                     ]
-                                }, m, monomer_charges, matrix_timer)
-
-            H1_m += XR_term.monomer_matrix(Sv_blocks_symm, {
+                                }, m, monomer_charges[m], matrix_timer)
+            
+            H1_m += XR_term.monomer_matrix(Sv_blocks_bior, {
                                 1: [
                                     "v0000"
                                     ]
-                                }, m, monomer_charges, matrix_timer)
+                                }, m, monomer_charges[m], matrix_timer)
+            
             H1 += [H1_m]
-
 
 
         print("build S2inv")
@@ -191,7 +197,7 @@ def get_xr_H(ints, dens, xr_order, monomer_charges, bra_det=False, ket_det=False
                                 2: [
                                     "s01"
                                 ]
-                            },  (0,1), all_dimer_charges, matrix_timer)
+                            },  (0,1), all_dimer_charges, matrix_timer, bra_det=bra_det, ket_det=ket_det)
 
         S2inv = qode.math.precise_numpy_inverse(S2)
 
@@ -206,7 +212,7 @@ def get_xr_H(ints, dens, xr_order, monomer_charges, bra_det=False, ket_det=False
                             2: [
                                 "t01"
                                 ]
-                            }, (0,1), all_dimer_charges, matrix_timer)
+                            }, (0,1), all_dimer_charges, matrix_timer, bra_det=bra_det, ket_det=ket_det)
         S2H2 += XR_term.dimer_matrix(Su_blocks_symm, {
                             1: [
                                 "u000"
@@ -215,7 +221,7 @@ def get_xr_H(ints, dens, xr_order, monomer_charges, bra_det=False, ket_det=False
                                 "u100",
                                 "u001", "u101"
                                 ]
-                            }, (0,1), all_dimer_charges, matrix_timer)
+                            }, (0,1), all_dimer_charges, matrix_timer, bra_det=bra_det, ket_det=ket_det)
 
         S2H2 += XR_term.dimer_matrix(St_blocks_bior, {
                             2: [
@@ -231,7 +237,7 @@ def get_xr_H(ints, dens, xr_order, monomer_charges, bra_det=False, ket_det=False
                                 "s01u010", "s01u110", 
                                 "s01u001", "s01u101"
                                 ]
-                            }, (0,1), all_dimer_charges, matrix_timer)
+                            }, (0,1), all_dimer_charges, matrix_timer, bra_det=bra_det, ket_det=ket_det)
 
         print("build S2H2 (2e)")
 
@@ -242,7 +248,7 @@ def get_xr_H(ints, dens, xr_order, monomer_charges, bra_det=False, ket_det=False
                             2: [
                                 "v0110", "v0010", "v0100", "v0011"
                                 ]
-                            }, (0,1), all_dimer_charges, matrix_timer)
+                            }, (0,1), all_dimer_charges, matrix_timer, bra_det=bra_det, ket_det=ket_det)
 
         S2H2 += XR_term.dimer_matrix(Sv_blocks_bior, {
                             2: [
@@ -251,7 +257,7 @@ def get_xr_H(ints, dens, xr_order, monomer_charges, bra_det=False, ket_det=False
                                 "s01v0100", 
                                 "s01v1100", "s01v0010", "s01v0111"#, "s01v0011"
                                 ]
-                            }, (0,1), all_dimer_charges, matrix_timer)
+                            }, (0,1), all_dimer_charges, matrix_timer, bra_det=bra_det, ket_det=ket_det)
 
 
 
@@ -263,18 +269,18 @@ def get_xr_H(ints, dens, xr_order, monomer_charges, bra_det=False, ket_det=False
                             1: [
                                 "t00"
                                 ]
-                            }, (0,1), all_dimer_charges, matrix_timer)
+                            }, (0,1), all_dimer_charges, matrix_timer, bra_det=bra_det, ket_det=ket_det)
         H2blocked -= XR_term.dimer_matrix(Su_blocks_symm, {
                             1: [
                                 "u000"
                                 ]
-                            }, (0,1), all_dimer_charges, matrix_timer)
+                            }, (0,1), all_dimer_charges, matrix_timer, bra_det=bra_det, ket_det=ket_det)
 
         H2blocked -= XR_term.dimer_matrix(Sv_blocks_symm, {
                             1: [
                                 "v0000"
                                 ]
-                            }, (0,1), all_dimer_charges, matrix_timer)
+                            }, (0,1), all_dimer_charges, matrix_timer, bra_det=bra_det, ket_det=ket_det)
     elif xr_order == 2:
         print("build H1")
 

@@ -88,6 +88,8 @@ def build_tensors(states, n_orbs, n_elec_0, thresh=1e-10, options=None, n_thread
         op_strings = {2:["aa"], 1:["a", "caa"], 0:["ca", "ccaa"]}
     elif xr_order == 1:
         op_strings = {2:["aa", "caaa"], 1:["a", "caa", "ccaaa"], 0:["ca", "ccaa"]}
+    elif xr_order ==2:
+        op_strings = {2:["aa", "caaa", "ccaaaa"], 1:["a", "caa", "ccaaa"], 0:["ca", "ccaa", "cccaaa"]}
     else:
         raise NotImplementedError(f"densities for xr_order {xr_order} are not implemented")
     #op_strings = {0:["ca", "ccaa"]}
