@@ -19,7 +19,8 @@
 from get_ints import get_ints
 from get_xr_result import get_xr_states#, get_xr_H
 from state_solver import optimize_states
-from qode.math.tensornet import backend_contract_path#, raw, tl_tensor
+#from qode.math.tensornet import backend_contract_path#, raw, tl_tensor
+import qode.math.tensornet as tensornet
 #import qode.util
 from qode.util import timer, sort_eigen
 #from state_gradients import state_gradients, get_slices, get_adapted_overlaps
@@ -39,12 +40,18 @@ from   build_fci_states import get_fci_states
 import densities
 
 tl.plugins.use_opt_einsum()
-backend_contract_path(True)
+tensornet.backend_contract_path(True)
 
 #class empty(object):  pass
 
 def run_xr(displacement, max_iter, xr_order_final, xr_order_solver=0, dens_filter_thresh_solver=1e-7,
            single_thresh=1/5, double_thresh=1/3.5, triple_thresh=1/2.5, grad_level="herm", state_prep=False):#, n_threads):
+    tensornet.initialize_timer()
+    tensornet.tensorly_backend.initialize_timer()
+
+    #global_timings = timer()
+    #global_timings.start()
+
     n_frag       = 2
     displacement = displacement
     project_core = True
@@ -96,6 +103,9 @@ def run_xr(displacement, max_iter, xr_order_final, xr_order_solver=0, dens_filte
         #raise ValueError("stop here")
     #print(type(raw(dens[0]["a"][(+1,0)])), raw(dens[0]["a"][(+1,0)]).shape)
 
+    #global_timings.record("initialize state space")
+    #global_timings.start()
+
     int_timer = timer()
     ints = get_ints(BeN, project_core, int_timer)
 
@@ -116,4 +126,4 @@ def run_xr(displacement, max_iter, xr_order_final, xr_order_solver=0, dens_filte
 
 
 
-print(run_xr(2.5, 0, 0, single_thresh=1/5, double_thresh=1/3.5, triple_thresh=1/2.5, grad_level="herm", state_prep=True))
+print(run_xr(2.5, 50, 0, single_thresh=1/5, double_thresh=1/3.5, triple_thresh=1/2.5, grad_level="full", state_prep=False))

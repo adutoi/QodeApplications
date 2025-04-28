@@ -16,8 +16,7 @@
 #    along with QodeApplications.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-#import numpy
-from qode.util import struct#, recursive_looper
+from qode.util import struct
 from precontract import precontract
 
 ##########

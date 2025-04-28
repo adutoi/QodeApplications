@@ -142,7 +142,8 @@ S2     = XR_term.dimer_matrix(S_blocks, {
                             "identity"
                            ],
                         2: [
-                            "s01"
+                            "s01",
+                            "s01s10", "s01s01"
                            ]
                        },  (0,1), all_dimer_charges, matrix_timings)
 
@@ -157,7 +158,10 @@ S2H2  = XR_term.dimer_matrix(St_blocks_symm, {
                            "t00"
                           ],
                        2: [
-                           "t01"
+                           "t01",
+                           "s01t00", "s01t11",
+                           "s01t10", 
+                           "s01t01"
                           ]
                       }, (0,1), all_dimer_charges, matrix_timings)
 S2H2 += XR_term.dimer_matrix(Su_blocks_symm, {
@@ -166,29 +170,28 @@ S2H2 += XR_term.dimer_matrix(Su_blocks_symm, {
                           ],
                        2: [
                            "u100",
-                           "u001", "u101"
-                          ]
-                     }, (0,1), all_dimer_charges, matrix_timings)
-
-S2H2 += XR_term.dimer_matrix(St_blocks_bior, {
-                       2: [
-                           "s01t00", "s01t11",
-                           "s01t10", 
-                           "s01t01"
-                          ]
-                      }, (0,1), all_dimer_charges, matrix_timings)
-S2H2 += XR_term.dimer_matrix(Su_blocks_bior, {
-                       2: [
+                           "u001", "u101",
                            "s01u000", "s01u011",
                            "s01u100", "s01u111",
                            "s01u010", "s01u110", 
                            "s01u001", "s01u101"
                           ]
+                     }, (0,1), all_dimer_charges, matrix_timings)
+
+S2H2 += XR_term.dimer_matrix(St_blocks_bior, {
+                       2: [
+                           "s01s01t00", "s01s01t10", "s01s01t11", "s01s10t00", "s01s10t01"
+                          ]
+                      }, (0,1), all_dimer_charges, matrix_timings)
+S2H2 += XR_term.dimer_matrix(Su_blocks_bior, {
+                       2: [
+                           "s01s01u000", "s01s01u010", "s01s01u011", "s01s10u000", "s01s10u001", "s01s01u100", "s01s01u110", "s01s01u111", "s01s10u100", "s01s10u101"
+                          ]
                       }, (0,1), all_dimer_charges, matrix_timings)
 
 print("build S2H2 (2e)")
 
-S2H2 += XR_term.dimer_matrix(Sv_blocks_diff, {
+S2H2 += XR_term.dimer_matrix(Sv_blocks_symm, {
                        1: [
                            "v0000"
                           ],
@@ -196,13 +199,17 @@ S2H2 += XR_term.dimer_matrix(Sv_blocks_diff, {
                            "v0110", "v0010", "v0100", "v0011"
                           ]
                       }, (0,1), all_dimer_charges, matrix_timings)
-
-S2H2 += XR_term.dimer_matrix(Sv_blocks_bior, {
+S2H2 += XR_term.dimer_matrix(Sv_blocks_diff, {
                        2: [
                            "s01v0000", "s01v1111",
                            "s01v0110", "s01v1110", 
                            "s01v0100", 
                            "s01v1100", "s01v0010", "s01v0111"#, "s01v0011"
+                          ]
+                      }, (0,1), all_dimer_charges, matrix_timings)
+S2H2 += XR_term.dimer_matrix(Sv_blocks_bior, {
+                       2: [
+                           "s01s01v0000", "s01s01v0100", "s01s01v0110", "s01s01v1100", "s01s01v1110", "s01s01v1111", "s01s10v0000", "s01s10v0010", "s01s10v0011", "s01s10v0100", "s01s10v0110"
                           ]
                       }, (0,1), all_dimer_charges, matrix_timings)
 
