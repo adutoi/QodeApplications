@@ -69,7 +69,7 @@ def run_xr(displacement, max_iter, xr_order_final, xr_order_solver=0, dens_filte
     #pre_opt_states = pickle.load(open("pre_opt_coeffs.pkl", mode="rb"))
     #ref_state_coeffs_configs = pickle.load(open("opt_state_coeffs_configs.pkl", mode="rb"))
     for m in range(int(n_frag)):
-        state_obj, dens_var_1, dens_var_2, n_threads, Be = get_fci_states(displacement, n_state_list=[(1, 2), (0, 2), (-1, 2)])
+        state_obj, dens_var_1, dens_var_2, n_threads, Be = get_fci_states(displacement, n_state_list=[(1, 2), (0, 11), (-1, 8)])
         #Be.basis.MOcoeffs = ref_mos.copy()
         #pickle.dump(Be.basis.MOcoeffs, open(f"pre_opt_mos_{m}.pkl", mode="wb"))
 
@@ -126,4 +126,4 @@ def run_xr(displacement, max_iter, xr_order_final, xr_order_solver=0, dens_filte
 
 
 
-print(run_xr(2.5, 0, 0, single_thresh=1/5, double_thresh=1/3.5, triple_thresh=1/2.5, grad_level="herm", state_prep=False))
+print(run_xr(2.5, 0, 2, single_thresh=1/5, double_thresh=1/3.5, triple_thresh=1/2.5, grad_level="herm", state_prep=True))

@@ -286,24 +286,30 @@ def get_xr_H(ints, dens, xr_order, monomer_charges, bra_det=False, ket_det=False
 
         H1 = []
         for m in [0,1]:
-            H1_m  = XR_term.monomer_matrix(St_blocks_symm, {
+            #H1_m  = XR_term.monomer_matrix(Sn_blocks, {
+            #                    1: [
+            #                        "n00"
+            #                        ]
+            #                    }, m, monomer_charges)
+
+            H1_m = XR_term.monomer_matrix(St_blocks_bior, {
                                 1: [
                                     "t00"
                                     ]
-                                }, m, monomer_charges, matrix_timer)
-            H1_m += XR_term.monomer_matrix(Su_blocks_symm, {
+                                }, m, monomer_charges[m], matrix_timer)
+            H1_m += XR_term.monomer_matrix(Su_blocks_bior, {
                                 1: [
                                     "u000"
                                     ]
-                                }, m, monomer_charges, matrix_timer)
+                                }, m, monomer_charges[m], matrix_timer)
 
-            H1_m += XR_term.monomer_matrix(Sv_blocks_symm, {
+            H1_m += XR_term.monomer_matrix(Sv_blocks_bior, {
                                 1: [
                                     "v0000"
                                     ]
-                                }, m, monomer_charges, matrix_timer)
-            H1 += [H1_m]
+                                }, m, monomer_charges[m], matrix_timer)
 
+            H1 += [H1_m]
 
 
         print("build S2inv")
@@ -359,6 +365,7 @@ def get_xr_H(ints, dens, xr_order, monomer_charges, bra_det=False, ket_det=False
                                 "s01s01u000", "s01s01u010", "s01s01u011", "s01s10u000", "s01s10u001", "s01s01u100", "s01s01u110", "s01s01u111", "s01s10u100", "s01s10u101"
                                 ]
                             }, (0,1), all_dimer_charges, matrix_timer)
+        
 
         print("build S2H2 (2e)")
 
@@ -385,7 +392,6 @@ def get_xr_H(ints, dens, xr_order, monomer_charges, bra_det=False, ket_det=False
                             }, (0,1), all_dimer_charges, matrix_timer)
 
 
-
         print("build S2H2 (apply S2inv and subtract monomers)")
 
         H2blocked = S2inv @ S2H2
@@ -407,7 +413,7 @@ def get_xr_H(ints, dens, xr_order, monomer_charges, bra_det=False, ket_det=False
                                 ]
                             }, (0,1), all_dimer_charges, matrix_timer)
     else:
-        raise NotImplementedError("only xr in zeroth and first order are implemented")
+        raise NotImplementedError(f"xr order {xr_order} is not implemented")
 
     # well, this sucks.  reorder the states
     """

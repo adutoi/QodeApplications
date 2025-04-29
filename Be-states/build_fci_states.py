@@ -104,17 +104,21 @@ def get_fci_states(dist, n_state_list=[(+1, 4), (0, 11), (-1, 8)]):
                 Hmat[i,j] += v|Hw
 
         #evals, evecs = qode.util.sort_eigen(numpy.linalg.eigh(Hmat))
+        # TODO: the following setup is Be specific. Generalize reference and cationic part like anionic part to make it at least general for singlet monomers
         if charge <= 0:
-            if n_subset % 2 != 0:
-                raise NotImplementedError("pick an even number of guess vectors for each charge")
             guess = []
             if charge == 0:
+                if n_subset % 2 != 1:
+                    raise NotImplementedError("pick an uneven number of neutral guess vectors")
                 ref = [0, n_spatial_orb+0]
-                for ex in range(n_subset // 2):
+                guess.append(CI_space_atom.member(CI_space_atom.aux.basis_vec(ref + [1, n_spatial_orb+1])))  # gs determinant
+                for ex in range((n_subset - 1) // 2):
                     ex += 2
                     guess.append(CI_space_atom.member(CI_space_atom.aux.basis_vec(ref + [ex, n_spatial_orb+1])))  # alpha excitation
                     guess.append(CI_space_atom.member(CI_space_atom.aux.basis_vec(ref + [n_spatial_orb + ex, 1])))  # beta excitation
             if charge == -1:
+                if n_subset % 2 != 0:
+                    raise NotImplementedError("pick an even number of anionic guess vectors")
                 ref = [0, 1, n_spatial_orb+0, n_spatial_orb+1]
                 for ex in range(n_subset // 2):
                     ex += 2
