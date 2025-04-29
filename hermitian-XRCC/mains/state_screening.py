@@ -403,7 +403,7 @@ def state_screening(dens_builder_stuff, ints, monomer_charges, n_orbs, frozen, n
     #print(missing_states[0])
     
     # neutral spin flip contributions (only for chg 0) from two el ints for single excitations (seems like these are only necessary for 1e-6 Hartree precision)
-    
+    #"""
     gs = total_gs_config_neutral
     for frag in range(2):
         #for chg in range(min(monomer_charges[frag]), max(monomer_charges[frag])):  # loops over -1 and 0
@@ -411,7 +411,8 @@ def state_screening(dens_builder_stuff, ints, monomer_charges, n_orbs, frozen, n
         #dens = dens_looper(raw(dens_arr[frag]["ca"][(chg,chg)]))
         int = v0101
         #for elem in missing_orbs(int, dens, frag):  # ref_inds 2 and 3 should be equal to 0 and 1
-        for elem in get_large(int, thresh_frac=double_thresh)[frag]:  # spin flip is reduced to lower threshold than single here!!!!!!!!!!!!!!!!!!!!!!!!!
+        # TODO: something needs to be done with this threshold, which needs to be chosen ridiculously small to not incorporate all determinants
+        for elem in get_large(int, thresh_frac=1/1.005)[frag]:  # spin flip is reduced to lower threshold than single here!!!!!!!!!!!!!!!!!!!!!!!!!
             if elem in frozen:
                 continue
             if elem in conf_decoder(total_gs_config_neutral, n_orbs):  # filter out occupied orbitals
@@ -432,7 +433,7 @@ def state_screening(dens_builder_stuff, ints, monomer_charges, n_orbs, frozen, n
                 #det_state[dens_builder_stuff[frag][0][chg].configs.index(ex)] = 1.
                 #missing_states[frag][chg][ex] = det_state
                 missing_states[frag][chg][ex] = dens_builder_stuff[frag][0][chg].configs.index(ex)
-    
+    #"""
     #print(missing_states[0])
     #print(missing_states[0][0].keys(), missing_states[0][-1].keys())
 
@@ -623,9 +624,10 @@ def state_screening(dens_builder_stuff, ints, monomer_charges, n_orbs, frozen, n
                     already_included.append(pair)
                 except KeyError:
                     continue
-            if len(det_states) >= 150:
-                print(len(det_states))
-                raise RuntimeError(f"for fragment {frag} with charge {chg} the additionally screened states exceed 150...this will take forever")
+            #if len(det_states) >= 150:
+            #    print(len(det_states))
+            #    raise RuntimeError(f"for fragment {frag} with charge {chg} the additionally screened states exceed 150...this will take forever")
+            print(f"for fragment {frag} with charge {chg} {len(det_states)} determinants are taken into account")
             #new_states = dens_builder_stuff[frag][0][chg].coeffs + det_states #list(missing_states[frag][chg].values())
             #new_states = orthogonalize(np.array(new_states))
             #ret[frag][chg] = [i for i in new_states]
