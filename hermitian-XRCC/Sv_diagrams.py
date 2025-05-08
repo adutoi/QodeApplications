@@ -286,7 +286,7 @@ def s01s10v0000(X, contract_last=False):
         #@ X.s10(v,w)
         #@ X.v0000(p,q,r,s)
           X.cccaaa0pqXXsr_Vpqrs(i0,j0,t,w)
-        @ X.ca1Xu_s0u(i1,j1,v,t)
+        @ X.ca1Xu_S0u(i1,j1,v,t)
         @ X.s10(v,w)
         )
 
