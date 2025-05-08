@@ -1,4 +1,4 @@
-#    (C) Copyright 2018, 2019, 2023 Anthony D. Dutoi and Yuhong Liu
+#    (C) Copyright 2018, 2019, 2023, 2024 Anthony D. Dutoi and Yuhong Liu
 # 
 #    This file is part of QodeApplications.
 # 
@@ -18,7 +18,7 @@
 
 import numpy
 import tensorly
-#import multiprocessing
+import multiprocessing
 from qode.util           import sort_eigen
 from qode.util.PyC       import Double
 from qode.math.tensornet import tl_tensor, tensor_sum, raw
@@ -81,9 +81,8 @@ def _compress(args):
 
 
 
-def build_tensors(states, n_orbs, n_elec_0, thresh=1e-10, options=None, n_threads=1):
-    #pool = multiprocessing.Pool(n_threads)
-
+# private version so that we can use "with pool" on the outside
+def _build_tensors(states, n_orbs, n_elec_0, thresh, options, n_threads, pool):
     op_strings = {2:["aa", "caaa"], 1:["a", "caa", "ccaaa"], 0:["ca", "ccaa"]}
     densities = {}
     conj_densities = {}
@@ -128,7 +127,7 @@ def build_tensors(states, n_orbs, n_elec_0, thresh=1e-10, options=None, n_thread
 
     for op_string in densities:
         for bra_chg,ket_chg in densities[op_string]:
-            print(op_string, bra_chg, ket_chg)
+            print("<>", op_string, bra_chg, ket_chg)
             rho = densities[op_string][bra_chg,ket_chg]
             temp_ij = tensor_sum()
             temp_ji = tensor_sum()
@@ -141,11 +140,13 @@ def build_tensors(states, n_orbs, n_elec_0, thresh=1e-10, options=None, n_thread
                     if bra_chg!=ket_chg or i>=j:
                         #rho_ij = compress.compress(rho_ij, op_string, bra_chg, ket_chg, i, j, compress_args, natural_orbs, antisymm_abstract, _tens_wrap)
                         arguments += [(rho_ij, op_string, bra_chg, ket_chg, i, j, n_bras, n_kets, compress_args, natural_orbs, antisymm_abstract)]
-            values = [_compress(args) for args in arguments]
-            #values = pool.map(_compress, arguments)
+            if pool is None:
+                values = [_compress(args) for args in arguments]
+            else:
+                values = pool.map(_compress, arguments)    # instead of pool, make pool.map the function argument, replaceable with map
             for i, n_bras, j, n_kets, rho_ij in values:
-                if True:
-                    if True:
+                if True:        # if these two lines and the three above are deleted, and the line above that is uncommented, ...
+                    if True:    # ... then even the indentation will be right to obtain working code
                         indices = tuple(p+2 for p in range(len(op_string)))
                         temp_ij += _vec(i,n_bras)(0) @ _vec(j,n_kets)(1) @ rho_ij(*indices)
                         rev_indices = tuple(reversed(indices))
@@ -167,4 +168,13 @@ def build_tensors(states, n_orbs, n_elec_0, thresh=1e-10, options=None, n_thread
     densities["n_states"] = {chg:len(states[chg].coeffs) for chg in states}
 
     print("Writing to hard drive ...")
+    return densities
+
+def build_tensors(states, n_orbs, n_elec_0, thresh=1e-10, options=None, n_threads=1):
+    if n_threads>1:
+        with multiprocessing.Pool(n_threads, maxtasksperchild=1) as pool:    # to avoid errors on exit, both maxtasksperchild=1 ...
+            densities = _build_tensors(states, n_orbs, n_elec_0, thresh, options, n_threads, pool)
+            pool.close()                                                     # ... and pool.close() seem to be necessary
+    else:
+        densities = _build_tensors(states, n_orbs, n_elec_0, thresh, options, n_threads, None)
     return densities
