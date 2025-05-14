@@ -27,9 +27,7 @@ from qode.atoms.integrals.fragments import unblock_2, unblock_last2, unblock_4
 from get_ints import get_ints
 import psi4_check
 
-from CI_space_traits import CI_space_traits
-import field_op_ham
-import configurations
+from qode.fermion_field import CI_space_traits, field_op_ham, configurations
 
 import densities
 
