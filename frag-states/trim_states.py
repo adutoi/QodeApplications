@@ -44,7 +44,6 @@ def trim_states(rho, statesthresh, n_elec_ref, configs, printout=print):
     states = {}
     for n,(evals,evecs) in evals_evecs.items():
         chg = n_elec_ref - n
-        print(chg)
         n_config_n = len(evals)
         printout("n_config_n", n_config_n)
         for i,e in enumerate(evals):

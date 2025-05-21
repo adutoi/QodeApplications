@@ -159,8 +159,6 @@ def get_optimal(frags, statesthresh, printout=print, n_threads=1):
                     if (p in core) and (p!=r) and (p!=s):  V[p,q,r,s] = 0
                     if (q in core) and (q!=r) and (q!=s):  V[p,q,r,s] = 0
 
-    occupied[-1] += 1
-    print(occupied)
     CI_space_dimer = qode.math.linear_inner_product_space(CI_space_traits(configs))
     H     = CI_space_dimer.lin_op(field_op_ham.Hamiltonian(h,V, n_threads=n_threads))
     guess = CI_space_dimer.member(CI_space_dimer.aux.basis_vec(occupied))
