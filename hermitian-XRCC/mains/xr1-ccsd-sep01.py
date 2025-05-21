@@ -17,7 +17,7 @@
 #
 
 # Usage:
-#     python [-u] <this-file.py> <displacement> <rhos> [no-proj]
+#     python [-u] <this-file.py> <displacement> <rhos1> <rhos2> [no-proj]
 # where <rhos> can be the filestem of any one of the .pkl files in atomic_states/ prepared by Be631g.py.
 
 import time
@@ -26,6 +26,7 @@ import pickle
 import numpy
 #import torch
 import tensorly
+from tensorly import plugins as tensorly_plugins
 import qode.util
 from qode.util import struct, timer
 import qode.math
@@ -43,6 +44,8 @@ class empty(object):  pass     # needed for unpickling - remove when all Be-stat
 
 #torch.set_num_threads(4)
 #tensorly.set_backend("pytorch")
+tensorly_plugins.use_opt_einsum()
+qode.math.tensornet.backend_contract_path(True)
 
 global_timings = timer()
 matrix_timings = timer()
@@ -61,17 +64,17 @@ global_timings.start()
 # Information about the Be2 supersystem
 n_frag       = 2
 displacement = float(sys.argv[1])
-states       = "rho/{}.pkl".format(sys.argv[2])
+states       = ["rho/{}.pkl".format(sys.argv[2]), "rho/{}.pkl".format(sys.argv[3])]
 project_core = True
-if len(sys.argv)==4:
-    if sys.argv[3]=="no-proj":
+if len(sys.argv)==5:
+    if sys.argv[4]=="no-proj":
         project_core = False
 
 # "Assemble" the supersystem for the displaced fragments and get integrals
 BeN = []
 print("load states ...")
 for m in range(int(n_frag)):
-    Be = pickle.load(open(states,"rb"))
+    Be = pickle.load(open(states[m],"rb"))
     for elem,coords in Be.atoms:  coords[2] += m * displacement    # displace along z
     BeN += [Be]
 print("get_ints ...")
@@ -80,6 +83,8 @@ print("done")
 
 # The engines that build the terms
 BeN_rho = [frag.rho for frag in BeN]   # diagrammatic_expansion.blocks should take BeN directly? (n_states and n_elec one level higher)
+for BeN_rho_m in BeN_rho:                                # These lines to be removed when synced ...
+    BeN_rho_m['n_states_bra'] = BeN_rho_m['n_states']    # ... up with Be states code again (now works with Be-states from main branch).
 contract_cache = precontract(BeN_rho, symm_ints.S, precontract_timings)
 S_blocks       = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=symm_ints.S,                               diagrams=S_diagrams,  contract_cache=contract_cache, timings=diagram_timings, precon_timings=precontract_timings)
 St_blocks_symm = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, T=symm_ints.T),      diagrams=St_diagrams, contract_cache=contract_cache, timings=diagram_timings, precon_timings=precontract_timings)
@@ -89,6 +94,7 @@ St_blocks_bior = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=stru
 Su_blocks_bior = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, U=bior_ints.U),      diagrams=Su_diagrams, contract_cache=contract_cache, timings=diagram_timings, precon_timings=precontract_timings)
 Sv_blocks_bior = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, V=bior_ints.V),      diagrams=Sv_diagrams, contract_cache=contract_cache, timings=diagram_timings, precon_timings=precontract_timings)
 Sv_blocks_half = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, V=bior_ints.V_half), diagrams=Sv_diagrams, contract_cache=contract_cache, timings=diagram_timings, precon_timings=precontract_timings)
+Sv_blocks_diff = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, V=bior_ints.V_diff), diagrams=Sv_diagrams, contract_cache=contract_cache, timings=diagram_timings, precon_timings=precontract_timings)
 
 # charges under consideration
 monomer_charges = [0, +1, -1]
@@ -112,18 +118,18 @@ print("build H1")
 
 H1 = []
 for m in [0,1]:
-    H1_m  = XR_term.monomer_matrix(St_blocks_bior, {
+    H1_m  = XR_term.monomer_matrix(St_blocks_symm, {
                           1: [
                               "t00"
                              ]
                          }, m, monomer_charges, matrix_timings)
-    H1_m += XR_term.monomer_matrix(Su_blocks_bior, {
+    H1_m += XR_term.monomer_matrix(Su_blocks_symm, {
                           1: [
                               "u000"
                              ]
                          }, m, monomer_charges, matrix_timings)
 
-    H1_m += XR_term.monomer_matrix(Sv_blocks_bior, {
+    H1_m += XR_term.monomer_matrix(Sv_blocks_symm, {
                           1: [
                               "v0000"
                              ]
@@ -137,6 +143,9 @@ print("build S2inv")
 S2     = XR_term.dimer_matrix(S_blocks, {
                         0: [
                             "identity"
+                           ],
+                        2: [
+                            "s01"
                            ]
                        },  (0,1), all_dimer_charges, matrix_timings)
 
@@ -146,30 +155,82 @@ S2inv = qode.math.precise_numpy_inverse(S2)
 
 print("build S2H2 (1e)")
 
-S2H2   = XR_term.dimer_matrix(St_blocks_bior, {
-                        2: [
-                            "t01"
-                           ]
-                       }, (0,1), all_dimer_charges, matrix_timings)
+S2H2  = XR_term.dimer_matrix(St_blocks_symm, {
+                       1: [
+                           "t00"
+                          ],
+                       2: [
+                           "t01"
+                          ]
+                      }, (0,1), all_dimer_charges, matrix_timings)
+S2H2 += XR_term.dimer_matrix(Su_blocks_symm, {
+                       1: [
+                           "u000"
+                          ],
+                       2: [
+                           "u100",
+                           "u001", "u101"
+                          ]
+                     }, (0,1), all_dimer_charges, matrix_timings)
 
-S2H2  += XR_term.dimer_matrix(Su_blocks_bior, {
-                        2: [
-                            "u100",
-                            "u001", "u101"
-                           ]
-                       }, (0,1), all_dimer_charges, matrix_timings)
+S2H2 += XR_term.dimer_matrix(St_blocks_bior, {
+                       2: [
+                           "s01t00", "s01t11",
+                           "s01t10", 
+                           "s01t01"
+                          ]
+                      }, (0,1), all_dimer_charges, matrix_timings)
+S2H2 += XR_term.dimer_matrix(Su_blocks_bior, {
+                       2: [
+                           "s01u000", "s01u011",
+                           "s01u100", "s01u111",
+                           "s01u010", "s01u110", 
+                           "s01u001", "s01u101"
+                          ]
+                      }, (0,1), all_dimer_charges, matrix_timings)
 
 print("build S2H2 (2e)")
 
-S2H2  += XR_term.dimer_matrix(Sv_blocks_bior, {
-                        2: [
-                            "v0101", "v0010", "v0111", "v0011"
-                           ]
-                       }, (0,1), all_dimer_charges, matrix_timings)
+S2H2 += XR_term.dimer_matrix(Sv_blocks_diff, {
+                       1: [
+                           "v0000"
+                          ],
+                       2: [
+                           "v0110", "v0010", "v0100", "v0011"
+                          ]
+                      }, (0,1), all_dimer_charges, matrix_timings)
+
+S2H2 += XR_term.dimer_matrix(Sv_blocks_bior, {
+                       2: [
+                           "s01v0000", "s01v1111",
+                           "s01v0110", "s01v1110", 
+                           "s01v0100", 
+                           "s01v1100", "s01v0010", "s01v0111"#, "s01v0011"
+                          ]
+                      }, (0,1), all_dimer_charges, matrix_timings)
 
 
+
+print("build S2H2 (apply S2inv and subtract monomers)")
 
 H2blocked = S2inv @ S2H2
+
+H2blocked -= XR_term.dimer_matrix(St_blocks_symm, {
+                       1: [
+                           "t00"
+                          ]
+                      }, (0,1), all_dimer_charges, matrix_timings)
+H2blocked -= XR_term.dimer_matrix(Su_blocks_symm, {
+                       1: [
+                           "u000"
+                          ]
+                     }, (0,1), all_dimer_charges, matrix_timings)
+
+H2blocked -= XR_term.dimer_matrix(Sv_blocks_symm, {
+                       1: [
+                           "v0000"
+                          ]
+                      }, (0,1), all_dimer_charges, matrix_timings)
 
 global_timings.record("build")
 global_timings.start()
@@ -202,7 +263,7 @@ for i,i_ in enumerate(mapping):
     for j,j_ in enumerate(mapping):
         H2[i,j] = H2blocked[i_,j_]
 
-out, resources = qode.util.output(log=qode.util.textlog(echo=True)), qode.util.parallel.resources(1)
+out, resources = struct(log=qode.util.textlog(echo=True)), qode.util.parallel.resources(1)
 E, T = excitonic.ccsd((H1,[[None,H2],[None,None]]), out, resources)
 E += sum(nuc_rep[m1,m2] for m1 in range(n_frag) for m2 in range(m1+1))
 out.log("\nTotal Excitonic CCSD Energy (test) = ", E)

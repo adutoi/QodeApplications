@@ -166,7 +166,17 @@ def get_optimal(frags, statesthresh, printout=print, n_threads=1):
     guess = CI_space_dimer.member(CI_space_dimer.aux.basis_vec(occupied))
 
     printout((guess|H|guess) + N)
-    (Eval,Evec), = qode.math.lanczos.lowest_eigen(H, [guess], thresh=1e-8)
+    #(Eval,Evec), = qode.math.lanczos.lowest_eigen(H, [guess], thresh=1e-8)
+    n_dim_states = 4
+    results = qode.math.lanczos.lowest_eigen_one_by_one(H, [guess]*n_dim_states, thresh=1e-8)
+    for _1,bra in results:
+        for _2,ket in results:
+            printout((bra|ket), end="  ")
+        printout()
+    #printout(results[0][1]|results[0][1])
+    #printout(results[1][1]|results[1][1])
+    #printout(results[0][1]|results[1][1])
+    Eval,Evec = results[n_dim_states-1]
     printout("\nE_gs = {}\n".format(Eval+N))
 
     dim_1 = [len(frag1_to_dimer_n) for frag1_to_dimer_n in frag1_to_dimer]
@@ -195,6 +205,6 @@ def get_optimal(frags, statesthresh, printout=print, n_threads=1):
             rho[n] = (rho_1[n] + rho_0[n]) / 2    # relies on fragments being the same
 
     frags[0].states, frags[0].state_indices = trim_states(rho, statesthresh, frags[0].n_elec_ref, configs_0, printout=indented(printout))
-    frags[1].states, frags[1].state_indices = trim_states(rho, statesthresh, frags[1].n_elec_ref, configs_1, printout=indented(printout))
+    #frags[1].states, frags[1].state_indices = trim_states(rho, statesthresh, frags[1].n_elec_ref, configs_1, printout=indented(printout))
 
     return "nth"

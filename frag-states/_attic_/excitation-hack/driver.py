@@ -67,11 +67,11 @@ if __name__=="__main__":
 
     printout("Determine optimal states")
     label += "_" + states.get_optimal(frags, params("nstates thresh"), printout=indented(printout), n_threads=params.n_threads)
-    label += "_" + densities.build_tensors(frags, thresh=1e-30, options=params("compress nat_orbs abs_anti"), n_threads=params.n_threads)
+    #label += "_" + densities.build_tensors(frags, thresh=1e-30, options=params("compress nat_orbs abs_anti"), n_threads=params.n_threads)
 
     frags[0].integrals = None    # otherwise huge files
-    frags[0].states    = None    # otherwise huge files
+    #frags[0].states    = None    # otherwise huge files
     frags[1].integrals = None    # otherwise huge files
     frags[1].states    = None    # otherwise huge files
     pickle.dump(frags[0], open(f"rho/{label}.pkl".format(0), "wb"))    # users responsibility to softlink rho/ to different volume if desired
-    pickle.dump(frags[1], open(f"rho/{label}.pkl".format(1), "wb"))    # users responsibility to softlink rho/ to different volume if desired
+    #pickle.dump(frags[1], open(f"rho/{label}.pkl".format(1), "wb"))    # users responsibility to softlink rho/ to different volume if desired

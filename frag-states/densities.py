@@ -132,12 +132,13 @@ def _build_tensors(states, n_orbs, n_elec_0, thresh, options, n_threads, pool):
     return densities
 
 def build_tensors(frags, thresh=1e-10, options=None, n_threads=1):
-    states, n_orbs, n_elec_0 = frags[0].states, 2*frags[0].basis.n_spatial_orb, frags[0].n_elec_ref
-    if n_threads>1:
-        with multiprocessing.Pool(n_threads, maxtasksperchild=1) as pool:    # to avoid errors on exit, both maxtasksperchild=1 ...
-            densities = _build_tensors(states, n_orbs, n_elec_0, thresh, options, n_threads, pool)
-            pool.close()                                                     # ... and pool.close() seem to be necessary
-    else:
-        densities = _build_tensors(states, n_orbs, n_elec_0, thresh, options, n_threads, None)
-    frags[0].rho = densities
+    for frag in frags:
+        states, n_orbs, n_elec_0 = frag.states, 2*frag.basis.n_spatial_orb, frag.n_elec_ref
+        if n_threads>1:
+            with multiprocessing.Pool(n_threads, maxtasksperchild=1) as pool:    # to avoid errors on exit, both maxtasksperchild=1 ...
+                densities = _build_tensors(states, n_orbs, n_elec_0, thresh, options, n_threads, pool)
+                pool.close()                                                     # ... and pool.close() seem to be necessary
+        else:
+            densities = _build_tensors(states, n_orbs, n_elec_0, thresh, options, n_threads, None)
+        frag.rho = densities
     return "compress"
