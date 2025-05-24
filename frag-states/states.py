@@ -25,7 +25,7 @@ from qode.util.PyC import Double
 def map_frag_dimer(nested):
 
     all_configs_0, all_configs_1 = {}, {}
-    for config_1,configs_0 in nested:
+    for configs_0,config_1 in nested:
         n1 = config_1.bit_count()
         if n1 not in all_configs_1:
             all_configs_1[n1] = list()
@@ -46,7 +46,7 @@ def map_frag_dimer(nested):
     dimer_to_frags = []
 
     P = 0
-    for config_1,configs_0 in nested:
+    for configs_0,config_1 in nested:
         n1 = config_1.bit_count()
         i1 = all_configs_1[n1].index(config_1)
         for config_0 in configs_0:
