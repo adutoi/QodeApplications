@@ -20,7 +20,7 @@ import numpy
 from qode.util.PyC       import Double
 from qode.math.tensornet import tensor_sum, raw
 from qode.math           import svd_decomposition
-from qode.fermion_field import field_op
+from qode.many_body.fermion_field import field_op
 
 _permutations = {
     "aa":    {+1:[(0,1)], -1:[(1,0)]},

@@ -17,9 +17,10 @@
 #    along with QodeApplications.  If not, see <http://www.gnu.org/licenses/>.
 #
 import pickle
-from qode.util import struct, read_input, indented
+from qode.util import struct, read_input, indented, no_print
+from qode.many_body.fermion_field import combine_orb_lists, CI_methods
 import input_env
-import get_MOs
+import hamiltonian
 import states
 import densities
 
@@ -32,7 +33,7 @@ n_spatial_orb = {
 
 
 if __name__=="__main__":
-    printout = print
+    printout = indented(print, indent="    ")
 
     params = struct(    # defaults
         n_threads = 1,
@@ -48,7 +49,6 @@ if __name__=="__main__":
         struct(
             atoms = frag.atoms,
             n_elec_ref = sum(n_elec_ref[atom.element] for atom in frag.atoms) - frag.charge,    # "cation (+1)" and "anion (-1)" are interpreted relative to the reference
-            multiplicity = frag.multiplicity,
             basis = struct(
                 AOcode = params.basis,
                 n_spatial_orb = sum(n_spatial_orb[params.basis][atom.element] for atom in frag.atoms),
@@ -62,16 +62,39 @@ if __name__=="__main__":
 
     printout("Fragment HF")
     for frag in frags:
-        get_MOs.fragment_HF(frag, indented(printout))    # modifies/initializes MOcoeffs and stores HF data in frag
+        hamiltonian.fragment_HF(frag, Sz=0, printout=indented(printout))    # modifies/initializes MOcoeffs and stores HF data in frag
     frags[1].basis.MOcoeffs = frags[0].basis.MOcoeffs    # insist identical for this code
 
     printout("Determine optimal states")
-    label += "_" + states.get_optimal(frags, params("nstates thresh"), printout=indented(printout), n_threads=params.n_threads)
+
+    monomer_ints, dimer_ints = hamiltonian.dimer_integrals(frags, printout=printout)
+
+    printout("Monomer FCIs")
+    occupied = range(frags[0].n_elec_ref // 2), range(frags[1].n_elec_ref // 2)
+    occupied = (combine_orb_lists(occupied[0], occupied[0], frags[0].basis.n_spatial_orb),
+                combine_orb_lists(occupied[1], occupied[1], frags[1].basis.n_spatial_orb))
+    for m,frag in enumerate(frags):
+        configs = CI_methods.monomer_configs(frag, Sz=0)
+        Eval, Evec = CI_methods.lanczos_ground(monomer_ints[m], configs, occupied[m], thresh=1e-8, printout=indented(printout), n_threads=params.n_threads)
+
+    printout("Dimer FCI")
+    occupied = combine_orb_lists(occupied[0], occupied[1], 2*frags[0].basis.n_spatial_orb)
+    configs, nested = CI_methods.dimer_configs(*frags, Sz=0)
+    Eval, Evec = CI_methods.lanczos_ground(dimer_ints, configs, occupied, thresh=1e-8, printout=indented(printout), n_threads=params.n_threads)
+
+    dimer_to_frags, frags_to_dimer, frag_configs = states.map_frag_dimer(nested)
+    frag_rhos = states.frag_state_densities(Evec.v, dimer_to_frags, frags_to_dimer)
+    rhos = {n: (1/2)*(frag_rhos[0][n] + frag_rhos[1][n]) for n in frag_rhos[0]}
+    frag_rhos = [rhos, rhos]
+
+    statesthresh = params("nstates thresh")
+    frags[0].states, frags[0].state_indices = states.trim_states(frag_rhos[0], statesthresh, frags[0].n_elec_ref, frag_configs[0], printout=indented(printout))
+    frags[1].states, frags[1].state_indices = states.trim_states(frag_rhos[1], statesthresh, frags[1].n_elec_ref, frag_configs[1], printout=indented(printout))
+
+    label += "_nth"
     label += "_" + densities.build_tensors(frags, thresh=1e-30, options=params("compress nat_orbs abs_anti"), n_threads=params.n_threads)
 
-    frags[0].integrals = None    # otherwise huge files
     frags[0].states    = None    # otherwise huge files
-    frags[1].integrals = None    # otherwise huge files
     frags[1].states    = None    # otherwise huge files
     pickle.dump(frags[0], open(f"rho/{label}.pkl".format(0), "wb"))    # users responsibility to softlink rho/ to different volume if desired
     pickle.dump(frags[1], open(f"rho/{label}.pkl".format(1), "wb"))    # users responsibility to softlink rho/ to different volume if desired
