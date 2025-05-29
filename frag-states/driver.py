@@ -65,11 +65,9 @@ if __name__=="__main__":
         hamiltonian.fragment_HF(frag, Sz=0, printout=indented(printout))    # modifies/initializes MOcoeffs and stores HF data in frag
     frags[1].basis.MOcoeffs = frags[0].basis.MOcoeffs    # insist identical for this code
 
-    printout("Determine optimal states")
-
     monomer_ints, dimer_ints = hamiltonian.dimer_integrals(frags, printout=printout)
 
-    printout("Monomer FCIs")
+    printout("Monomer FCIs (just for fun/illustration)")
     occupied = range(frags[0].n_elec_ref // 2), range(frags[1].n_elec_ref // 2)
     occupied = (combine_orb_lists(occupied[0], occupied[0], frags[0].basis.n_spatial_orb),
                 combine_orb_lists(occupied[1], occupied[1], frags[1].basis.n_spatial_orb))
@@ -88,11 +86,14 @@ if __name__=="__main__":
     frag_rhos = [rhos, rhos]
 
     statesthresh = params("nstates thresh")
+    printout("Optimal states for fragment 0")
     frags[0].states, frags[0].state_indices = states.trim_states(frag_rhos[0], statesthresh, frags[0].n_elec_ref, frag_configs[0], printout=indented(printout))
+    printout("Optimal states for fragment 1")
     frags[1].states, frags[1].state_indices = states.trim_states(frag_rhos[1], statesthresh, frags[1].n_elec_ref, frag_configs[1], printout=indented(printout))
 
     label += "_nth"
-    label += "_" + densities.build_tensors(frags, thresh=1e-30, options=params("compress nat_orbs abs_anti"), n_threads=params.n_threads)
+    printout("Reduced density tensors")
+    label += "_" + densities.build_tensors(frags, thresh=1e-30, options=params("compress nat_orbs abs_anti"), printout=indented(printout), n_threads=params.n_threads)
 
     frags[0].states    = None    # otherwise huge files
     frags[1].states    = None    # otherwise huge files

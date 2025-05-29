@@ -19,7 +19,7 @@
 import numpy
 import tensorly
 import multiprocessing
-from qode.util           import sort_eigen
+from qode.util           import sort_eigen, indented
 from qode.util.PyC       import Double
 from qode.math.tensornet import tl_tensor, tensor_sum, raw
 from qode.many_body.fermion_field import field_op
@@ -45,7 +45,7 @@ def _compress(args):
 
 
 # private version so that we can use "with pool" on the outside
-def _build_tensors(states, n_orbs, n_elec_0, thresh, options, n_threads, pool):
+def _build_tensors(states, n_orbs, n_elec_0, thresh, options, printout, n_threads, pool):
     op_strings = {2:["aa", "caaa"], 1:["a", "caa", "ccaaa"], 0:["ca", "ccaa"]}
     densities = {}
     conj_densities = {}
@@ -54,24 +54,27 @@ def _build_tensors(states, n_orbs, n_elec_0, thresh, options, n_threads, pool):
     antisymm_abstract  = options.abs_anti                    # antisymmetry abstract in final rep, which might be original? (default: no)
     antisymm_numerical = (not antisymm_abstract) or use_natural_orbs    # numerically antisymmetrize in original rep? (default: yes)
 
-    print("Computing densities ...")
+    printdent = indented(printout)
+
+    printout("Computing densities ...")
 
     for bra_chg in states:
         bra_coeffs  = states[bra_chg].coeffs
         bra_configs = field_op.packed_configs(states[bra_chg].configs)
         for ket_chg in states:
+            printdent(bra_chg, ket_chg)
             ket_coeffs  = states[ket_chg].coeffs
             ket_configs = field_op.packed_configs(states[ket_chg].configs)
             chg_diff = bra_chg - ket_chg
             if chg_diff in op_strings:
                 for op_string in op_strings[chg_diff]:
                     if op_string not in densities:  densities[op_string] = {}
-                    print(bra_chg, ket_chg, op_string)
+                    #printout("  ", bra_chg, ket_chg, op_string)
                     # bit of a waste here ... computes i<j and i>j for chg_diff=0
-                    rho = field_op.build_densities(op_string, n_orbs, bra_coeffs, ket_coeffs, bra_configs, ket_configs, thresh, wisdom=None, antisymmetrize=antisymm_numerical, n_threads=n_threads)
+                    rho = field_op.build_densities(op_string, n_orbs, bra_coeffs, ket_coeffs, bra_configs, ket_configs, thresh, wisdom=None, antisymmetrize=antisymm_numerical, printout=indented(printdent), n_threads=n_threads)
                     densities[op_string][bra_chg,ket_chg] = [[_tens_wrap(rho_ij) for rho_ij in rho_i] for rho_i in rho]
 
-    print("Postprocessing ...")
+    printout("Postprocessing/compressing ...")
 
     natural_orbs = None
     if use_natural_orbs:
@@ -81,14 +84,14 @@ def _build_tensors(states, n_orbs, n_elec_0, thresh, options, n_threads, pool):
             natural_orbs_chg = []
             for i in range(len(rho)):                   # ... which means the number of bras and kets are the same
                 rho_ii = numpy.array(raw(rho[i][i]), dtype=Double.numpy, order="C")
-                #print(chg, i, "deviation from symmetric:", numpy.linalg.norm(rho_ii - rho_ii.T))
+                #printout(chg, i, "deviation from symmetric:", numpy.linalg.norm(rho_ii - rho_ii.T))
                 evals, evecs = sort_eigen(numpy.linalg.eigh(rho_ii), order="descending")
                 natural_orbs_chg += [_tens_wrap(evecs)]
             natural_orbs[chg] = natural_orbs_chg
 
     for op_string in densities:
         for bra_chg,ket_chg in densities[op_string]:
-            print("<>", op_string, bra_chg, ket_chg)
+            printdent(op_string, bra_chg, ket_chg)
             rho = densities[op_string][bra_chg,ket_chg]
             temp_ij = tensor_sum()
             temp_ji = tensor_sum()
@@ -128,17 +131,18 @@ def _build_tensors(states, n_orbs, n_elec_0, thresh, options, n_threads, pool):
     densities["n_elec"]   = {chg:(n_elec_0-chg)          for chg in states}
     densities["n_states"] = {chg:len(states[chg].coeffs) for chg in states}
 
-    print("Writing to hard drive ...")
+    printout("Writing to hard drive ...")
     return densities
 
-def build_tensors(frags, thresh=1e-10, options=None, n_threads=1):
-    for frag in frags:
+def build_tensors(frags, thresh=1e-10, options=None, printout=print, n_threads=1):
+    for m,frag in enumerate(frags):
+        printout(f"Fragment {m}")
         states, n_orbs, n_elec_0 = frag.states, 2*frag.basis.n_spatial_orb, frag.n_elec_ref
         if n_threads>1:
             with multiprocessing.Pool(n_threads, maxtasksperchild=1) as pool:    # to avoid errors on exit, both maxtasksperchild=1 ...
-                densities = _build_tensors(states, n_orbs, n_elec_0, thresh, options, n_threads, pool)
+                densities = _build_tensors(states, n_orbs, n_elec_0, thresh, options, indented(printout), n_threads, pool)
                 pool.close()                                                     # ... and pool.close() seem to be necessary
         else:
-            densities = _build_tensors(states, n_orbs, n_elec_0, thresh, options, n_threads, None)
+            densities = _build_tensors(states, n_orbs, n_elec_0, thresh, options, indented(printout), n_threads, None)
         frag.rho = densities
     return "compress"

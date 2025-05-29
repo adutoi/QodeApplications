@@ -110,12 +110,13 @@ def trim_states(rho, statesthresh, n_elec_ref, configs, printout=print):
         raise RuntimeError("cannot define both thresh and nstates as criteria for keeping monomer states")
 
     states = {}
+    n_states, n_config = 0, 0
     for n,(evals,evecs) in evals_evecs.items():
         chg = n_elec_ref - n
-        n_config_n = len(evals)
-        printout("n_config_n", n_config_n)
+        n_states_n, n_config_n = 0, len(evals)
         for i,e in enumerate(evals):
             if e>thresh:
+                n_states_n += 1
                 if chg not in states:
                     states[chg] = struct(
                         configs = configs[n],
@@ -124,11 +125,10 @@ def trim_states(rho, statesthresh, n_elec_ref, configs, printout=print):
                 tmp = numpy.zeros(n_config_n, dtype=Double.numpy, order="C")
                 tmp[:] = evecs[:,i]
                 states[chg].coeffs += [tmp]
-
-    for chg,states_chg in states.items():
-        num_states = len(states_chg.coeffs)
-        if num_states>0:
-            printout("{}: {} x {}".format(chg, num_states, states_chg.coeffs[0].shape))
+        printout(f"{chg: d}: {n_states_n:2d} ({n_config_n} coefficients)")
+        n_states += n_states_n
+        n_config += n_states_n * n_config_n
+    printout(f"Total: {n_states:2d} ({n_config} coefficients)")
 
     ref_chg, ref_idx = 0, 0
     state_indices = [(ref_chg,ref_idx)]    # List of all charge and state indices, reference state needs to be first, but otherwise irrelevant order
