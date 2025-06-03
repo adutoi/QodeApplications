@@ -53,7 +53,7 @@ def ccsd(H, out, resources, diis_start=0):
 
 
 
-def fci(H, out):
+def fci(H, out, target_state=0):
 	#monomer_Hamiltonians, _, _ = H
 	monomer_Hamiltonians, _ = H
 	N_frag = len(monomer_Hamiltonians)
@@ -69,7 +69,7 @@ def fci(H, out):
 	dim = Hmat.shape[0]
 	if True:	# Because Lanczos does not yet handle non-hermitian matrices
 		vals, vecs = sort_eigen(numpy.linalg.eig(Hmat))
-		E = vals[0]
+		E = vals[target_state]
 	else:
 		traits = qode.math.numpy_space.real_traits(dim)
 		S = qode.math.linear_inner_product_space(traits)
@@ -80,4 +80,4 @@ def fci(H, out):
 		E = Eval
 
 	out.log("FCI Energy  =", E)
-	return E, vecs[0]
+	return E, vecs[target_state]

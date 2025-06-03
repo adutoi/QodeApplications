@@ -105,7 +105,7 @@ def get_fci_states(dist, n_state_list=[(+1, 4), (0, 11), (-1, 8)]):
 
         #evals, evecs = qode.util.sort_eigen(numpy.linalg.eigh(Hmat))
         # TODO: the following setup is Be specific. Generalize reference and cationic part like anionic part to make it at least general for singlet monomers
-        if charge <= 0:
+        if charge <= -2:#0:
             guess = []
             if charge == 0:
                 if n_subset % 2 != 1:

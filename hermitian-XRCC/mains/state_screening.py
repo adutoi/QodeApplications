@@ -27,11 +27,13 @@ import densities
 import pickle
 
 
-def orthogonalize(U, eps=1e-6, normalize=True):  # with the transpose commented out, it orthogonalizes rows instead of columns
-    # one should play with eps a little here
+def orthogonalize(U, eps=1e-6, normalize=True):
+    # gram schmidt orthogonalizer for orthogonalizing rows of a matrix
+    # one might has to play with eps a little here
     n = len(U)
-    V = U#.T
+    V = U
     for i in range(n):
+        #print("norm before orthogonalization", np.linalg.norm(V[i]))
         prev_basis = V[0:i]     # orthonormal basis before V[i]
         coeff_vec = np.dot(prev_basis, V[i].T)  # each entry is np.dot(V[j], V[i]) for all j < i
         # subtract projections of V[i] onto already determined basis V[0:i]
@@ -44,9 +46,10 @@ def orthogonalize(U, eps=1e-6, normalize=True):  # with the transpose commented 
             else:
                 V[i] /= np.linalg.norm(V[i])
         else:
+            #print("norm after orthogonalization", np.linalg.norm(V[i]))
             if np.linalg.norm(V[i]) < eps:
                 V[i] = np.zeros_like(V[i])
-    return V#.T
+    return V
 
 
 def get_large(ten, thresh_frac=1 / 3, compress_ouput=True):
@@ -120,11 +123,17 @@ def is_singlet(det, n_orbs):
 
 
 def state_screening(dens_builder_stuff, ints, monomer_charges, n_orbs, frozen, n_occ, n_threads=1,
-                    single_thresh=1/5, double_thresh=1/3.5, triple_thresh=1/2.5):
+                    single_thresh=1/5, double_thresh=1/3.5, triple_thresh=1/2.5, sp_thresh=1/1.1):
     # since in this procedure all elements of the integrals are looped over, one could make use of
-    # this also build an object storing information on which elements of a certain density to compute
-    # and which to neglect, which would speed up the density builder. Making use of sparse backend ontop
+    # this to also build an object storing information on which elements of a certain density to compute
+    # and which to neglect, which would speed up the density builder. Making use of sparse backend on top
     # of that would then also speed up the contractions required to build the XR Hamiltonian.
+    # An other thing to investigate is how the filtered information is converted...Currently if one orbital
+    # transition is found to be important, it will simply be added to a list of important transitions,
+    # from which the determinants are build, but one could include information on which pairs of orbital
+    # transitions are important, i.e. according to the screened integral information build pairs of determinants
+    # which should be applied together on the corresponding fragment when appending the spaces with the
+    # gradient free solver type.
 
     #h01 = raw(ints[0]("T")._as_tuple()[0][(0,1)])
     #h01 += raw(ints[0]("U")._as_tuple()[0][(0,0,1)])
@@ -197,8 +206,6 @@ def state_screening(dens_builder_stuff, ints, monomer_charges, n_orbs, frozen, n
         print(f"multi reference contribution for fragment {frag} detected in orbitals {mr_occs[frag]}")
     """
 
-    # here only the densities are taken into account, for which the initial state (ket) is the neutral state
-    #missing_states = [{0: {}, -1: {}}, {0: {}, -1: {}}]  # note, that within the following procedure all missing contributions are captured without appending the most positively charged states
     missing_states = [{chg: {} for chg in monomer_charges[frag]} for frag in range(2)]
 
     beta_gs_config = sum([2**(n_orbs + i) for i in range(n_occ[1])])
@@ -249,7 +256,7 @@ def state_screening(dens_builder_stuff, ints, monomer_charges, n_orbs, frozen, n
                 continue
             ex = total_gs_config_neutral + 2**comb[0] + 2**comb[1] - 2**comb[2] - 2**comb[3]
             missing_states[frag][0][ex] = dens_builder_stuff[frag][0][0].configs.index(ex)
-
+    
     #print(missing_states[0])
 
 
@@ -398,44 +405,6 @@ def state_screening(dens_builder_stuff, ints, monomer_charges, n_orbs, frozen, n
                 #print(conf_decoder(ex_minus), conf_decoder(ex_plus))
                 missing_states[frag][-1][ex_minus] = dens_builder_stuff[frag][0][-1].configs.index(ex_minus)
                 missing_states[frag][1][ex_plus] = dens_builder_stuff[frag][0][1].configs.index(ex_plus)
-    #raise ValueError("stop")
-    
-    #print(missing_states[0])
-    
-    # neutral spin flip contributions (only for chg 0) from two el ints for single excitations (seems like these are only necessary for 1e-6 Hartree precision)
-    #"""
-    gs = total_gs_config_neutral
-    for frag in range(2):
-        #for chg in range(min(monomer_charges[frag]), max(monomer_charges[frag])):  # loops over -1 and 0
-        chg = 0
-        #dens = dens_looper(raw(dens_arr[frag]["ca"][(chg,chg)]))
-        int = v0101
-        #for elem in missing_orbs(int, dens, frag):  # ref_inds 2 and 3 should be equal to 0 and 1
-        # TODO: something needs to be done with this threshold, which needs to be chosen ridiculously small to not incorporate all determinants
-        for elem in get_large(int, thresh_frac=1/1.005)[frag]:  # spin flip is reduced to lower threshold than single here!!!!!!!!!!!!!!!!!!!!!!!!!
-            if elem in frozen:
-                continue
-            if elem in conf_decoder(total_gs_config_neutral, n_orbs):  # filter out occupied orbitals
-                continue
-            # build excitation from gs det into singly excited det
-            if elem >= n_orbs:  # spin flip beta requires alpha hole
-                ion = gs - 2**(n_occ[0] - 1)
-            else:  # spin flip alpha requires beta hole
-                ion = gs - 2**(n_orbs + n_occ[1] - 1)
-            #if chg == 0:
-            ex = ion + 2**elem
-            #elif chg == -1:
-            #    ex = gs + 2**elem
-            #else:
-            #    raise ValueError(f"chg {chg} not accepted")
-            if ex not in missing_states[frag][chg].keys():
-                #det_state = np.zeros_like(dens_builder_stuff[frag][0][chg].configs)
-                #det_state[dens_builder_stuff[frag][0][chg].configs.index(ex)] = 1.
-                #missing_states[frag][chg][ex] = det_state
-                missing_states[frag][chg][ex] = dens_builder_stuff[frag][0][chg].configs.index(ex)
-    #"""
-    #print(missing_states[0])
-    #print(missing_states[0][0].keys(), missing_states[0][-1].keys())
 
     """
     # check which double excitations are covered already for neutral and anion
@@ -498,7 +467,7 @@ def state_screening(dens_builder_stuff, ints, monomer_charges, n_orbs, frozen, n
                     #det_state[dens_builder_stuff[frag][0][chg].configs.index(ex)] = 1.
                     #missing_states[frag][chg][ex] = det_state
                     missing_states[frag][chg][ex] = dens_builder_stuff[frag][0][chg].configs.index(ex)
-
+    
     #print(missing_states[0])
 
     # ionization contributions from one el ints for anionic triple excitations without spin flip
@@ -533,7 +502,7 @@ def state_screening(dens_builder_stuff, ints, monomer_charges, n_orbs, frozen, n
                     missing_states[frag][chg][ex] = dens_builder_stuff[frag][0][chg].configs.index(ex)
 
     #print(missing_states[0])
-
+    
     # singly and doubly excited anionic determinants from double ionization term
     gs_list = [2**n_occ[i] for i in range(2)]
     for frag in range(2):
@@ -561,6 +530,37 @@ def state_screening(dens_builder_stuff, ints, monomer_charges, n_orbs, frozen, n
             #print(conf_decoder(ex_minus), conf_decoder(ex_plus))
             missing_states[frag][-1][ex1] = dens_builder_stuff[frag][0][-1].configs.index(ex1)
             missing_states[frag][-1][ex2] = dens_builder_stuff[frag][0][-1].configs.index(ex2)
+
+    # neutral spin flip contributions (only for chg 0) from two el ints for single excitations (seems like these are only necessary for 1e-6 Hartree precision)
+    gs = total_gs_config_neutral
+    for frag in range(2):
+        #for chg in range(min(monomer_charges[frag]), max(monomer_charges[frag])):  # loops over -1 and 0
+        chg = 0
+        #dens = dens_looper(raw(dens_arr[frag]["ca"][(chg,chg)]))
+        int = v0101
+        #for elem in missing_orbs(int, dens, frag):  # ref_inds 2 and 3 should be equal to 0 and 1
+        # TODO: something needs to be done with this threshold, which needs to be chosen ridiculously small to not incorporate all determinants
+        for elem in get_large(int, thresh_frac=sp_thresh)[frag]:  # spin flip is reduced to lower threshold than single here!!!!!!!!!!!!!!!!!!!!!!!!!
+            if elem in frozen:
+                continue
+            if elem in conf_decoder(total_gs_config_neutral, n_orbs):  # filter out occupied orbitals
+                continue
+            # build excitation from gs det into singly excited det
+            if elem >= n_orbs:  # spin flip beta requires alpha hole
+                ion = gs - 2**(n_occ[0] - 1)
+            else:  # spin flip alpha requires beta hole
+                ion = gs - 2**(n_orbs + n_occ[1] - 1)
+            #if chg == 0:
+            ex = ion + 2**elem
+            #elif chg == -1:
+            #    ex = gs + 2**elem
+            #else:
+            #    raise ValueError(f"chg {chg} not accepted")
+            if ex not in missing_states[frag][chg].keys():
+                #det_state = np.zeros_like(dens_builder_stuff[frag][0][chg].configs)
+                #det_state[dens_builder_stuff[frag][0][chg].configs.index(ex)] = 1.
+                #missing_states[frag][chg][ex] = det_state
+                missing_states[frag][chg][ex] = dens_builder_stuff[frag][0][chg].configs.index(ex)
         
     #print(missing_states[0])
 
@@ -610,12 +610,13 @@ def state_screening(dens_builder_stuff, ints, monomer_charges, n_orbs, frozen, n
                 # the following part "sorts" the filtered determinants such that every non-singlet determinant is followed by its counterpart,
                 # e.g. the alpha HOMO -> beta LUMO determinant is followed by the beta HOMO -> alpha LUMO determinant for a singlet reference system.
                 # This is important for the stability of the solver later, where these determinants are explicitly provided, but cannot be taken into
-                # the model state space all at once.
+                # the model state space all at once. However, it was found for Be 6-31g that no sorting makes the result much worse for gradient based opt!
+                """
                 it_is_singlet, pair = is_singlet(det_dec, n_orbs)
                 if pair in already_included:
                     continue
-                if it_is_singlet:
-                    continue
+                #if it_is_singlet:
+                #    continue
                 try:
                     mirror_det_ind = missing_states[frag][chg][pair]
                     print(chg, conf_decoder(pair, n_orbs))
@@ -624,6 +625,7 @@ def state_screening(dens_builder_stuff, ints, monomer_charges, n_orbs, frozen, n
                     already_included.append(pair)
                 except KeyError:
                     continue
+                """
             #if len(det_states) >= 150:
             #    print(len(det_states))
             #    raise RuntimeError(f"for fragment {frag} with charge {chg} the additionally screened states exceed 150...this will take forever")

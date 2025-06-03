@@ -85,7 +85,7 @@ def get_slices(dict, chgs, append=False, type="standard"):
             raise ValueError(f"type {type} is unknown")
     return ret
 
-def get_gs(current_state_dict, d_sl, H1_new, H2_new, monomer_charges):
+def get_gs(current_state_dict, d_sl, H1_new, H2_new, monomer_charges, target_state):
         #new_gs_en, new_gs_vec = get_xr_states(ints, dens, 0)  # this is not possible, until solvers are fixed
         #H1_new, H2_new = get_xr_H(ints, dens, xr_order)
         n_states = [sum(current_state_dict[i][chg] for chg in monomer_charges[i]) for i in range(2)]
@@ -105,13 +105,13 @@ def get_gs(current_state_dict, d_sl, H1_new, H2_new, monomer_charges):
         full_eigvals, full_eigvec_l = sort_eigen((full_eigvals_raw, full_eigvec_l_unsorted))
         full_eigvals_check, full_eigvec_r = sort_eigen((full_eigvals_raw, full_eigvec_r_unsorted))
         if any(full_eigvals - full_eigvals_check):  # this check should be unnecessary and might need to be refined for fully degenerate states
-            raise ValueError("sorting went wrong with the sorting")
+            raise ValueError("something went wrong with the sorting")
         #full_eigvals, full_eigvec_r = sort_eigen(np.linalg.eig(H2_new))
         #return full_eigvals[0], H2_new, full_eigvec_l[:, 0].T / np.linalg.norm(full_eigvec_l[:, 0]), full_eigvec_r[:, 0].T
         print("currently state gradients are build with only dr and not dl!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
-        return full_eigvals[0], H2_new, full_eigvec_r[:, 0].T, full_eigvec_r[:, 0].T, full_eigvec_l[:, 0].T / np.linalg.norm(full_eigvec_l[:, 0])
+        return full_eigvals[target_state], H2_new, full_eigvec_r[:, target_state].T, full_eigvec_r[:, target_state].T, full_eigvec_l[:, target_state].T / np.linalg.norm(full_eigvec_l[:, target_state])
 
-def state_gradients(frag_ind, ints, dens_builder_stuff, dens, monomer_charges, n_threads=1, xr_order=0, dets={}, grad_level="herm"):
+def state_gradients(frag_ind, ints, dens_builder_stuff, dens, monomer_charges, n_threads=1, xr_order=0, dets={}, grad_level="herm", target_state=0):
     if xr_order != 0:
         raise NotImplementedError("gradients for higher orders in S than 0 are not implemented yet")
 
@@ -136,7 +136,7 @@ def state_gradients(frag_ind, ints, dens_builder_stuff, dens, monomer_charges, n
 
     #gs_energy, gs_state = get_xr_states(ints, dens, xr_order)
     H1_for_d, H2_for_d = get_xr_H(ints, dens, xr_order, monomer_charges)
-    gs_energy, H_no_dets, dl, dr, dl_extra = get_gs(state_dict, d_slices, H1_for_d, H2_for_d, monomer_charges)
+    gs_energy, H_no_dets, dl, dr, dl_extra = get_gs(state_dict, d_slices, H1_for_d, H2_for_d, monomer_charges, target_state)
     E = np.real(gs_energy)
     #dl, dr = gs_state
     print("dropping imaginary part of non-diagonalized d with norm", np.linalg.norm(np.imag(dl)), np.linalg.norm(np.imag(dr)))

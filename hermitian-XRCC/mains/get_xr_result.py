@@ -573,11 +573,11 @@ def get_xr_S(ints, dens, xr_order, monomer_charges):
 
     return S2
 
-def get_xr_states_from_H(H1, H2):
+def get_xr_states_from_H(H1, H2, target_state):
     #H1, H2 = get_xr_H(ints, dens, xr_order)
     out, resources = qode.util.output(log=qode.util.textlog(echo=True)), qode.util.parallel.resources(1)
     #E, T = excitonic.ccsd((H1,[[None,H2],[None,None]]), out, resources)
-    E, T = excitonic.fci((H1,[[None,H2],[None,None]]), out)
+    E, T = excitonic.fci((H1,[[None,H2],[None,None]]), out, target_state=target_state)
     #E += sum(nuc_rep[m1,m2] for m1 in range(2) for m2 in range(m1+1))
     out.log("\nTotal Excitonic CCSD Energy (test) (without nuc_rep) = ", E)
 
@@ -585,6 +585,6 @@ def get_xr_states_from_H(H1, H2):
 
     return E, T
 
-def get_xr_states(ints, dens, xr_order, monomer_charges):
+def get_xr_states(ints, dens, xr_order, monomer_charges, target_state):
     H1, H2 = get_xr_H(ints, dens, xr_order, monomer_charges)
-    return get_xr_states_from_H(H1, H2)
+    return get_xr_states_from_H(H1, H2, target_state=target_state)

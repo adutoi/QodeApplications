@@ -51,11 +51,14 @@ backend_contract_path(True)
 #class empty(object):  pass
 
 
-def optimize_orbs(displacement, max_iter, xr_order, conv_thresh=1e-6, dens_filter_thresh=1e-7, state_prep_guess=True):#, pen_start=10):
+def optimize_orbs(max_iter, xr_order, BeN, ints, dens, dens_builder_stuff, monomer_charges=[[0, +1, -1], [0, +1, -1]]):#, pen_start=10):
     ######################################################
     # Initialize integrals and density preliminaries
     ######################################################
-
+    XR_energies = []
+    adap_xr_energies = []
+    int_timer = timer()
+    """
     n_frag       = 2
     displacement = displacement
     project_core = True
@@ -115,7 +118,9 @@ def optimize_orbs(displacement, max_iter, xr_order, conv_thresh=1e-6, dens_filte
         dens = [densities.build_tensors(*dens_builder_stuff[frag][:-1], options=density_options, n_threads=n_threads) for frag in range(2)]
     else:
         screening_energies, BeN, ints, dens, dens_builder_stuff = optimize_states(displacement, 0, xr_order)
-        state_coeffs_og = [[dens_builder_stuff[frag][0][chg].coeffs for chg in monomer_charges[frag]] for frag in range(2)]
+    """
+
+    state_coeffs_og = [[dens_builder_stuff[frag][0][chg].coeffs for chg in monomer_charges[frag]] for frag in range(2)]
 
     n_states = [sum(len(state_coeffs_og[i][chg]) for chg in monomer_charges[i]) for i in range(2)]
     #n_confs = [sum(len(state_coeffs_og[i][chg][0]) for chg in monomer_charges[i]) for i in range(2)]
@@ -302,7 +307,7 @@ def optimize_orbs(displacement, max_iter, xr_order, conv_thresh=1e-6, dens_filte
         # Implementation uses MOs with mo,ao inds, but psi4 provides ao,mo, so MOs are transposed here, as they are not used otherwise anymore
         BeN[i].basis.MOcoeffs = np.concatenate((BeN[i].basis.MOcoeffs.T, BeN[i].basis.MOcoeffs.T))
         BeN[i].basis.n_spatial_orb *= 2
-        BeN[i].basis.core = [0, 9]
+        BeN[i].basis.core = [0, (n_occ[i] + n_virt[i]) // 2]
     ints[0].fragments = BeN
 
     int_ranges = {2: ints[0].T.ranges, 3: ints[0].U.ranges, 4: ints[0].V.ranges}
@@ -524,9 +529,13 @@ def optimize_orbs(displacement, max_iter, xr_order, conv_thresh=1e-6, dens_filte
                 print("pre step ov pen, post step ov pen", overlap_pen * overlap_term**2, overlap_pen * overlap_term_tmp)
                 # TODO: for proper starting reference and also monitoring with the scale factor overlap_term should be build from S and then contracted here with dl and dr
                 adap_xr_energies[-1] += overlap_pen * overlap_term_tmp
-            if (XR_energies[-1] - XR_energies[-2] < 1e-8 and d_imag_norm < 1e-9) and (np.max(off_diag_blocks_mo(mo_tmp)) < 1e-4 and abs(overlap_term_init - overlap_term_tmp_check) < 1e-5):  # this is what we are looking for, but it might not be fetched out in the other if clause, because the penalty is too large
+            #if (XR_energies[-1] - XR_energies[-2] < 1e-8 and d_imag_norm < 1e-9) and (np.max(off_diag_blocks_mo(mo_tmp)) < 1e-4 and abs(overlap_term_init - overlap_term_tmp_check) < 1e-5):  # this is what we are looking for, but it might not be fetched out in the other if clause, because the penalty is too large
+            #    break
+            #if adap_xr_energies[-1] - adap_xr_energies[-2] < 1e-6 and (XR_energies[-1] - XR_energies[-2] < 1e-8 and abs(overlap_term_init - overlap_term_tmp_check) < 1e-5):
+                #break
+            if (XR_energies[-1] - XR_energies[-2] < 1e-8 and d_imag_norm < 1e-9) and np.max(off_diag_blocks_mo(mo_tmp)) < 1e-4:  # this is what we are looking for, but it might not be fetched out in the other if clause, because the penalty is too large
                 break
-            if adap_xr_energies[-1] - adap_xr_energies[-2] < 1e-6 and (XR_energies[-1] - XR_energies[-2] < 1e-8 and abs(overlap_term_init - overlap_term_tmp_check) < 1e-5):
+            if adap_xr_energies[-1] - adap_xr_energies[-2] < 1e-6 and XR_energies[-1] - XR_energies[-2] < 1e-8:
                 #break
                 
                 if d_imag_norm < 1e-9:
@@ -632,7 +641,7 @@ def optimize_orbs(displacement, max_iter, xr_order, conv_thresh=1e-6, dens_filte
 
     #hess_inv = blockwise_invert(hess_init)
 
-    grads_prev = g_and_h.orb_grads(dl, dr, dens, ints)#, off_diag=False)
+    grads_prev = g_and_h.orb_grads(dl, dr, dens, ints, off_diag=False)
     #grads_prev *= 0.02
     print("grads norm", np.linalg.norm(grads_prev))
     x_prev = - grads_prev
@@ -669,9 +678,9 @@ def optimize_orbs(displacement, max_iter, xr_order, conv_thresh=1e-6, dens_filte
     mo_init_left = np.concatenate((BeN[0].basis.MOcoeffs, np.zeros_like(BeN[0].basis.MOcoeffs)))
     mo_init_right = np.concatenate((np.zeros_like(BeN[1].basis.MOcoeffs), BeN[1].basis.MOcoeffs))
     mo_init = np.concatenate((mo_init_left, mo_init_right), axis=1)
-    ov_grad_term, ov_term = g_and_h.S_orb_grads(dl, dr, dens, ints)
+    #ov_grad_term, ov_term = g_and_h.S_orb_grads(dl, dr, dens, ints)
     #dl, dr, new_ints, mo_prev, pen = pen_apply(grads_prev, ints, scale, mo_init)#, off_diag_pen=0)#, hess=hess_inv)
-    dl, dr, new_ints, mo_prev, off_diag_pen = pen_apply(grads_prev, ints, scale, mo_init, dl, dr, overlap_grad_term=ov_grad_term, overlap_term=ov_term)#, hess=hess_inv)
+    dl, dr, new_ints, mo_prev, off_diag_pen = pen_apply(grads_prev, ints, scale, mo_init, dl, dr)#, overlap_grad_term=ov_grad_term, overlap_term=ov_term)#, hess=hess_inv)
     #mo_prevprev = mo_init
 
     # the following could also be implemented more efficiently using the
@@ -694,8 +703,8 @@ def optimize_orbs(displacement, max_iter, xr_order, conv_thresh=1e-6, dens_filte
         #hess_inv = blockwise_invert(hess_init)
         #hess_init_2 = hess_init.reshape((sum(n_occ) + sum(n_virt)) ** 2, (sum(n_occ) + sum(n_virt)) ** 2)
         #hess_inv = sequential_2b2_invert(hess_init_2).reshape(hess_inv.shape)
-        grads = g_and_h.orb_grads(dl, dr, dens, new_ints)#, off_diag=False)
-        ov_grad_term, ov_term = g_and_h.S_orb_grads(dl, dr, dens, new_ints)
+        grads = g_and_h.orb_grads(dl, dr, dens, new_ints, off_diag=False)
+        #ov_grad_term, ov_term = g_and_h.S_orb_grads(dl, dr, dens, new_ints)
         #if iter % 5 == 0:
         #    hess_init = g_and_h.orb_hess_diag(dl, dr, dens, new_ints)
         #    #if iter < 15:
@@ -775,7 +784,7 @@ def optimize_orbs(displacement, max_iter, xr_order, conv_thresh=1e-6, dens_filte
         #pen_grad = grads + 2 * pen * off_diag_blocks_mo(mo_prev) @ mo_prevprev.T
         #grad_norm = np.linalg.norm(pen_grad)
         #dl, dr, new_ints, mo_new, pen = pen_apply(grads, new_ints, scale, mo_prev, off_diag_pen=off_diag_pen, hess=hess_inv)
-        dl, dr, new_ints, mo_new, off_diag_pen = pen_apply(grads, new_ints, scale, mo_prev, dl, dr, overlap_grad_term=ov_grad_term, overlap_term=ov_term)#, hess=hess_inv)
+        dl, dr, new_ints, mo_new, off_diag_pen = pen_apply(grads, new_ints, scale, mo_prev, dl, dr)#, overlap_grad_term=ov_grad_term, overlap_term=ov_term)#, hess=hess_inv)
         #pen *= 0.5
         grad_norm = np.linalg.norm(grads)
 
@@ -797,9 +806,9 @@ def optimize_orbs(displacement, max_iter, xr_order, conv_thresh=1e-6, dens_filte
                 pass
         except IndexError:
             pass
-    return XR_energies[-1]
+    return XR_energies[-1], new_ints
     
 
 
-print(optimize_orbs(4.5, 20, 0, state_prep_guess=False))
+#print(optimize_orbs(4.5, 20, 0, state_prep_guess=False))
 #print([optimize_orbs(5.0 + r / 2, 20, 0) for r in range(1)])
