@@ -27,7 +27,7 @@ from qode.atoms.integrals.fragments import unblock_2, unblock_last2, unblock_4
 from get_ints import get_ints
 import psi4_check
 
-from qode.fermion_field import CI_space_traits, field_op_ham, configurations
+from qode.many_body.fermion_field import CI_space_traits, field_op_ham, configurations
 
 import densities
 
@@ -113,11 +113,11 @@ def build_Be_rho(basis, dist, statesthresh, options, n_threads):
     all_configs_1 = list()
     all_configs_0 = set()
     nested = []
-    for config_dn1,configs_dn0 in dn_configs_decomp:
-        for config_up1,configs_up0 in up_configs_decomp:
-            config_1  = combine_configs([config_up1, config_dn1])
-            configs_0 = configurations.tensor_product_configs([configs_up0, configs_dn0], [num_spatial_atom, num_spatial_atom])
-            nested += [(config_1, configs_0)]
+    for configs_up0,config_up1 in up_configs_decomp:
+        for configs_dn0,config_dn1 in dn_configs_decomp:
+            config_1  = combine_configs([config_dn1, config_up1])
+            configs_0 = configurations.tensor_product_configs([configs_dn0, configs_up0], [num_spatial_atom, num_spatial_atom])
+            nested += [(configs_0, config_1)]
             all_configs_1 += [config_1]
             all_configs_0 |= set(configs_0)
     all_configs_0 = list(all_configs_0)
@@ -139,7 +139,7 @@ def build_Be_rho(basis, dist, statesthresh, options, n_threads):
     frag0_to_dimer = [[[] for _ in range(len(sorted_configs_0_n))] for sorted_configs_0_n in sorted_configs_0]
     dimer_to_frags = []
     P = 0
-    for config_1,configs_0 in nested:
+    for configs_0,config_1 in nested:
         n1 = config_1.bit_count()
         i1 = sorted_configs_1[n1].index(config_1)
         for config_0 in configs_0:

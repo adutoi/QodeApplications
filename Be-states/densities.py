@@ -22,7 +22,7 @@ import multiprocessing
 from qode.util           import sort_eigen
 from qode.util.PyC       import Double
 from qode.math.tensornet import tl_tensor, tensor_sum, raw
-from qode.fermion_field import field_op
+from qode.many_body.fermion_field import field_op
 import compress
 
 # states[n].coeffs  = [numpy.array, numpy.array, . . .]   One (effectively 1D) array of coefficients per n-electron state
