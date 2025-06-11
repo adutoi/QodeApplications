@@ -56,30 +56,37 @@ def mask_core(h, V, core):
     return
 
 
-def dimer_integrals(frags, printout=print):
+def dimer_integrals(frags, printout=print, core_hack=False):
     symm_ints, bior_ints, nuc_rep = get_ints(frags, printout=indented(no_print))
 
     core = (combine_orb_lists(frags[0].basis.core, frags[0].basis.core, frags[0].basis.n_spatial_orb),
             combine_orb_lists(frags[1].basis.core, frags[1].basis.core, frags[1].basis.n_spatial_orb))
 
     def _monomer_integrals(m):
-        N, T, U, V = nuc_rep[m,m], symm_ints.T[m,m], symm_ints.U[m,m,m], symm_ints.V[m,m,m,m]
+        N, S, T, U, V = nuc_rep[m,m], symm_ints.S[m,m], symm_ints.T[m,m], symm_ints.U[m,m,m], symm_ints.V[m,m,m,m]
         h = T + U
         V = V + 0
-        mask_core(h, V, core[m])
-        return N, h, V
+        if core_hack:
+            mask_core(h, V, [0,9])
+        else:
+            mask_core(h, V, core[m])
+        return struct(N=N, S=S, h=h, V=V)
     monomer_ints = [_monomer_integrals(m) for m in range(2)]
 
     core = combine_orb_lists(core[0], core[1], 2*frags[0].basis.n_spatial_orb)
 
     N = nuc_rep[0,0] + nuc_rep[1,1] + nuc_rep[0,1]
+    S = unblock_2(    symm_ints.S, frags, spin_orbs=True)
     T = unblock_2(    bior_ints.T, frags, spin_orbs=True)
     U = unblock_last2(bior_ints.U, frags, spin_orbs=True)
     V = unblock_4(    bior_ints.V, frags, spin_orbs=True)
     h = T + U[0] + U[1]
 
-    mask_core(h, V, core)
-    dimer_ints = N, h, V
+    if core_hack:
+        mask_core(h, V, [0,9,18,27])
+    else:
+        mask_core(h, V, core)
+    dimer_ints = struct(N=N, S=S, h=h, V=V)
 
     return monomer_ints, dimer_ints
 

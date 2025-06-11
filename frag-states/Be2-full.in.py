@@ -21,12 +21,12 @@ basis = "6-31G"
 frags = [
     struct(
         atoms=[struct(element="Be", position=[0, 0, 0])],    # promote to struct internally
-        core=[0],    # needs ...
+        core=[],    # needs ...
         charge=0     # ... defaulting mechanism
     ),
     struct(
         atoms=[struct(element="Be", position=[0, 0, 4.5])],
-        core=[0],
+        core=[],
         charge=0
     )
 ]
