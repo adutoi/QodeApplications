@@ -16,6 +16,20 @@
 #    along with QodeApplications.  If not, see <http://www.gnu.org/licenses/>.
 #
 
+
+# This solver is not yet able to converge to viable solutions!!!!!!!!!!!!!!!
+# It would be highly beneficial to optimize the fragment state spaces in the
+# much smaller orbital space than in the vast state space, but with these limitations
+# optimization in the orbital space can e.g. never include spin-flip contributions
+# from non-spin-flip determinants. Hence, a short pre optimization in the state space
+# followed by a full optimization in the orbital space would be preferable.
+# However, optimizing in the orbital space seems to only yield better energies
+# in a trade-off for larger orbital overlaps. This has been tested for various
+# state spaces, solver parameters and parameters constraining the optimization,
+# but so far the trade-off could not be circumvented.
+
+
+
 from   get_ints import get_ints, tensorly_wrapper2, tens_diff
 from   get_xr_result import get_xr_states, get_xr_H, get_xr_S
 from qode.math.tensornet import raw, tl_tensor, backend_contract_path

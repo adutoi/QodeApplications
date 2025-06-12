@@ -27,7 +27,7 @@ import densities
 import pickle
 
 
-def orthogonalize(U, eps=1e-6, normalize=True):
+def orthogonalize(U, eps=1e-6, filter_list=[]):
     # gram schmidt orthogonalizer for orthogonalizing rows of a matrix
     # one might has to play with eps a little here
     n = len(U)
@@ -38,17 +38,18 @@ def orthogonalize(U, eps=1e-6, normalize=True):
         coeff_vec = np.dot(prev_basis, V[i].T)  # each entry is np.dot(V[j], V[i]) for all j < i
         # subtract projections of V[i] onto already determined basis V[0:i]
         V[i] -= np.dot(coeff_vec, prev_basis).T
-        if normalize:
-            if np.linalg.norm(V[i]) < eps:
-                #V[i][V[i] < eps] = 0.   # set the small entries to 0
+        if np.linalg.norm(V[i]) < eps:
+            V[i] = np.zeros_like(V[i])
+            continue
+        if len(filter_list) == 0:
+            V[i] /= np.linalg.norm(V[i])
+        else:
+            if len(filter_list) != n:
+                raise ValueError("filter list requires same length as basis vectors")
+            if np.linalg.norm(V[i]) * filter_list[i] < eps:
                 V[i] = np.zeros_like(V[i])
-                #print("zero vector encountered!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
             else:
                 V[i] /= np.linalg.norm(V[i])
-        else:
-            #print("norm after orthogonalization", np.linalg.norm(V[i]))
-            if np.linalg.norm(V[i]) < eps:
-                V[i] = np.zeros_like(V[i])
     return V
 
 

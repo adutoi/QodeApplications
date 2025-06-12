@@ -537,13 +537,13 @@ def optimize_states(max_iter, xr_order, dens_builder_stuff, ints, n_occ, n_orbs,
         #print(f"target state = {target_state}")
         target_vecs = [np.real(full_eigvecs[lr][:, i].reshape((n_states[0], n_states[1]))) for i in target_state for lr in range(2)]
         #print(len(target_vecs))
-        def get_large_elems(mat, eps=1e-3):
-            ret = {}
-            for i, vec in enumerate(mat):
-                for j, elem in enumerate(vec):
-                    if abs(elem) > eps:
-                        ret[(i, j)] = elem
-            return ret
+        #def get_large_elems(mat, eps=1e-3):
+        #    ret = {}
+        #    for i, vec in enumerate(mat):
+        #        for j, elem in enumerate(vec):
+        #            if abs(elem) > eps:
+        #                ret[(i, j)] = elem
+        #    return ret
         #print(get_large_elems(target_vecs[0]))
         #print(get_large_elems(target_vecs[1]))
 
@@ -603,26 +603,30 @@ def optimize_states(max_iter, xr_order, dens_builder_stuff, ints, n_occ, n_orbs,
         new_large_vecs = [[], []]
         dens_eigvals = [[], []]
         #reduction_factor = 1e-2
+
         for frag in range(2):
             #reduce = False
             #prev_norm = 1.0
-            for ind, orth_vec in enumerate(orthogonalize(new_large_vecs_full[frag].T, normalize=False)):#[len(dens_eigvals[frag]):, :]):
+            #new_large_vals_full[frag], new_large_vecs_full[frag] = sort_eigen((new_large_vals_full[frag], new_large_vecs_full[frag]), order="descending")
+            for ind, orth_vec in enumerate(orthogonalize(new_large_vecs_full[frag].T, eps=dens_filter_thresh, filter_list=new_large_vals_full[frag])):#normalize=False)):#[len(dens_eigvals[frag]):, :]):
                 # The left eigvecs are very close to the right eigvecs depending on the system, but this way they are filtered out in a consistent manner
                 # and it might also be helpful when looking at multiple states.
                 # If the threshold is lowered, beware that the orthogonalizer also has a threshold for setting parallel vectors to zero.
                 #print(np.linalg.norm(orth_vec))
-                orth_vec_norm = np.linalg.norm(orth_vec)
+                #orth_vec_norm = np.linalg.norm(orth_vec)
                 #if orth_vec_norm > prev_norm:
                 #    reduce = True
                 # to further reduce the state space for multiple states eigvals are also multiplied with vec norms after orthogonalization here
-                if orth_vec_norm > 1e-5:
-                    new_large_vecs[frag].append(orth_vec)
-                    dens_eigvals[frag].append(new_large_vals_full[frag][ind] * orth_vec_norm)
-                    #if not reduce:
-                    #    dens_eigvals[frag][-1] *= reduction_factor
-                    #new_large_vecs[frag] = np.concatenate((new_large_vecs[frag], new_l_contr.T), axis=1)
-                    #dens_eigvals[frag] = np.concatenate((dens_eigvals[frag], dens_eigvals_extra[frag][ind]))
-                    #print("right eigvec set has been appended with left eigvec")
+                #if orth_vec_norm > 1e-5:
+                if np.linalg.norm(orth_vec) < 1e-10:  # filter out zero vectors
+                    continue
+                new_large_vecs[frag].append(orth_vec)
+                dens_eigvals[frag].append(new_large_vals_full[frag][ind])
+                #if not reduce:
+                #    dens_eigvals[frag][-1] *= reduction_factor
+                #new_large_vecs[frag] = np.concatenate((new_large_vecs[frag], new_l_contr.T), axis=1)
+                #dens_eigvals[frag] = np.concatenate((dens_eigvals[frag], dens_eigvals_extra[frag][ind]))
+                #print("right eigvec set has been appended with left eigvec")
                 #prev_norm = orth_vec_norm
             #print(new_large_vecs[frag])
             #new_large_vecs[frag] = np.array(new_large_vecs[frag])#, axis=1)
@@ -639,12 +643,12 @@ def optimize_states(max_iter, xr_order, dens_builder_stuff, ints, n_occ, n_orbs,
         # too large -> truncation errors
         # too small -> numerical inconsistencies through terms to small to resolve even
         # with double precision (at least I think so...where else should the numerical instability come from?)
-        keepers = [[], []]
-        for frag in range(2):
-            for i, vec in enumerate(new_large_vecs[frag]):#.T):
-                if dens_eigvals[frag][i] >= dens_eigval_thresh:
-                    keepers[frag].append(vec)
-            print(f"{len(keepers[frag])} states are kept for frag {frag}")
+        #keepers = [[], []]
+        #for frag in range(2):
+        #    for i, vec in enumerate(new_large_vecs[frag]):#.T):
+        #        if dens_eigvals[frag][i] >= dens_eigval_thresh:
+        #            keepers[frag].append(vec)
+        #    print(f"{len(keepers[frag])} states are kept for frag {frag}")
 
         large_vec_map = []
         for frag in range(2):
@@ -653,7 +657,7 @@ def optimize_states(max_iter, xr_order, dens_builder_stuff, ints, n_occ, n_orbs,
                 large_vec_map_[d_slices[frag][chg], c_slices[frag][chg]] = state_coeffs[frag][chg]
             large_vec_map.append(large_vec_map_)
 
-        new_vecs = [np.einsum("ij,jp->ip", np.array(keepers[frag]), large_vec_map[frag]) for frag in range(2)]
+        new_vecs = [np.einsum("ij,jp->ip", np.array(new_large_vecs[frag]), large_vec_map[frag]) for frag in range(2)]
         
         chg_sorted_keepers = [{chg: [] for chg in monomer_charges[frag]} for frag in range(2)]
         for frag in range(2):
@@ -668,8 +672,8 @@ def optimize_states(max_iter, xr_order, dens_builder_stuff, ints, n_occ, n_orbs,
         for frag in range(2):
             print(f"fragment {frag}")
             for chg, vecs in chg_sorted_keepers[frag].items():
-                print(f"for charge {chg} {len(vecs)} states are kept")
                 chg_sorted_keepers[frag][chg] = [i for i in orthogonalize(np.array(vecs)) if np.linalg.norm(i) > 0.99]
+                print(f"for charge {chg} {len(chg_sorted_keepers[frag][chg])} states are kept")
 
         for frag in range(2):
             for chg in monomer_charges[frag]:
@@ -700,6 +704,12 @@ def optimize_states(max_iter, xr_order, dens_builder_stuff, ints, n_occ, n_orbs,
     
     def alternate_enlarge_and_opt(frag_ind, dens_builder_stuff, dens, state_coeffs, dens_eigval_thresh=dens_filter_thresh, dets={}, target_state=target_state):
         print(f"opt frag {frag_ind}")
+
+        if type(target_state) != int:
+            if len(target_state) > 1:
+                # this has not been done, because the fragment state spaces would get too big
+                # for the XR Hamiltonian evaluation, before they can be reduced again via filtering
+                raise NotImplementedError("The gradient based optimizer is currently only implemented for single states")
 
         #############################################
         # Obtaining the derivatives for frag frag_ind
@@ -810,6 +820,7 @@ def optimize_states(max_iter, xr_order, dens_builder_stuff, ints, n_occ, n_orbs,
         print("imag contribution of lowest eigvec of full H with grads with eig", np.linalg.norm(np.imag(full_eigvec_r[:, target_state])))#, np.linalg.norm(np.imag(full_eigvec_l[:, 0])))
 
         # now determine which elements of the eigvec to keep
+        """
         #full_gs_vec = np.real(full_eigvec[:, 0].reshape((2 - frag_ind) * n_states[0], (1 + frag_ind) * n_states[1]))
         #full_gs_vec = np.real(full_eigvec[:, 0].reshape(n_states[0], n_states[1]))
         full_gs_vec_l = np.real(full_eigvec_l[:, target_state].reshape((n_states[0], n_states[1])))
@@ -819,17 +830,17 @@ def optimize_states(max_iter, xr_order, dens_builder_stuff, ints, n_occ, n_orbs,
         # Filter which states to keep
         #############################
         #print("currently density filtering is done with only dr and not dl!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
-        #"""
-        dens_mat_a_l = np.einsum("ij,kj->ik", full_gs_vec_l, full_gs_vec_l)#np.conj(full_gs_vec))  # contract over frag_b part
-        dens_mat_b_l = np.einsum("ij,ik->jk", full_gs_vec_l, full_gs_vec_l)#np.conj(full_gs_vec))  # contract over frag_a part
-        dens_mat_a_r = np.einsum("ij,kj->ik", full_gs_vec_r, full_gs_vec_r)#np.conj(full_gs_vec))  # contract over frag_b part
-        dens_mat_b_r = np.einsum("ij,ik->jk", full_gs_vec_r, full_gs_vec_r)#np.conj(full_gs_vec))  # contract over frag_a part
+        
+        #dens_mat_a_l = np.einsum("ij,kj->ik", full_gs_vec_l, full_gs_vec_l)#np.conj(full_gs_vec))  # contract over frag_b part
+        #dens_mat_b_l = np.einsum("ij,ik->jk", full_gs_vec_l, full_gs_vec_l)#np.conj(full_gs_vec))  # contract over frag_a part
+        #dens_mat_a_r = np.einsum("ij,kj->ik", full_gs_vec_r, full_gs_vec_r)#np.conj(full_gs_vec))  # contract over frag_b part
+        #dens_mat_b_r = np.einsum("ij,ik->jk", full_gs_vec_r, full_gs_vec_r)#np.conj(full_gs_vec))  # contract over frag_a part
 
         # not sure if this is the appropriate way to build one set of states out of the two densities intead of two sets, which are very similar
         # maybe better build dens directly as full_gs_vec_l @ full_gs_vec_r.T, but this yields eigenvectors with large imaginary contributions
         #dens_mat_a = 0.5 * (dens_mat_a_l + dens_mat_a_r)
         #dens_mat_b = 0.5 * (dens_mat_b_l + dens_mat_b_r)
-        #"""
+        
         #dens_mat_a = np.einsum("ij,kj->ik", full_gs_vec_r, full_gs_vec_r)#np.conj(full_gs_vec))  # contract over frag_b part
         #dens_mat_b = np.einsum("ij,ik->jk", full_gs_vec_r, full_gs_vec_r)#np.conj(full_gs_vec))  # contract over frag_a part
 
@@ -859,14 +870,119 @@ def optimize_states(max_iter, xr_order, dens_builder_stuff, ints, n_occ, n_orbs,
         new_large_vecs_full = [np.real(np.concatenate((dens_eigvecs_a, dens_eigvecs_a2), axis=1)),
                                np.real(np.concatenate((dens_eigvecs_b, dens_eigvecs_b2), axis=1))]
         dens_eigvals_extra = [dens_eigvals_a2, dens_eigvals_b2]
+        new_large_vals_full = [np.concatenate((dens_eigvals_a, dens_eigvals_a2)), np.concatenate((dens_eigvals_b, dens_eigvals_b2))]
         for frag in range(2):
-            for ind, new_l_contr in enumerate(orthogonalize(new_large_vecs_full[frag].T, normalize=False)[len(dens_eigvals[frag]):, :]):
+            for ind, new_l_contr in enumerate(orthogonalize(new_large_vecs_full[frag].T, eps=dens_filter_thresh, filter_list=new_large_vals_full[frag])[len(dens_eigvals[frag]):, :]):
                 # this seems unnecessary, since the left eigvecs seem to be too close to the right eigvecs for the given threshold.
                 # if the threshold is lowered, beware that the orthogonalizer also has a threshold for setting parallel vectors to zero
                 if np.linalg.norm(new_l_contr) > 1e-5:
                     new_large_vecs[frag] = np.concatenate((new_large_vecs[frag], new_l_contr.T), axis=1)
                     dens_eigvals[frag] = np.concatenate((dens_eigvals[frag], dens_eigvals_extra[frag][ind]))
                     print("right eigvec set has been appended with left eigvec")
+        """
+
+
+        if type(target_state) == int:
+            target_state = [target_state]
+
+        full_eigvecs = [full_eigvec_r, full_eigvec_l]
+        #print(f"target state = {target_state}")
+        target_vecs = [np.real(full_eigvecs[lr][:, i].reshape((n_states[0], n_states[1]))) for i in target_state for lr in range(2)]
+        #print(len(target_vecs))
+        #def get_large_elems(mat, eps=1e-3):
+        #    ret = {}
+        #    for i, vec in enumerate(mat):
+        #        for j, elem in enumerate(vec):
+        #            if abs(elem) > eps:
+        #                ret[(i, j)] = elem
+        #    return ret
+        #print(get_large_elems(target_vecs[0]))
+        #print(get_large_elems(target_vecs[1]))
+
+        #full_gs_vec_l = np.real(full_eigvec_l[:, target_state].reshape((n_states[0], n_states[1])))
+        #full_gs_vec_r = np.real(full_eigvec_r[:, target_state].reshape((n_states[0], n_states[1])))
+
+        dens_mats = [[np.einsum("ij,kj->ik", vec, vec) for vec in target_vecs],  # contract over frag_b part
+                     [np.einsum("ij,ik->jk", vec, vec) for vec in target_vecs]]  # contract over frag_a part
+        #dens_mat_a_l = np.einsum("ij,kj->ik", full_gs_vec_l, full_gs_vec_l)#np.conj(full_gs_vec))  # contract over frag_b part
+        #dens_mat_b_l = np.einsum("ij,ik->jk", full_gs_vec_l, full_gs_vec_l)#np.conj(full_gs_vec))  # contract over frag_a part
+        #dens_mat_a_r = np.einsum("ij,kj->ik", full_gs_vec_r, full_gs_vec_r)#np.conj(full_gs_vec))  # contract over frag_b part
+        #dens_mat_b_r = np.einsum("ij,ik->jk", full_gs_vec_r, full_gs_vec_r)#np.conj(full_gs_vec))  # contract over frag_a part
+        #print(get_large_elems(dens_mats[0][0]))
+        #print(get_large_elems(dens_mats[0][1]))
+
+        #dens_eigvals_a, dens_eigvecs_a = sort_eigen(np.linalg.eigh(dens_mat_a_r), order="descending")
+        #dens_eigvals_b, dens_eigvecs_b = sort_eigen(np.linalg.eigh(dens_mat_b_r), order="descending")
+        #dens_eigvals_a2, dens_eigvecs_a2 = sort_eigen(np.linalg.eigh(dens_mat_a_l), order="descending")
+        #dens_eigvals_b2, dens_eigvecs_b2 = sort_eigen(np.linalg.eigh(dens_mat_b_l), order="descending")
+        #print(dens_eigvals_a)
+        #print(dens_eigvals_b)
+        #dens_eigvals = [dens_eigvals_a, dens_eigvals_b]
+        #new_large_vecs = [dens_eigvecs_a, dens_eigvecs_b]
+        dens_eigpairs = [[sort_eigen(sp.linalg.eigh(mat), order="descending") for mat in dens_mats[frag]] for frag in range(2)]
+        #for frag in range(2):
+        #    for mat in dens_mats[frag]:
+        #        eigvals, eigvecs = sort_eigen(np.linalg.eigh(mat), order="descending")
+        #        dens_eigpairs[frag].append(eigvals)
+        #        dens_eigpairs[frag].append(eigvecs)
+        #dens_eigvals = [pair[0] for pair in dens_eigpairs]
+        #dens_eigvecs = [pair[1] for pair in dens_eigpairs]
+        # the following is tricky...
+        # building everything here and then orthogonalize will only take the first eigenvector into account,
+        # since they build the full space and therefore one needs to either sort it differently or truncate before orthogonalizing
+        new_large_vecs_full = [np.real(np.concatenate(tuple([pair[1] for pair in dens_eigpairs[frag]]), axis=1)) for frag in range(2)]
+        #print(get_large_elems(new_large_vecs_full[0][:, 0:2]))
+        #print(get_large_elems(new_large_vecs_full[0][:, (n_states[0]):(2 + n_states[0])], eps=1e-3))
+        #for ind in range(len(new_large_vecs_full[0])):
+        #    if np.linalg.norm(new_large_vecs_full[0][:, ind]) > 1e-4:
+        #        print(ind)
+        #print(get_large_elems(new_large_vecs_full[0]))
+        
+        new_large_vals_full = [np.concatenate([pair[0] for pair in dens_eigpairs[frag]]) for frag in range(2)]
+
+        for frag in range(2):
+            to_del = []
+            for ind, eigval in enumerate(new_large_vals_full[frag]):
+                if eigval < dens_eigval_thresh:
+                    to_del.append(ind)
+            new_large_vals_full[frag] = np.delete(new_large_vals_full[frag], to_del, 0)
+            new_large_vecs_full[frag] = np.delete(new_large_vecs_full[frag], to_del, 1)
+
+        # check new contribution from left eigenvector density filtering
+        #new_large_vecs_full = [np.real(np.concatenate((dens_eigvecs_a, dens_eigvecs_a2), axis=1)),
+        #                       np.real(np.concatenate((dens_eigvecs_b, dens_eigvecs_b2), axis=1))]
+        #dens_eigvals_extra = [dens_eigvals_a2, dens_eigvals_b2]
+        new_large_vecs = [[], []]
+        dens_eigvals = [[], []]
+        #reduction_factor = 1e-2
+
+        for frag in range(2):
+            #reduce = False
+            #prev_norm = 1.0
+            #new_large_vals_full[frag], new_large_vecs_full[frag] = sort_eigen((new_large_vals_full[frag], new_large_vecs_full[frag]), order="descending")
+            for ind, orth_vec in enumerate(orthogonalize(new_large_vecs_full[frag].T, eps=dens_filter_thresh, filter_list=new_large_vals_full[frag])):#normalize=False)):#[len(dens_eigvals[frag]):, :]):
+                # The left eigvecs are very close to the right eigvecs depending on the system, but this way they are filtered out in a consistent manner
+                # and it might also be helpful when looking at multiple states.
+                # If the threshold is lowered, beware that the orthogonalizer also has a threshold for setting parallel vectors to zero.
+                #print(np.linalg.norm(orth_vec))
+                #orth_vec_norm = np.linalg.norm(orth_vec)
+                #if orth_vec_norm > prev_norm:
+                #    reduce = True
+                # to further reduce the state space for multiple states eigvals are also multiplied with vec norms after orthogonalization here
+                #if orth_vec_norm > 1e-5:
+                if np.linalg.norm(orth_vec) < 1e-10:  # filter out zero vectors
+                    continue
+                new_large_vecs[frag].append(orth_vec)
+                dens_eigvals[frag].append(new_large_vals_full[frag][ind])
+                #if not reduce:
+                #    dens_eigvals[frag][-1] *= reduction_factor
+                #new_large_vecs[frag] = np.concatenate((new_large_vecs[frag], new_l_contr.T), axis=1)
+                #dens_eigvals[frag] = np.concatenate((dens_eigvals[frag], dens_eigvals_extra[frag][ind]))
+                #print("right eigvec set has been appended with left eigvec")
+                #prev_norm = orth_vec_norm
+            #print(new_large_vecs[frag])
+            #new_large_vecs[frag] = np.array(new_large_vecs[frag])#, axis=1)
+        print(np.array(dens_eigvals, dtype=object))
 
         # the following threshold is very delicate, because if its
         # too large -> truncation errors
@@ -875,12 +991,12 @@ def optimize_states(max_iter, xr_order, dens_builder_stuff, ints, n_occ, n_orbs,
         # for this algorithm applied to the Be2 6-31g example something around 3e-9 seems to be the sweet spot
         keepers = [[], []]
         for frag in range(2):
-            for i, vec in enumerate(new_large_vecs[frag].T):
+            for i, vec in enumerate(new_large_vecs[frag]):#.T):
                 if dens_eigvals[frag][i] >= dens_eigval_thresh:
                     if np.linalg.norm(np.imag(vec)) > 1e-7:
                         raise ValueError(f"imaginary contribution of relevant density eigvec is {np.linalg.norm(np.imag(vec))}, which is too large")
                     keepers[frag].append(np.real(vec))
-            print(f"{len(keepers[frag])} states are kept for frag {frag}")
+            #print(f"{len(keepers[frag])} states are kept for frag {frag}")
 
         large_vec_map = [0, 0]
 
@@ -930,7 +1046,6 @@ def optimize_states(max_iter, xr_order, dens_builder_stuff, ints, n_occ, n_orbs,
         for frag in range(2):
             print(f"fragment {frag}")
             for chg, vecs in chg_sorted_keepers[frag].items():
-                print(f"for charge {chg} {len(vecs)} states are kept")
                 #chg_sorted_keepers[frag][chg] = [i for i in orthogonalize(np.array(vecs))]
                 final_keepers = []
                 for vec in orthogonalize(np.array(vecs)):
@@ -942,6 +1057,7 @@ def optimize_states(max_iter, xr_order, dens_builder_stuff, ints, n_occ, n_orbs,
                         continue
                     final_keepers.append(vec)
                 chg_sorted_keepers[frag][chg] = final_keepers
+                print(f"for charge {chg} {len(chg_sorted_keepers[frag][chg])} states are kept")
 
         for frag in range(2):
             for chg in monomer_charges[frag]:
@@ -1012,7 +1128,7 @@ def optimize_states(max_iter, xr_order, dens_builder_stuff, ints, n_occ, n_orbs,
     # 2. start by only expanding the neutral space in bigger steps, which probably contains most of the
     # correlation with itself and then expand the other charges, which can then be applied in larger chunks
     dens = []
-    while safety_iter < 20:#not all(screening_done.flatten()):
+    while safety_iter < 50:#not all(screening_done.flatten()):
         #if safety_iter >= 10:
         #    break
         safety_iter += 1

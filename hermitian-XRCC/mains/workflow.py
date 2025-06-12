@@ -167,6 +167,17 @@ def run_xr(displacement, max_iter, xr_order_final, xr_order_solver=0, dens_filte
     
     #final_orb_opt_en, ints = optimize_orbs(orb_max_iter, xr_order_solver, BeN, ints, dens, dens_builder_stuff, monomer_charges=monomer_charges)
 
+    # TODO: remove this, when asymmetric diagonalization is activated
+    for chg in monomer_charges[0]:
+        len0 = len(dens_builder_stuff[0][0][chg].coeffs)
+        len1 = len(dens_builder_stuff[1][0][chg].coeffs)
+        if len0 > len1:
+            dens_builder_stuff[0][0][chg].coeffs = dens_builder_stuff[0][0][chg].coeffs[:len1]
+        elif len0 < len1:
+            dens_builder_stuff[1][0][chg].coeffs = dens_builder_stuff[1][0][chg].coeffs[:len0]
+        else:  # equal
+            continue
+
     # rebuild densities for appropriate order
     dens = [densities.build_tensors(*dens_builder_stuff[frag][:-1], options=dens_builder_stuff[frag][-1], n_threads=n_threads, xr_order=xr_order_final) for frag in range(2)]
 
@@ -186,5 +197,5 @@ def run_xr(displacement, max_iter, xr_order_final, xr_order_solver=0, dens_filte
 
 
 
-print(run_xr(4.5, 0, 0, single_thresh=1/6, double_thresh=1/4, triple_thresh=1/2.5,# sp_thresh=1/1.005,
+print(run_xr(3.5, 0, 0, single_thresh=1/6, double_thresh=1/4, triple_thresh=1/2.5,# sp_thresh=1/1.005,
              grad_level="herm", state_prep=True, target_state=[0, 1], dens_filter_thresh_solver=1e-5))
