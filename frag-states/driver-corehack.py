@@ -97,12 +97,12 @@ if __name__=="__main__":
                 combine_orb_lists(occupied[1], occupied[1], frags[1].basis.n_spatial_orb))
     for m,frag in enumerate(frags):
         configs = CI_methods.monomer_configs(frag, Sz=0)
-        Eval, Evec = CI_methods.lanczos_ground(monomer_ints_c[m], configs, occupied[m], thresh=1e-8, printout=indented(printout), n_threads=params.n_threads)
+        (Eval, Evec), = CI_methods.lanczos_ground(monomer_ints_c[m], configs, occupied[m], thresh=1e-8, printout=indented(printout), n_threads=params.n_threads)
 
     printout("Dimer FCI")
     occupied = combine_orb_lists(occupied[0], occupied[1], 2*frags[0].basis.n_spatial_orb)
     configs, nested = CI_methods.dimer_configs(*frags, Sz=0)
-    Eval, Evec = CI_methods.lanczos_ground(dimer_ints_c, configs, occupied, thresh=1e-8, printout=indented(printout), n_threads=params.n_threads, full_ints=dimer_ints)
+    (Eval, Evec), = CI_methods.lanczos_ground(dimer_ints_c, configs, occupied, thresh=1e-8, printout=indented(printout), n_threads=params.n_threads, full_ints=dimer_ints)
 
     exit()
 

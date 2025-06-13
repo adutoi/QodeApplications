@@ -17,6 +17,7 @@
 #    along with QodeApplications.  If not, see <http://www.gnu.org/licenses/>.
 #
 import pickle
+import numpy
 from qode.util import struct, read_input, indented, no_print
 from qode.many_body.fermion_field import combine_orb_lists, CI_methods
 import input_env
@@ -33,6 +34,8 @@ n_spatial_orb = {
 
 
 if __name__=="__main__":
+    numpy.set_printoptions(precision=3, suppress=True)
+
     printout = indented(print, indent="    ")
 
     params = struct(    # defaults
@@ -67,18 +70,46 @@ if __name__=="__main__":
 
     monomer_ints, dimer_ints = hamiltonian.dimer_integrals(frags, printout=printout)
 
+    S = dimer_ints[1]
+    adim = S.shape[0]//2
+    sigma = S - numpy.identity(2*adim)
+    #print("0 0\n", sigma[:adim,:adim])
+    #print("0 1\n", sigma[:adim,adim:])
+    #print("1 0\n", sigma[adim:,:adim])
+    #print("1 1\n", sigma[adim:,adim:])
+    U0, _, Vh1 = numpy.linalg.svd(sigma[:adim,adim:])
+    T = numpy.zeros_like(S)
+    T[:adim,:adim] = U0
+    T[adim:,adim:] = Vh1.T
+    sigma = T.T @ sigma @ T
+    #print("\n\n")
+    #print("0 0\n", sigma[:adim,:adim])
+    #print("0 1\n", sigma[:adim,adim:])
+    #print("1 0\n", sigma[adim:,:adim])
+    #print("1 1\n", sigma[adim:,adim:])
+    sigma_ints = []
+    for p in range(adim):
+        s = numpy.zeros_like(S)
+        s[p,adim+p] = sigma[p,adim+p]
+        sigma_ints += [T @ s @ T.T]
+        s = numpy.zeros_like(S)
+        s[adim+p,p] = sigma[adim+p,p]
+        sigma_ints += [T @ s @ T.T]
+
     printout("Monomer FCIs (just for fun/illustration)")
     occupied = range(frags[0].n_elec_ref // 2), range(frags[1].n_elec_ref // 2)
     occupied = (combine_orb_lists(occupied[0], occupied[0], frags[0].basis.n_spatial_orb),
                 combine_orb_lists(occupied[1], occupied[1], frags[1].basis.n_spatial_orb))
     for m,frag in enumerate(frags):
         configs = CI_methods.monomer_configs(frag, Sz=0)
-        (Eval, Evec), = CI_methods.lanczos_ground(monomer_ints[m], configs, occupied[m], thresh=1e-8, printout=indented(printout), n_threads=params.n_threads)
+        Eval, Evec = CI_methods.lanczos_ground(monomer_ints[m], configs, occupied[m], thresh=1e-8, printout=indented(printout), n_threads=params.n_threads)
 
     printout("Dimer FCI")
     occupied = combine_orb_lists(occupied[0], occupied[1], 2*frags[0].basis.n_spatial_orb)
     configs, nested = CI_methods.dimer_configs(*frags, Sz=0)
-    (Eval, Evec), = CI_methods.lanczos_ground(dimer_ints, configs, occupied, thresh=1e-8, printout=indented(printout), n_threads=params.n_threads)
+    Eval, Evec = CI_methods.lanczos_ground(dimer_ints, configs, occupied, thresh=1e-8, printout=indented(printout), n_threads=params.n_threads, sigma_ints=sigma_ints)
+
+    exit()
 
     dimer_to_frags, frags_to_dimer, frag_configs = states.map_frag_dimer(nested)
     frag_rhos = states.frag_state_densities(Evec.v, dimer_to_frags, frags_to_dimer)
