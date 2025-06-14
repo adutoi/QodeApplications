@@ -79,14 +79,6 @@ def get_xr_H(ints, dens, xr_order, monomer_charges, bra_det=False, ket_det=False
     #Combo_blocks_bior = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, T=bior_ints.T, U=bior_ints.U, V=bior_ints.V),      diagrams=combo_diagram, contract_cache=contract_cache, timings=diag_timer, precon_timings=precon_timer, bra_det=bra_det, ket_det=ket_det)
 
     # charges under consideration
-    #monomer_charges = [0, +1, -1]
-    #dimer_charges = {
-    #                6:  [(+1, +1)],
-    #                7:  [(0, +1), (+1, 0)],
-    #                8:  [(0, 0), (+1, -1), (-1, +1)],
-    #                9:  [(0, -1), (-1, 0)],
-    #                10: [(-1, -1)]
-    #                }
     all_dimer_charges = []#[(0,0), (0,+1), (0,-1), (+1,0), (+1,+1), (+1,-1), (-1,0), (-1,+1), (-1,-1)]
     for chg0 in monomer_charges[0]:
         for chg1 in monomer_charges[1]:
@@ -415,32 +407,6 @@ def get_xr_H(ints, dens, xr_order, monomer_charges, bra_det=False, ket_det=False
     else:
         raise NotImplementedError(f"xr order {xr_order} is not implemented")
 
-    # well, this sucks.  reorder the states
-    """
-    dims0 = [BeN_rho[0]['n_states'][chg] for chg in [0,+1,-1]]
-    dims1 = [BeN_rho[1]['n_states'][chg] for chg in [0,+1,-1]]
-    mapping2 = [[None]*sum(dims0) for _ in range(sum(dims1))]
-    idx = 0
-    beg0 = 0
-    for dim0 in dims0:
-        beg1 = 0
-        for dim1 in dims1:
-            for m in range(dim0):
-                for n in range(dim1):
-                    mapping2[beg0+m][beg1+n] = idx
-                    idx += 1
-            beg1 += dim1
-        beg0 += dim0
-    mapping = []
-    for m in range(sum(dims0)):
-        for n in range(sum(dims1)):
-            mapping += [mapping2[m][n]]
-    H2 = numpy.zeros(H2blocked.shape)
-    print(H2blocked.shape)
-    for i,i_ in enumerate(mapping):
-        for j,j_ in enumerate(mapping):
-            H2[i,j] = H2blocked[i_,j_]
-    """
     # determine bra map
     if not ket_det:
         dims0_bra = [BeN_rho[0]['n_states_bra'][chg] for chg in monomer_charges[0]]
@@ -498,11 +464,11 @@ def get_xr_H(ints, dens, xr_order, monomer_charges, bra_det=False, ket_det=False
 
     return H1, H2
 
-def get_xr_S(ints, dens, xr_order, monomer_charges):
+def get_xr_S(ints, dens, xr_order, monomer_charges):  # this is part of the orbital solver
     diag_timer = timer()
     precon_timer = timer()
     matrix_timer = timer()
-    symm_ints, bior_ints, nuc_rep = ints#get_ints(BeN, project_core)
+    symm_ints, bior_ints, nuc_rep = ints
 
     # The engines that build the terms
     BeN_rho = dens  #[frag.rho for frag in BeN]   # diagrammatic_expansion.blocks should take BeN directly? (n_states and n_elec one level higher)
@@ -574,7 +540,6 @@ def get_xr_S(ints, dens, xr_order, monomer_charges):
     return S2
 
 def get_xr_states_from_H(H1, H2, target_state):
-    #H1, H2 = get_xr_H(ints, dens, xr_order)
     out, resources = qode.util.output(log=qode.util.textlog(echo=True)), qode.util.parallel.resources(1)
     #E, T = excitonic.ccsd((H1,[[None,H2],[None,None]]), out, resources)
     E, T = excitonic.fci((H1,[[None,H2],[None,None]]), out, target_state=target_state)

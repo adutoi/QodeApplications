@@ -26,7 +26,8 @@
 # However, optimizing in the orbital space seems to only yield better energies
 # in a trade-off for larger orbital overlaps. This has been tested for various
 # state spaces, solver parameters and parameters constraining the optimization,
-# but so far the trade-off could not be circumvented.
+# but so far the trade-off could not be circumvented. Nevertheless, since this
+# might has potential this is stored here in its raw state, including orb_grads.py
 
 
 

@@ -73,6 +73,7 @@ def run_xr(displacement, max_iter, xr_order_final, xr_order_solver=0, dens_filte
         state_obj, dens_var_1, dens_var_2, n_threads, Be = get_fci_states(displacement, n_state_list=[(1, 2), (0, 10), (-1, 10)])
         #Be.basis.MOcoeffs = ref_mos.copy()
         #pickle.dump(Be.basis.MOcoeffs, open(f"check_mos_{m}.pkl", mode="wb"))
+        # the following provide two possibilities to start from a dumped reference
         """
         frag0 = empty()
         frag0.atoms = [("Be",[0,0,0])]
@@ -127,10 +128,7 @@ def run_xr(displacement, max_iter, xr_order_final, xr_order_solver=0, dens_filte
         BeN.append(Be)
         #dens.append(densities.build_tensors(state_obj, dens_var_1, dens_var_2, options=density_options, n_threads=n_threads))
         dens_builder_stuff.append([state_obj, dens_var_1, dens_var_2, density_options])
-        #state_coeffs_og.append({chg: state_obj[chg].coeffs for chg in state_obj})
         state_coeffs_og.append({chg: state_obj[chg].coeffs for chg in state_obj})
-        #print(Be.basis.MOcoeffs)
-        #raise ValueError("stop here")
         """
         def conf_decoder(conf):
             ret = []
@@ -144,10 +142,8 @@ def run_xr(displacement, max_iter, xr_order_final, xr_order_solver=0, dens_filte
         for chg in monomer_charges[0]:
             for i, vec in enumerate(state_obj[chg].coeffs):
                 big_inds = {ind: elem for ind, elem in enumerate(vec) if abs(elem) > 1e-1}
-                #print(i, [ind for ind, elem in enumerate(vec) if abs(elem) > 1e-1])
                 print(chg, i, {tuple(conf_decoder(dens_builder_stuff[0][0][chg].configs[j])): val for j, val in big_inds.items()})
         """
-    #print(type(raw(dens[0]["a"][(+1,0)])), raw(dens[0]["a"][(+1,0)]).shape)
 
     #global_timings.record("initialize state space")
     #global_timings.start()
@@ -192,8 +188,7 @@ def run_xr(displacement, max_iter, xr_order_final, xr_order_solver=0, dens_filte
     final_en, final_state = get_xr_states(ints, dens, xr_order_final, monomer_charges, target_state)
 
     #return energies[-1], final_orb_opt_en, final_en
-    #return energies[-1 * (target_state + 1)], final_en
-    return final_en
+    return energies[-1], final_en
 
 
 
