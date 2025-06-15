@@ -17,7 +17,7 @@
 #
 
 # Usage:
-#     python [-u] <this-file.py> <displacement> <rhos>
+#     python [-u] <this-file.py> <displacement> <rhos> [no-proj]
 # where <rhos> can be the filestem of any one of the .pkl files in atomic_states/ prepared by Be631g.py.
 
 import time

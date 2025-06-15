@@ -38,6 +38,7 @@ import pickle
 #tl.set_backend("numpy")
 
 from   build_fci_states import get_fci_states
+#from build_Be_rho import build_Be_rho
 import densities
 
 tl.plugins.use_opt_einsum()
@@ -71,6 +72,7 @@ def run_xr(displacement, max_iter, xr_order_final, xr_order_solver=0, dens_filte
     #ref_state_coeffs_configs = pickle.load(open("opt_state_coeffs_configs.pkl", mode="rb"))
     for m in range(int(n_frag)):
         state_obj, dens_var_1, dens_var_2, n_threads, Be = get_fci_states(displacement, n_state_list=[(1, 2), (0, 10), (-1, 10)])
+        #state_obj, dens_var_1, dens_var_2, n_threads, Be = build_Be_rho(("6-31g", 9), displacement, n_state_list=[(1, 2), (0, 10), (-1, 10)])
         #Be.basis.MOcoeffs = ref_mos.copy()
         #pickle.dump(Be.basis.MOcoeffs, open(f"check_mos_{m}.pkl", mode="wb"))
         # the following provide two possibilities to start from a dumped reference

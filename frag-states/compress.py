@@ -21,7 +21,6 @@ from qode.util.PyC       import Double
 from qode.math.tensornet import tensor_sum, raw
 from qode.math           import svd_decomposition
 from qode.many_body.fermion_field import field_op
-from multi_term import multi_term
 
 _permutations = {
     "aa":    {+1:[(0,1)], -1:[(1,0)]},
@@ -35,7 +34,7 @@ _permutations = {
     "cccaa": {+1:[(0,1,2,3,4), (1,2,0,3,4), (2,0,1,3,4), (0,2,1,4,3), (1,0,2,4,3), (2,1,0,4,3)], -1:[(0,2,1,3,4), (1,0,2,3,4), (2,1,0,3,4), (0,1,2,4,3), (1,2,0,4,3), (2,0,1,4,3)]},
 }
 
-def compress(rho_ij, op_string, bra_chg, ket_chg, i, j, compress, natural_orbs, antisymm_abstract, tens_wrap):
+def compress(rho_ij, op_string, bra_chg, ket_chg, i, j, options, natural_orbs, antisymm_abstract, tens_wrap):
     c_count = op_string.count("c")
     a_count = op_string.count("a")
     indices = list(range(len(op_string)))
@@ -55,30 +54,30 @@ def compress(rho_ij, op_string, bra_chg, ket_chg, i, j, compress, natural_orbs, 
         if antisymm_abstract:
             field_op.asymmetrize(op_string, rho_ij)
         rho_ij = tens_wrap(rho_ij)
-    if c_count>0 and a_count>0 and compress[0]=="SVD":
-        thresh = 1e-6
-        if len(compress)>2:
-            thresh = compress[2]
-            if len(compress)>3 and op_string=="ccaaa" and bra_chg==0:
-                thresh = compress[3]
-        if compress[1]=="cc-aa":      # SVD-compress the densities, separating creation from annihilation indices
+    if c_count>0 and a_count>0 and options.method=="SVD":
+        try:
+            thresh = options.thresh
+        except AttributeError:
+            thresh = 1e-6
+        try:
+            _temp = options.ccaaa_thresh
+        except AttributeError:
+            pass
+        else:
+            if op_string=="ccaaa" and bra_chg==0:
+                thresh = _temp
+        if options.divide=="cc-aa":      # SVD-compress the densities, separating creation from annihilation indices
             left_indices = indices[:c_count]
-        if compress[1]=="ca-ca-F":    # SVD-compress the densities, separating one c an a index from the others
+        if options.divide=="ca-ca-F":    # SVD-compress the densities, separating one c an a index from the others
             left_indices = [0, c_count]
-        if compress[1]=="ca-ca-O":    # SVD-compress the densities, separating one c an a index from the others
+        if options.divide=="ca-ca-O":    # SVD-compress the densities, separating one c an a index from the others
             left_indices = [0, len(indices)-1]
-        if compress[1]=="ca-ca-I":    # SVD-compress the densities, separating one c an a index from the others
+        if options.divide=="ca-ca-I":    # SVD-compress the densities, separating one c an a index from the others
             left_indices = [c_count-1, c_count]
-        if compress[1]=="ca-ca-L":    # SVD-compress the densities, separating one c an a index from the others
+        if options.divide=="ca-ca-L":    # SVD-compress the densities, separating one c an a index from the others
             left_indices = [c_count-1, len(indices)-1]
         right_indices = [i for i in indices if i not in left_indices]
-        try:
-            ret_rho = svd_decomposition(numpy.array(raw(rho_ij), dtype=Double.numpy, order="C"), left_indices, right_indices, thresh=thresh, wrapper=tens_wrap)
-        except: # numpy.linalg.LinAlgError:
-            ret_rho = rho_ij
-        rho_ij = ret_rho
-    elif c_count+a_count>1 and compress[0]=="multi":
-        rho_ij = multi_term(rho_ij, c_count, a_count, compress[1], tens_wrap)
+        rho_ij = svd_decomposition(numpy.array(raw(rho_ij), dtype=Double.numpy, order="C"), left_indices, right_indices, thresh=thresh, wrapper=tens_wrap)
     if natural_orbs is not None:
         p = 0
         for _ in range(c_count):

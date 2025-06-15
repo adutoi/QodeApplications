@@ -48,12 +48,14 @@ def make_section(max_order, MOint):
     global derivation
     derivation += section(f"{MOint} diagrams")
     min_order = 0
+    MOintOpr = f"\\hat{{{MOint}}}"
     if MOint=="S":
         MOint = None
         min_order = 1
+        MOintOpr = ""
     for S_order in range(min_order, max_order+1):
         derivation += subsection(f"Order {S_order}")
-        derivation += equation(f"{S_order}!\\cdot" + braket(f"\\hat{{S}}^{{[{S_order}]}}"))
+        derivation += equation(f"{S_order}!\\cdot" + braket(f"\\hat{{S}}^{{[{S_order}]}}{MOintOpr}"))
         terms = make_terms([None], S_order, MOint)
         derivation += eq_equation(braket(terms))
         terms = make_terms(frags, S_order, MOint)
@@ -72,8 +74,8 @@ def make_section(max_order, MOint):
         derivation += code(condensed_terms)
 
 make_section(4, "S")
-make_section(1, "h")
-make_section(1, "v")
+make_section(2, "h")
+make_section(2, "v")
 
 if not "no-compile" in sys.argv:
     template = open("template.tex", "r").read()

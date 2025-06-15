@@ -25,10 +25,8 @@ import qode
 from qode.many_body.self_consistent_field.fermionic import RHF_RoothanHall_Nonorthogonal, RHF_RoothanHall_Orthonormal
 from get_ints_Be import get_ints
 from qode.atoms.integrals.fragments import unblock_2, unblock_last2, unblock_4
+from qode.many_body.fermion_field import CI_space_traits, field_op_ham, configurations
 import psi4_check
-from CI_space_traits import CI_space_traits
-import field_op_ham
-import configurations
 import qode.util
 from qode.util.PyC import Double
 import densities

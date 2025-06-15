@@ -17,7 +17,7 @@
 #
 
 # Usage:
-#     python [-u] <this-file.py> <displacement> <rhos>
+#     python [-u] <this-file.py> <displacement> <rhos> [no-proj]
 # where <rhos> can be the filestem of any one of the .pkl files in atomic_states/ prepared by Be631g.py.
 
 import time
@@ -26,6 +26,7 @@ import pickle
 import numpy
 #import torch
 import tensorly
+from tensorly import plugins as tensorly_plugins
 import qode.util
 from qode.util import struct, timer
 import qode.math
@@ -43,6 +44,8 @@ class empty(object):  pass     # needed for unpickling - remove when all Be-stat
 
 #torch.set_num_threads(4)
 #tensorly.set_backend("pytorch")
+tensorly_plugins.use_opt_einsum()
+qode.math.tensornet.backend_contract_path(True)
 
 global_timings = timer()
 matrix_timings = timer()

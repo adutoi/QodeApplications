@@ -1,4 +1,4 @@
-#    (C) Copyright 2018, 2019, 2023 Yuhong Liu and Anthony Dutoi
+#    (C) Copyright 2023, 2024 Anthony D. Dutoi
 # 
 #    This file is part of QodeApplications.
 # 
@@ -16,23 +16,15 @@
 #    along with QodeApplications.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-import numpy
-from qode.util.PyC import Double
-import field_op
+# python [-u] dump-detdens.py 
 
+import pickle
+from lala import lala
 
+if __name__=="__main__":
 
-class Hamiltonian(object):
-    def __init__(self, h, V, thresh=1e-10, n_threads=1, core=[]):
-        self.h = h
-        self.V = V
-        self.thresh = thresh
-        self.n_threads = n_threads
-        self.core = core
-    def set_n_threads(self, n_threads):
-        self.n_threads = n_threads
-    def __call__(self, Psi, configs):
-        HPsi = numpy.zeros(len(configs), dtype=Double.numpy)
-        field_op.opPsi_1e(HPsi, Psi, self.h, configs, self.thresh, self.n_threads, self.core)
-        field_op.opPsi_2e(HPsi, Psi, self.V, configs, self.thresh, self.n_threads, self.core)
-        return HPsi
+    basis = "6-31G", 9    # 9 spatial orbitals per 6-31G Be atom
+
+    rho = lala(basis)
+
+    pickle.dump(rho, open("rho/Be631g_detdens.pkl", "wb"))    # users responsibility to softlink rho/ to different volume if desired

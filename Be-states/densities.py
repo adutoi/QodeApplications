@@ -1,4 +1,4 @@
-#    (C) Copyright 2018, 2019, 2023 Anthony D. Dutoi, Marco Bauer and Yuhong Liu
+#    (C) Copyright 2018, 2019, 2023, 2024 Anthony D. Dutoi, Marco Bauer and Yuhong Liu
 # 
 #    This file is part of QodeApplications.
 # 
@@ -18,11 +18,11 @@
 
 import numpy
 import tensorly
-#import multiprocessing
+import multiprocessing
 from qode.util           import sort_eigen
 from qode.util.PyC       import Double
 from qode.math.tensornet import tl_tensor, tensor_sum, raw
-import field_op
+from qode.many_body.fermion_field import field_op
 import compress
 
 # states[n].coeffs  = [numpy.array, numpy.array, . . .]   One (effectively 1D) array of coefficients per n-electron state
@@ -81,20 +81,17 @@ def _compress(args):
 
 
 
-def build_tensors(states, n_orbs, n_elec_0, thresh=1e-10, options=None, n_threads=1, dets={}, xr_order=0):#, screen=False):
-    #pool = multiprocessing.Pool(n_threads)
-
-    if xr_order == 0:
-        op_strings = {2:["aa"], 1:["a", "caa"], 0:["ca", "ccaa"]}
-    elif xr_order == 1:
-        op_strings = {2:["aa", "caaa"], 1:["a", "caa", "ccaaa"], 0:["ca", "ccaa"]}
-    elif xr_order ==2:
-        op_strings = {2:["aa", "caaa", "ccaaaa"], 1:["a", "caa", "ccaaa"], 0:["ca", "ccaa", "cccaaa"]}
-    else:
+# private version so that we can use "with pool" on the outside
+def _build_tensors(states, n_orbs, n_elec_0, thresh, options, n_threads, pool, dets, xr_order):
+    op_strings = {2:["aa"], 1:["a", "caa"], 0:["ca", "ccaa"]}
+    if xr_order >= 1:
+        op_strings[2].append("caaa")
+        op_strings[1].append("ccaaa")
+    if xr_order >= 2:
+        op_strings[2].append("ccaaaa")
+        op_strings[0].append("cccaaa")
+    if xr_order > 2:
         raise NotImplementedError(f"densities for xr_order {xr_order} are not implemented")
-    #op_strings = {0:["ca", "ccaa"]}
-    #if screen:
-    #    op_strings = {1:["a"], 0:["ca"]}
     densities = {}
     conj_densities = {}
 
@@ -113,7 +110,6 @@ def build_tensors(states, n_orbs, n_elec_0, thresh=1e-10, options=None, n_thread
     for bra_chg in states:
         bra_configs = field_op.packed_configs(states[bra_chg].configs)
         if options("bra_det"):
-            #print("bra det True")
             if dets:
                 bra_coeffs = dets[bra_chg]
             else:
@@ -121,7 +117,6 @@ def build_tensors(states, n_orbs, n_elec_0, thresh=1e-10, options=None, n_thread
         else:
             bra_coeffs  = states[bra_chg].coeffs
         for ket_chg in states:
-            #ket_coeffs  = states[ket_chg].coeffs
             ket_configs = field_op.packed_configs(states[ket_chg].configs)
             if options("ket_det"):
                 if dets:
@@ -130,16 +125,12 @@ def build_tensors(states, n_orbs, n_elec_0, thresh=1e-10, options=None, n_thread
                     ket_coeffs = [i for i in numpy.eye(len(ket_configs))]
             else:
                 ket_coeffs  = states[ket_chg].coeffs
-            #if len(coeffs[1].keys()) != 0:
-            #    ket_coeffs = coeffs[1][ket_chg]  # also let this allow for differing number of states in the future
-            #print("len kets", len(ket_coeffs))
-            #if len(bra_coeffs) > 200 and op_string == "ccaa":
-            #ket_configs = field_op.packed_configs(states[ket_chg].configs)
             chg_diff = bra_chg - ket_chg
             if chg_diff in op_strings:
                 for op_string in op_strings[chg_diff]:
                     if op_string not in densities:  densities[op_string] = {}
                     print(bra_chg, ket_chg, op_string)
+                    # TODO: the following line only exists to lower memory requirements and should be deleted for productive calculations
                     if ((options("bra_det") or options("ket_det")) and op_string == "ccaa") and (bra_chg == -1 and ket_chg == -1):
                         #print("bra det -1 -1 ccaa")
                         # only do this for ccaa -1 -1
@@ -151,11 +142,6 @@ def build_tensors(states, n_orbs, n_elec_0, thresh=1e-10, options=None, n_thread
                         # bit of a waste here ... computes i<j and i>j for chg_diff=0
                         rho = field_op.build_densities(op_string, n_orbs, bra_coeffs, ket_coeffs, bra_configs, ket_configs, thresh, wisdom=None, antisymmetrize=antisymm_numerical, n_threads=n_threads)
                         densities[op_string][bra_chg,ket_chg] = [[_tens_wrap(rho_ij) for rho_ij in rho_i] for rho_i in rho]
-                    #if options("bra_det"):
-                    #    ret = tensor_sum()
-                    #    indices = tuple(p+2 for p in range(len(op_string)))
-                    #    ret += _vec(i,n_bras)(0) @ _vec(j,n_kets)(1) @ rho_ij(*indices)
-                    #    ret += densities[op_string][bra_chg,ket_chg]
 
     print("Postprocessing ...")
 
@@ -178,11 +164,8 @@ def build_tensors(states, n_orbs, n_elec_0, thresh=1e-10, options=None, n_thread
     #if not options("bra_det"):
     for op_string in densities:
         for bra_chg,ket_chg in densities[op_string]:
-            print(op_string, bra_chg, ket_chg)
+            print("<>", op_string, bra_chg, ket_chg)
             rho = densities[op_string][bra_chg,ket_chg]
-            #if op_string == "ccaa" and options("bra_det"):
-            #    if bra_chg == -1 and ket_chg == -1:
-            #        continue  # ccaa -1 to -1 is already in decomposed form, because it's so large
             temp_ij = tensor_sum()
             temp_ji = tensor_sum()
             #
@@ -194,12 +177,15 @@ def build_tensors(states, n_orbs, n_elec_0, thresh=1e-10, options=None, n_thread
                     if bra_chg!=ket_chg or i>=j:
                         #rho_ij = compress.compress(rho_ij, op_string, bra_chg, ket_chg, i, j, compress_args, natural_orbs, antisymm_abstract, _tens_wrap)
                         arguments += [(rho_ij, op_string, bra_chg, ket_chg, i, j, n_bras, n_kets, compress_args, natural_orbs, antisymm_abstract)]
-            #if n_bras > 200 and op_string == "ccaa":  # better: if type(rho_ij) == qode.math.tensornet.base.to_contract:
-            if (options("bra_det") or options("ket_det")) or compress_args == None:# and bra_chg==ket_chg:  # better also decompose for equal charges, but with bras different from kets the accumulator needs to be populated differently
+            #if n_bras > 200 and op_string == "ccaa":
+            if (options("bra_det") or options("ket_det")) or compress_args == None:  # better also decompose for equal charges, but with bras different from kets the accumulator needs to be populated differently
+                # TODO: this currently doesn't use pool!
                 values = [(args[4], args[6], args[5], args[7], args[0]) for args in arguments]
             else:
-                values = [_compress(args) for args in arguments]
-            #values = pool.map(_compress, arguments)
+                if pool is None:
+                    values = [_compress(args) for args in arguments]
+                else:
+                    values = pool.map(_compress, arguments)    # instead of pool, make pool.map the function argument, replaceable with map
             for i, n_bras, j, n_kets, rho_ij in values:
                 #if True:
                 #    if True:
@@ -208,10 +194,7 @@ def build_tensors(states, n_orbs, n_elec_0, thresh=1e-10, options=None, n_thread
                 #if not options("bra_det"):
                 rev_indices = tuple(reversed(indices))
                 if bra_chg==ket_chg and not (options("bra_det") or options("ket_det")):
-                    if i!=j:# or options("bra_det"):  # if bra_det then bra and ket are not equal
-                        #if options("bra_det"):
-                        #    print(_vec(j,n_kets).shape, _vec(i,n_bras).shape, raw(rho_ij).shape)
-                        #    print("inds:", 0, 1, *rev_indices)
+                    if i!=j:
                         temp_ij += _vec(j,n_kets)(0) @ _vec(i,n_bras)(1) @ rho_ij(*rev_indices)
                 else:
                     temp_ji += _vec(j,n_kets)(0) @ _vec(i,n_bras)(1) @ rho_ij(*rev_indices)
@@ -237,7 +220,7 @@ def build_tensors(states, n_orbs, n_elec_0, thresh=1e-10, options=None, n_thread
         else:
             densities["n_states"]  = {chg:len(states[chg].configs) for chg in states}
         densities["n_states_bra"]  = {chg:len(states[chg].coeffs) for chg in states}
-    else: #not options("bra_det") and not options("ket_det"):
+    else:
         densities["n_states_bra"]  = densities["n_states"]
 
     densities["KetCoeffs"] = {}  # this name is misleading ... rename to Coeffs or StateCoeffs in next iteration
@@ -248,4 +231,13 @@ def build_tensors(states, n_orbs, n_elec_0, thresh=1e-10, options=None, n_thread
             densities["KetCoeffs"][(chg,chg)] = _tens_wrap(states[chg].coeffs)
 
     print("Writing to hard drive ...")
+    return densities
+
+def build_tensors(states, n_orbs, n_elec_0, thresh=1e-10, options=None, n_threads=1, dets={}, xr_order=0):
+    if n_threads>1:
+        with multiprocessing.Pool(n_threads, maxtasksperchild=1) as pool:    # to avoid errors on exit, both maxtasksperchild=1 ...
+            densities = _build_tensors(states, n_orbs, n_elec_0, thresh, options, n_threads, pool, dets, xr_order)
+            pool.close()                                                     # ... and pool.close() seem to be necessary
+    else:
+        densities = _build_tensors(states, n_orbs, n_elec_0, thresh, options, n_threads, None, dets, xr_order)
     return densities

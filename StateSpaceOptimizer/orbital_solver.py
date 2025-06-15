@@ -57,7 +57,7 @@ import pickle
 #tl.set_backend("pytorch")
 #tl.set_backend("numpy")
 
-from   build_fci_states import get_fci_states
+#from   build_fci_states import get_fci_states
 import densities
 
 tl.plugins.use_opt_einsum()
