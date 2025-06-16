@@ -138,8 +138,6 @@ def optimize_states(max_iter, xr_order, dens_builder_stuff, ints, n_occ, n_orbs,
             for ind, orth_vec in enumerate(orthogonalize(new_large_vecs_full[frag].T, eps=dens_filter_thresh, filter_list=new_large_vals_full[frag])):
                 # The left eigvecs are very close to the right eigvecs depending on the system, but this way they are filtered out in a consistent manner
                 # and it might also be helpful when looking at multiple states.
-                if np.linalg.norm(orth_vec) < 1e-10:  # filter out zero vectors
-                    continue
                 new_large_vecs[frag].append(orth_vec)
                 dens_eigvals[frag].append(new_large_vals_full[frag][ind])
         print(np.array(dens_eigvals, dtype=object))
@@ -165,7 +163,7 @@ def optimize_states(max_iter, xr_order, dens_builder_stuff, ints, n_occ, n_orbs,
         for frag in range(2):
             print(f"fragment {frag}")
             for chg, vecs in chg_sorted_keepers[frag].items():
-                chg_sorted_keepers[frag][chg] = [i for i in orthogonalize(np.array(vecs)) if np.linalg.norm(i) > 0.99]
+                chg_sorted_keepers[frag][chg] = [i for i in orthogonalize(np.array(vecs))]
                 print(f"for charge {chg} {len(chg_sorted_keepers[frag][chg])} states are kept")
 
         for chg in monomer_charges[0]:
@@ -207,7 +205,7 @@ def optimize_states(max_iter, xr_order, dens_builder_stuff, ints, n_occ, n_orbs,
         # For Hamiltonian evaluation in extended state basis, i.e. states + gradients, an orthonormal set for each fragment
         # is required, but this choice is not unique. One could e.g. normalize, orthogonalize and then again normalize,
         # or orthogonalize and normalize without previous normalization.
-        tot_a_coeffs = {chg: np.array([i for i in orthogonalize(np.vstack((a_coeffs[chg], grad_coeffs_a_raw[chg]))) if np.linalg.norm(i) > 0.99])
+        tot_a_coeffs = {chg: np.array([i for i in orthogonalize(np.vstack((a_coeffs[chg], grad_coeffs_a_raw[chg])))])
                         for chg in monomer_charges[frag_ind]}
         
         state_dict = [{chg: len(state_coeffs[i][chg]) for chg in monomer_charges[i]} for i in range(2)]
@@ -335,8 +333,6 @@ def optimize_states(max_iter, xr_order, dens_builder_stuff, ints, n_occ, n_orbs,
                 # The left eigvecs are very close to the right eigvecs depending on the system, but this way they are filtered out in a consistent manner
                 # and it might also be helpful when looking at multiple states.
                 # If the threshold is lowered, beware that the orthogonalizer also has a threshold for setting parallel vectors to zero.
-                if np.linalg.norm(orth_vec) < 1e-10:  # filter out zero vectors
-                    continue
                 new_large_vecs[frag].append(orth_vec)
                 dens_eigvals[frag].append(new_large_vals_full[frag][ind])
         print(np.array(dens_eigvals, dtype=object))
@@ -379,8 +375,6 @@ def optimize_states(max_iter, xr_order, dens_builder_stuff, ints, n_occ, n_orbs,
             for chg, vecs in chg_sorted_keepers[frag].items():
                 final_keepers = []
                 for vec in orthogonalize(np.array(vecs)):
-                    if np.linalg.norm(vec) < 0.99:
-                        continue
                     final_keepers.append(vec)
                 chg_sorted_keepers[frag][chg] = final_keepers
                 print(f"for charge {chg} {len(chg_sorted_keepers[frag][chg])} states are kept")
@@ -436,7 +430,7 @@ def optimize_states(max_iter, xr_order, dens_builder_stuff, ints, n_occ, n_orbs,
             #if pair != dens_builder_stuff[frag][0][chg].configs[conf_ind_pre] and max_add < len(additional_states[frag][chg]) - state_tracker[frag][chg]:
             #    max_add += 1
             dens_builder_stuff[frag][0][chg].coeffs += additional_states[frag][chg][state_tracker[frag][chg]: state_tracker[frag][chg] + max_add]
-            dens_builder_stuff[frag][0][chg].coeffs = [i for i in orthogonalize(np.array(dens_builder_stuff[frag][0][chg].coeffs)) if np.linalg.norm(i) > 0.99]
+            dens_builder_stuff[frag][0][chg].coeffs = [i for i in orthogonalize(np.array(dens_builder_stuff[frag][0][chg].coeffs))]
             state_coeffs_optimized[frag][chg] = dens_builder_stuff[frag][0][chg].coeffs.copy()
             state_tracker[frag][chg] += max_add
         dens[frag] = densities.build_tensors(*dens_builder_stuff[frag][:-1], options=density_options, n_threads=n_threads)

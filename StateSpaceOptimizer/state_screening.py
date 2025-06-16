@@ -31,6 +31,7 @@ def orthogonalize(U, eps=1e-6, filter_list=[]):
     # one might has to play with eps a little here
     n = len(U)
     V = U
+    to_del = []
     for i in range(n):
         prev_basis = V[0:i]     # orthonormal basis before V[i]
         coeff_vec = np.dot(prev_basis, V[i].T)  # each entry is np.dot(V[j], V[i]) for all j < i
@@ -38,6 +39,7 @@ def orthogonalize(U, eps=1e-6, filter_list=[]):
         V[i] -= np.dot(coeff_vec, prev_basis).T
         if np.linalg.norm(V[i]) < eps:
             V[i] = np.zeros_like(V[i])
+            to_del.append(i)
             continue
         if len(filter_list) == 0:
             V[i] /= np.linalg.norm(V[i])
@@ -46,9 +48,10 @@ def orthogonalize(U, eps=1e-6, filter_list=[]):
                 raise ValueError("filter list requires same length as basis vectors")
             if np.linalg.norm(V[i]) * filter_list[i] < eps:
                 V[i] = np.zeros_like(V[i])
+                to_del.append(i)
             else:
                 V[i] /= np.linalg.norm(V[i])
-    return V
+    return np.delete(V, to_del, axis=0)  #V
 
 
 def get_large(ten, thresh_frac=1 / 3, compress_ouput=True):
