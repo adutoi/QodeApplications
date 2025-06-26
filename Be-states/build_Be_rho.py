@@ -24,7 +24,7 @@ from qode.util.PyC import Double
 from qode.many_body.self_consistent_field.fermionic import RHF_RoothanHall_Nonorthogonal, RHF_RoothanHall_Orthonormal
 from qode.atoms.integrals.fragments import unblock_2, unblock_last2, unblock_4
 
-from get_ints import get_ints
+from get_ints_Be import get_ints
 import psi4_check
 
 from qode.many_body.fermion_field import CI_space_traits, field_op_ham, configurations
@@ -33,7 +33,7 @@ import densities
 
 
 
-def build_Be_rho(basis, dist, statesthresh, options, n_threads):
+def build_Be_rho(basis, dist, statesthresh, options, xr_order, n_threads):
 
     basis_label, n_spatial_orb = basis
 
@@ -242,7 +242,7 @@ def build_Be_rho(basis, dist, statesthresh, options, n_threads):
             #for config in states_chg.configs:
             #    print("  {:018b}".format(config))
 
-    frag0.rho = densities.build_tensors(states, 2*frag0.basis.n_spatial_orb, frag0.n_elec_ref, thresh=1e-30, options=options, n_threads=n_threads)
+    frag0.rho = densities.build_tensors(states, 2*frag0.basis.n_spatial_orb, frag0.n_elec_ref, thresh=1e-30, options=options, xr_order=xr_order, n_threads=n_threads)
 
     ref_chg, ref_idx = 0, 0
     frag0.state_indices = [(ref_chg,ref_idx)]                # List of all charge and state indices, reference state needs to be first, but otherwise irrelevant order

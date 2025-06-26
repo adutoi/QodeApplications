@@ -1,3 +1,21 @@
+#    (C) Copyright 2025 Marco Bauer
+# 
+#    This file is part of QodeApplications.
+# 
+#    QodeApplications is free software: you can redistribute it and/or modify
+#    it under the terms of the GNU General Public License as published by
+#    the Free Software Foundation, either version 3 of the License, or
+#    (at your option) any later version.
+# 
+#    QodeApplications is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU General Public License for more details.
+# 
+#    You should have received a copy of the GNU General Public License
+#    along with QodeApplications.  If not, see <http://www.gnu.org/licenses/>.
+#
+
 from   get_ints import get_ints
 from   get_xr_result import get_xr_states, get_xr_H, get_xr_states_from_H
 from qode.math.tensornet import raw, tl_tensor

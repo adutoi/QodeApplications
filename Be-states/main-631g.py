@@ -33,8 +33,9 @@ if __name__=="__main__":
     dist         = float(sys.argv[2])
     statesthresh =       sys.argv[3]
     options      =       sys.argv[4:]
+    xr_order     = 1
 
     label = "_".join(_abbrev(arg) for arg in sys.argv[2:])
-    rho = build_Be_rho(basis, dist, statesthresh, options, n_threads)
+    rho = build_Be_rho(basis, dist, statesthresh, options, xr_order, n_threads)
 
     pickle.dump(rho, open("rho/Be631g_{}.pkl".format(label), "wb"))    # users responsibility to softlink rho/ to different volume if desired

@@ -1,4 +1,4 @@
-#    (C) Copyright 2023 Anthony D. Dutoi and Marco Bauer
+#    (C) Copyright 2023, 2025 Anthony D. Dutoi and Marco Bauer
 # 
 #    This file is part of QodeApplications.
 # 
@@ -41,6 +41,7 @@ def u000(X):
           X.ca0pq_U0pq
         )
 
+# dimer diagrams
 
 def u100(X, special_processing=None):
     (i0s,j0s),(i1s,j1s) = X.n_states[0], X.n_states[1]

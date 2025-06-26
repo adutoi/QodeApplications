@@ -117,7 +117,7 @@ def direct_CoreProj(fragments, S):
 
     return Left, Right
 
-def get_ints(fragments, project_core=True, timings=None, spin_ints=True):
+def get_ints(fragments, project_core=True, timings=None, spin_ints=True):    # spin_ints=False does not appear to be used ... prefer to remove option
     # More needs to be done regarding the basis to prevent mismatches with the fragment states
     AO_ints     = AO_integrals(fragments)
     FragMO_ints = fragMO_integrals(AO_ints, [frag.basis.MOcoeffs for frag in fragments], cache=True)     # Cache because multiple calls to each block during biorthogonalization

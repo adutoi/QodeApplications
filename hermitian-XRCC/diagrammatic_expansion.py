@@ -1,4 +1,4 @@
-#    (C) Copyright 2023 Anthony D. Dutoi
+#    (C) Copyright 2023, 2025 Anthony D. Dutoi and Marco Bauer
 # 
 #    This file is part of QodeApplications.
 # 
@@ -70,9 +70,9 @@ class _charges(object):
         self._subsystem = subsystem
         self._charges = charges
         self._diagrams = diagrams
-        self._results = {}
         self._bra_det = bra_det
         self._ket_det = ket_det
+        self._results = {}
     def __getitem__(self, label):
         if label not in self._results:
             frag_order = len(self._subsystem)
@@ -85,7 +85,7 @@ class _charges(object):
                 for term_permutation in terms:
                     if term_permutation is not None:
                         term, permutation = term_permutation
-                        result = _build_block(term, permutation, self._bra_det, self._ket_det, label)
+                        result = _build_block(term, permutation, self._bra_det, self._ket_det, label)    # This should have a bra_det flag, but not label!
                         if (self._bra_det or self._ket_det) and len(result) == 0:
                             continue
                         if self._results[label] is None:  self._results[label]  = result
@@ -97,9 +97,9 @@ class _subsystem(object):
         self._supersys_info = supersys_info
         self._subsystem = subsystem
         self._diagrams = diagrams
-        self._items = {}
         self._bra_det = bra_det
         self._ket_det = ket_det
+        self._items = {}
     def __getitem__(self, charges):
         if charges is None:  charges = tuple()    # just to make top-level syntax prettier
         charges = tuple(charges)                  # dict index must be hashable
@@ -112,10 +112,10 @@ class blocks(object):
         contract_cache = struct(rho_S=contract_cache, general=precontract(densities, integrals, precon_timings))
         self._supersys_info = struct(densities=densities, integrals=integrals, contract_cache=contract_cache, timings=timings)
         self._diagrams = diagrams
-        self._items = {}
-        self.densities = self._supersys_info.densities    # "public" member providing access to system definition
         self._bra_det = bra_det
         self._ket_det = ket_det
+        self._items = {}
+        self.densities = self._supersys_info.densities    # "public" member providing access to system definition
     def __getitem__(self, subsystem):
         if subsystem is None:  subsystem = tuple()        # just to make top-level syntax prettier
         subsystem = tuple(subsystem)                      # dict index must be hashable
