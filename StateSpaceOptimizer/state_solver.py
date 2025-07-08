@@ -282,7 +282,7 @@ def optimize_states(max_iter, xr_order, dens_builder_stuff, ints, n_occ, n_orbs,
         full_eigvals, full_eigvec_l = sort_eigen((full_eigvals_raw, full_eigvec_l_unsorted))
         full_eigvals_check, full_eigvec_r = sort_eigen((full_eigvals_raw, full_eigvec_r_unsorted))
         if any(full_eigvals - full_eigvals_check):  # this check should be unnecessary and might need to be refined for fully degenerate states
-            raise ValueError("sorting went wrong with the sorting")
+            raise ValueError("something went wrong with the sorting")
         print(np.min(full_eigvals))
         print("imag contribution of lowest eigvec of full H with grads with eig", np.linalg.norm(np.imag(full_eigvec_r[:, target_state])))#, np.linalg.norm(np.imag(full_eigvec_l[:, 0])))
 

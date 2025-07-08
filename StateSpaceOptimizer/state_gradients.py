@@ -71,7 +71,7 @@ def get_slices(dict, chgs, append=False, type="standard"):
             raise ValueError(f"type {type} is unknown")
     return ret
 
-def get_gs(current_state_dict, d_sl, H1_new, H2_new, monomer_charges, target_state):
+def get_gs(current_state_dict, d_sl, H1_new, H2_new, monomer_charges, target_state, grad_level):
         #new_gs_en, new_gs_vec = get_xr_states(ints, dens, 0)  # TODO: This is not possible, until solvers are fixed
         #H1_new, H2_new = get_xr_H(ints, dens, xr_order)
         n_states = [sum(current_state_dict[i][chg] for chg in monomer_charges[i]) for i in range(2)]
@@ -90,8 +90,12 @@ def get_gs(current_state_dict, d_sl, H1_new, H2_new, monomer_charges, target_sta
         if any(full_eigvals - full_eigvals_check):  # this check should be unnecessary and might need to be refined for fully degenerate states
             raise ValueError("something went wrong with the sorting")
         #return full_eigvals[0], H2_new, full_eigvec_l[:, 0].T / np.linalg.norm(full_eigvec_l[:, 0]), full_eigvec_r[:, 0].T
-        print("currently state gradients are build with only dr and not dl!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
-        return full_eigvals[target_state], H2_new, full_eigvec_r[:, target_state].T, full_eigvec_r[:, target_state].T, full_eigvec_l[:, target_state].T / np.linalg.norm(full_eigvec_l[:, target_state])
+        if "herm" in grad_level:
+            print("currently state gradients are build with only dr and not dl")
+            return full_eigvals[target_state], H2_new, full_eigvec_r[:, target_state].T, full_eigvec_r[:, target_state].T, full_eigvec_l[:, target_state].T / np.linalg.norm(full_eigvec_l[:, target_state])
+        else:
+            print("currently state gradients are build with dl and dr")
+            return full_eigvals[target_state], H2_new, full_eigvec_l[:, target_state].T / np.linalg.norm(full_eigvec_l[:, target_state]), full_eigvec_r[:, target_state].T, full_eigvec_l[:, target_state].T / np.linalg.norm(full_eigvec_l[:, target_state])
 
 def state_gradients(frag_ind, ints, dens_builder_stuff, dens, monomer_charges, n_threads=1, xr_order=0, dets={}, grad_level="herm", target_state=0):
     if xr_order != 0:
@@ -117,7 +121,7 @@ def state_gradients(frag_ind, ints, dens_builder_stuff, dens, monomer_charges, n
 
     #gs_energy, gs_state = get_xr_states(ints, dens, xr_order)
     H1_for_d, H2_for_d = get_xr_H(ints, dens, xr_order, monomer_charges)
-    gs_energy, H_no_dets, dl, dr, dl_extra = get_gs(state_dict, d_slices, H1_for_d, H2_for_d, monomer_charges, target_state)
+    gs_energy, H_no_dets, dl, dr, dl_extra = get_gs(state_dict, d_slices, H1_for_d, H2_for_d, monomer_charges, target_state, grad_level)
     E = np.real(gs_energy)
     #dl, dr = gs_state
     print("dropping imaginary part of non-diagonalized d with norm", np.linalg.norm(np.imag(dl)), np.linalg.norm(np.imag(dr)))
@@ -152,7 +156,7 @@ def state_gradients(frag_ind, ints, dens_builder_stuff, dens, monomer_charges, n
     H2 = H2.reshape((H1[0].shape[0], H1[1].shape[0]))#, H1[0].shape[1], H1[1].shape[1]))
 
     # the following is the contribution <psi psi | H - E | phi psi>
-    if grad_level == "full":
+    if grad_level == "full" or grad_level == "herm_full":
         # TODO: this is a waste...one can also obtain the corresponding grad terms from biorthogonalizing the kets of the integrals
         # instead of the bras, which is much faster than building the new densities
         dens[frag_map[0]] = densities.build_tensors(*dens_builder_stuff[frag_map[0]][:-1], options=dens_builder_stuff[frag_map[0]][-1] + ["ket_det"], n_threads=n_threads, dets=dets)
@@ -164,10 +168,15 @@ def state_gradients(frag_ind, ints, dens_builder_stuff, dens, monomer_charges, n
     gradient_states = {}
     new_overlaps = get_adapted_overlaps(frag_map, dl, dr, d_slices)
 
-    # intermediates for S^{-1} terms
+    # intermediates for S^{-1} terms left
     if grad_level == "full":
         H_dr = np.einsum("ik,k->i", H_no_dets, dr.reshape((H_no_dets.shape[1])))
         dl_partial_H_dr = np.einsum("il,ml->im", dl_extra, H_dr.reshape(dl_extra.shape))
+
+    # intermediates for S^{-1} terms right
+    if grad_level == "full":
+        H_dl = np.einsum("ik,i->k", H_no_dets, dl.reshape((H_no_dets.shape[0])))
+        dl_H_dl_partial = np.einsum("il,ml->im", H_dl.reshape(dl.shape), dl)  # this is actually required as dl_H_dl, see paper
     
     for chg in monomer_charges[frag_map[0]]:
         if dets:
@@ -186,7 +195,7 @@ def state_gradients(frag_ind, ints, dens_builder_stuff, dens, monomer_charges, n
         #gradient_states[chg] *= 2
 
         # the following is the contribution <psi psi | H - E | phi psi>
-        if grad_level == "full":
+        if grad_level == "full" or grad_level == "herm_full":
             gradient_states[chg] += np.einsum("ip,ki->kp", H1_new[frag_map[0]][d_slices[frag_map[0]][chg], c_slices[frag_map[0]][chg]], new_overlaps[chg])  # frag A monomer H term
             gradient_states[chg] -= np.einsum("ip,ki->kp", c0, new_overlaps[chg]) * E  # E term
             if frag_ind == 0:
@@ -196,9 +205,15 @@ def state_gradients(frag_ind, ints, dens_builder_stuff, dens, monomer_charges, n
             # this line also relies on equal charges on fragments A and B
             gradient_states[chg] += np.einsum("ip,ki->kp", c0, H1_new[frag_map[1]][d_slices[frag_map[0]][chg], d_slices[frag_map[0]][chg]])  # frag B monomer H term
             
-            # the following are the two terms from the derivative with respect to S^{-1}
+        # the following are the two terms from the derivative with respect to S^{-1} from the left
+        if grad_level == "full":
             gradient_states[chg] -= np.einsum("mp,im->ip", c0, dl_partial_H_dr[d_slices[frag_map[0]][chg], d_slices[frag_map[0]][chg]])
             gradient_states[chg] -= np.einsum("kp,ki->ip", c0, dl_partial_H_dr[d_slices[frag_map[0]][chg], d_slices[frag_map[0]][chg]])
+
+        # the following are the two terms from the derivative with respect to S^{-1} from the right
+        if grad_level == "full":
+            gradient_states[chg] -= np.einsum("im,mp->ip", dl_H_dl_partial[d_slices[frag_map[0]][chg], d_slices[frag_map[0]][chg]], c0)
+            gradient_states[chg] -= np.einsum("ki,kp->ip", dl_H_dl_partial[d_slices[frag_map[0]][chg], d_slices[frag_map[0]][chg]], c0)
         
     return gs_energy, gradient_states, dl, dr
 

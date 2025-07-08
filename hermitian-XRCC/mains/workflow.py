@@ -25,7 +25,7 @@ import qode.math.tensornet as tensornet
 #import qode.util
 from qode.util import timer, sort_eigen
 #from state_gradients import state_gradients, get_slices, get_adapted_overlaps
-from state_screening import state_screening#, orthogonalize
+from state_screening import state_screening, orthogonalize
 
 #import torch
 import numpy as np
@@ -155,6 +155,15 @@ def run_xr(displacement, max_iter, xr_order_final, xr_order_solver=0, dens_filte
 
     relevant_determinants, confs_and_inds = state_screening(dens_builder_stuff, ints, monomer_charges, n_orbs, frozen_orbs, n_occ, n_threads=n_threads,
                                                         single_thresh=single_thresh, double_thresh=double_thresh, triple_thresh=triple_thresh, sp_thresh=sp_thresh)
+    
+    #print(np.array(relevant_determinants[0][0][0:2]))
+    #for frag in range(2):
+    #    relevant_determinants[frag][0] = [i for i in orthogonalize(np.concatenate((relevant_determinants[frag][0], np.identity(len(state_obj[0].configs))), axis=0))]
+    #    print(relevant_determinants[frag][0][0:2])
+    #    print(relevant_determinants[frag][0][82])
+    #    print(len(relevant_determinants[frag][0]))
+    #    raise ValueError("stop here")
+    
     #raise ValueError("stop here")
     energies, dens_builder_stuff = optimize_states(max_iter, xr_order_solver, dens_builder_stuff, ints, n_occ, n_orbs, frozen_orbs, relevant_determinants,
                                                    dens_filter_thresh=dens_filter_thresh_solver, grad_level=grad_level, begin_from_state_prep=state_prep,
@@ -181,11 +190,11 @@ def run_xr(displacement, max_iter, xr_order_final, xr_order_solver=0, dens_filte
 
     #pickle.dump([dens, ints], open("dens_ints_prep_orb_opt.pkl", mode="wb"))
     #pickle.dump(dens, open("dens_opt_states.pkl", mode="wb"))
-    #dump_states = [{}, {}]
-    #for frag in range(2):
-    #    for chg in monomer_charges[frag]:
-    #        dump_states[frag][chg] = dens_builder_stuff[frag][0][chg].coeffs
-    #pickle.dump(dump_states, open("dens_opt_states.pkl", mode="wb"))
+    dump_states = [{}, {}]
+    for frag in range(2):
+        for chg in monomer_charges[frag]:
+            dump_states[frag][chg] = (dens_builder_stuff[frag][0][chg].coeffs, dens_builder_stuff[frag][0][chg].configs)
+    pickle.dump(dump_states, open("opt_states_confs_much_bigger.pkl", mode="wb"))
 
     final_en, final_state = get_xr_states(ints, dens, xr_order_final, monomer_charges, target_state)
 
@@ -194,5 +203,5 @@ def run_xr(displacement, max_iter, xr_order_final, xr_order_solver=0, dens_filte
 
 
 
-print(run_xr(3.5, 0, 0, single_thresh=1/6, double_thresh=1/4, triple_thresh=1/2.5,# sp_thresh=1/1.005,
-             grad_level="herm", state_prep=True, target_state=[0, 1], dens_filter_thresh_solver=1e-5))
+print(run_xr(4.5, 50, 0, single_thresh=1/7, double_thresh=1/5, triple_thresh=1/3.5,  # single_thresh=1/6, double_thresh=1/4, triple_thresh=1/2.5,# sp_thresh=1/1.005,
+             grad_level="herm_full", state_prep=False, target_state=[0], dens_filter_thresh_solver=1e-6))
