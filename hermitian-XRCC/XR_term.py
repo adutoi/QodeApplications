@@ -1,4 +1,4 @@
-#    (C) Copyright 2023 Anthony D. Dutoi
+#    (C) Copyright 2023, 2025 Anthony D. Dutoi and Marco Bauer
 # 
 #    This file is part of QodeApplications.
 # 
@@ -66,12 +66,12 @@ def _evaluate_block(result, op_blocks, frag_order, active_diagrams, subsys_indic
                                 block = numpy.zeros(n_states_i+n_states_j)    # concatenate lists and make ndarray
                         # !!! phases not yet implemented should be handled here.
                         #count = 0
-                        for I in compound_range([range(n) for n in n_states_j], inactive=frags):    # with frags of interest inactive, i vs j does not matter here
-                            for frag in frags:  I[frag] = full
+                        for J in compound_range([range(n) for n in n_states_j], inactive=frags):    # with frags of interest inactive, i vs j does not matter here
+                            for frag in frags:  J[frag] = full
                             if bra_det or ket_det:
-                                indices = tuple(I)
+                                indices = tuple(J)
                             else:
-                                indices = tuple(I+I)    # concatenate I with itself for "diagonal" element (wrt specified indices)
+                                indices = tuple(J+J)    # concatenate J with itself for "diagonal" element (wrt specified indices)
                             #try:
                             #if block[indices].shape != diagram_block.shape and len(diagram_block.shape) < 4:
                             #    print(block[indices].shape, diagram_block.shape)

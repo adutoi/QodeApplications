@@ -1,4 +1,4 @@
-#    (C) Copyright 2018, 2019, 2023, 2024 Anthony D. Dutoi, Marco Bauer and Yuhong Liu
+#    (C) Copyright 2018, 2019, 2023, 2024, 2025 Anthony D. Dutoi, Marco Bauer and Yuhong Liu
 # 
 #    This file is part of QodeApplications.
 # 
@@ -82,7 +82,7 @@ def _compress(args):
 
 
 # private version so that we can use "with pool" on the outside
-def _build_tensors(states, n_orbs, n_elec_0, thresh, options, n_threads, pool, dets, xr_order):
+def _build_tensors(states, n_orbs, n_elec_0, thresh, options, xr_order, dets, n_threads, pool):
     op_strings = {2:["aa"], 1:["a", "caa"], 0:["ca", "ccaa"]}
     if xr_order >= 1:
         op_strings[2].append("caaa")
@@ -187,8 +187,6 @@ def _build_tensors(states, n_orbs, n_elec_0, thresh, options, n_threads, pool, d
                 else:
                     values = pool.map(_compress, arguments)    # instead of pool, make pool.map the function argument, replaceable with map
             for i, n_bras, j, n_kets, rho_ij in values:
-                #if True:
-                #    if True:
                 indices = tuple(p+2 for p in range(len(op_string)))
                 temp_ij += _vec(i,n_bras)(0) @ _vec(j,n_kets)(1) @ rho_ij(*indices)
                 #if not options("bra_det"):
@@ -233,11 +231,12 @@ def _build_tensors(states, n_orbs, n_elec_0, thresh, options, n_threads, pool, d
     print("Writing to hard drive ...")
     return densities
 
-def build_tensors(states, n_orbs, n_elec_0, thresh=1e-10, options=None, n_threads=1, dets={}, xr_order=0):
+def build_tensors(states, n_orbs, n_elec_0, thresh=1e-10, options=None, xr_order=0, dets=None, n_threads=1):
+    dets = {} if (dets is None) else dets    # See: https://florimond.dev/en/posts/2018/08/python-mutable-defaults-are-the-source-of-all-evil
     if n_threads>1:
         with multiprocessing.Pool(n_threads, maxtasksperchild=1) as pool:    # to avoid errors on exit, both maxtasksperchild=1 ...
-            densities = _build_tensors(states, n_orbs, n_elec_0, thresh, options, n_threads, pool, dets, xr_order)
+            densities = _build_tensors(states, n_orbs, n_elec_0, thresh, options, xr_order, dets, n_threads, pool)
             pool.close()                                                     # ... and pool.close() seem to be necessary
     else:
-        densities = _build_tensors(states, n_orbs, n_elec_0, thresh, options, n_threads, None, dets, xr_order)
+        densities = _build_tensors(states, n_orbs, n_elec_0, thresh, options, xr_order, dets, n_threads, None)
     return densities
