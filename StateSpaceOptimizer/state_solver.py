@@ -99,8 +99,11 @@ def optimize_states(max_iter, xr_order, dens_builder_stuff, ints, n_occ, n_orbs,
         if type(target_state) == int:
             target_state = [target_state]
 
-        full_eigvecs = [full_eigvec_r, full_eigvec_l]
-        target_vecs = [np.real(full_eigvecs[lr][:, i].reshape((n_states[0], n_states[1]))) for i in target_state for lr in range(2)]
+        # it would be correct here to also use the left eigvec, but it was found that only the right eigvec
+        # yields similar or even better results with much more compact state spaces.
+        # TODO: an open question remains how the performance differs for stronger interacting fragments
+        full_eigvecs = [full_eigvec_r]#, full_eigvec_l]
+        target_vecs = [np.real(full_eigvecs[lr][:, i].reshape((n_states[0], n_states[1]))) for i in target_state for lr in range(len(full_eigvecs))]
         #def get_large_elems(mat, eps=1e-3):
         #    ret = {}
         #    for i, vec in enumerate(mat):
@@ -177,7 +180,7 @@ def optimize_states(max_iter, xr_order, dens_builder_stuff, ints, n_occ, n_orbs,
 
         return chg_sorted_keepers, dens_builder_stuff, full_eigvals[target_state]
     
-    def alternate_enlarge_and_opt(frag_ind, dens_builder_stuff, dens, state_coeffs, dens_eigval_thresh=dens_filter_thresh, dets={}, target_state=target_state):
+    def alternate_enlarge_and_opt(frag_ind, dens_builder_stuff, dens, state_coeffs, dens_eigval_thresh=dens_filter_thresh, dets={}, target_state=target_state, grad_level=grad_level):
         print(f"opt frag {frag_ind}")
 
         if type(target_state) != int:
@@ -293,8 +296,11 @@ def optimize_states(max_iter, xr_order, dens_builder_stuff, ints, n_occ, n_orbs,
         if type(target_state) == int:
             target_state = [target_state]
 
-        full_eigvecs = [full_eigvec_r, full_eigvec_l]
-        target_vecs = [np.real(full_eigvecs[lr][:, i].reshape((n_states[0], n_states[1]))) for i in target_state for lr in range(2)]
+        # it would be correct here to also use the left eigvec, but it was found that only the right eigvec
+        # yields similar or even better results with much more compact state spaces.
+        # TODO: an open question remains how the performance differs for stronger interacting fragments
+        full_eigvecs = [full_eigvec_r]#, full_eigvec_l]
+        target_vecs = [np.real(full_eigvecs[lr][:, i].reshape((n_states[0], n_states[1]))) for i in target_state for lr in range(len(full_eigvecs))]
         #def get_large_elems(mat, eps=1e-3):
         #    ret = {}
         #    for i, vec in enumerate(mat):
@@ -494,7 +500,7 @@ def optimize_states(max_iter, xr_order, dens_builder_stuff, ints, n_occ, n_orbs,
         iter += 1
         # opt frag 0 and previously enlarge 1
         state_coeffs_optimized, dens_builder_stuff, dens = enlarge_state_space(1, state_coeffs_optimized, dens_builder_stuff, dens)
-        state_coeffs_optimized, dens_builder_stuff, gs_energy_a, gs_en_a_with_grads = alternate_enlarge_and_opt(0, dens_builder_stuff, dens, state_coeffs_optimized, dets=additional_states[0])
+        state_coeffs_optimized, dens_builder_stuff, gs_energy_a, gs_en_a_with_grads = alternate_enlarge_and_opt(0, dens_builder_stuff, dens, state_coeffs_optimized, dets=additional_states[0], grad_level=grad_level)
         converged = postprocessing(gs_energy_a, gs_en_a_with_grads, en_history, en_with_grads_history, converged)
 
         if all(screening_done.flatten()):
@@ -504,7 +510,7 @@ def optimize_states(max_iter, xr_order, dens_builder_stuff, ints, n_occ, n_orbs,
         
         # opt frag 1 and previously enlarge 0
         state_coeffs_optimized, dens_builder_stuff, dens = enlarge_state_space(0, state_coeffs_optimized, dens_builder_stuff, dens)
-        state_coeffs_optimized, dens_builder_stuff, gs_energy_a, gs_en_a_with_grads = alternate_enlarge_and_opt(1, dens_builder_stuff, dens, state_coeffs_optimized, dets=additional_states[1])
+        state_coeffs_optimized, dens_builder_stuff, gs_energy_a, gs_en_a_with_grads = alternate_enlarge_and_opt(1, dens_builder_stuff, dens, state_coeffs_optimized, dets=additional_states[1], grad_level=grad_level)
         converged = postprocessing(gs_energy_a, gs_en_a_with_grads, en_history, en_with_grads_history, converged)
 
         dens[0] = densities.build_tensors(*dens_builder_stuff[0][:-1], options=dens_builder_stuff[0][-1], n_threads=n_threads)

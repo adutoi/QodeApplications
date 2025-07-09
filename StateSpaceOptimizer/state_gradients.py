@@ -194,6 +194,7 @@ def state_gradients(frag_ind, ints, dens_builder_stuff, dens, monomer_charges, n
         gradient_states[chg] += np.einsum("ip,ki->kp", c0, H1[frag_map[1]][d_slices[frag_map[0]][chg], d_slices[frag_map[0]][chg]])  # frag B monomer H term
         #gradient_states[chg] *= 2
 
+        # TODO: check for stronger interacting systems whether this should be the one term for the "herm" gradient option
         # the following is the contribution <psi psi | H - E | phi psi>
         if grad_level == "full" or grad_level == "herm_full":
             gradient_states[chg] += np.einsum("ip,ki->kp", H1_new[frag_map[0]][d_slices[frag_map[0]][chg], c_slices[frag_map[0]][chg]], new_overlaps[chg])  # frag A monomer H term

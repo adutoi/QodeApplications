@@ -174,29 +174,47 @@ def run_xr(displacement, max_iter, xr_order_final, xr_order_solver=0, dens_filte
     
     #final_orb_opt_en, ints = optimize_orbs(orb_max_iter, xr_order_solver, BeN, ints, dens, dens_builder_stuff, monomer_charges=monomer_charges)
 
-    # TODO: remove this, when asymmetric diagonalization is activated
-    for chg in monomer_charges[0]:
-        len0 = len(dens_builder_stuff[0][0][chg].coeffs)
-        len1 = len(dens_builder_stuff[1][0][chg].coeffs)
-        if len0 > len1:
-            dens_builder_stuff[0][0][chg].coeffs = dens_builder_stuff[0][0][chg].coeffs[:len1]
-        elif len0 < len1:
-            dens_builder_stuff[1][0][chg].coeffs = dens_builder_stuff[1][0][chg].coeffs[:len0]
-        else:  # equal
-            continue
-
     # rebuild densities for appropriate order
     dens = [densities.build_tensors(*dens_builder_stuff[frag][:-1], options=dens_builder_stuff[frag][-1], n_threads=n_threads, xr_order=xr_order_final) for frag in range(2)]
 
     #pickle.dump([dens, ints], open("dens_ints_prep_orb_opt.pkl", mode="wb"))
     #pickle.dump(dens, open("dens_opt_states.pkl", mode="wb"))
-    dump_states = [{}, {}]
-    for frag in range(2):
-        for chg in monomer_charges[frag]:
-            dump_states[frag][chg] = (dens_builder_stuff[frag][0][chg].coeffs, dens_builder_stuff[frag][0][chg].configs)
-    pickle.dump(dump_states, open("opt_states_confs_much_bigger.pkl", mode="wb"))
+    #dump_states = [{}, {}]
+    #for frag in range(2):
+    #    for chg in monomer_charges[frag]:
+    #        dump_states[frag][chg] = (dens_builder_stuff[frag][0][chg].coeffs, dens_builder_stuff[frag][0][chg].configs)
+    #pickle.dump(dump_states, open("opt_states_confs_much_bigger.pkl", mode="wb"))
 
-    final_en, final_state = get_xr_states(ints, dens, xr_order_final, monomer_charges, target_state)
+    #final_en, final_state = get_xr_states(ints, dens, xr_order_final, monomer_charges, target_state)
+
+    # TODO: generalize the diagonalizer in excitonic.fci and excitonic.ccsd to also deal with asymmetric state spaces between fragments and then delete the following
+    from get_xr_result import get_xr_H
+    from state_gradients import get_slices
+    import scipy as sp
+    state_coeffs = [[dens_builder_stuff[frag][0][chg].coeffs for chg in monomer_charges[frag]] for frag in range(2)]
+    n_states = [sum(len(state_coeffs[i][chg]) for chg in monomer_charges[i]) for i in range(2)]
+
+    state_dict = [{chg: len(state_coeffs[i][chg]) for chg in monomer_charges[i]} for i in range(2)]
+
+    d_slices = [get_slices(state_dict[i], monomer_charges[i]) for i in range(2)]
+
+    H1, H2 = get_xr_H(ints, dens, xr_order_final, monomer_charges)
+    
+    full = H2.reshape(n_states[0], n_states[1],
+                        n_states[0], n_states[1])
+    
+    for chg0 in monomer_charges[0]:
+        for chg1 in monomer_charges[1]:
+            full[d_slices[0][chg0], d_slices[1][chg1], d_slices[0][chg0], d_slices[1][chg1]] +=\
+                np.einsum("ij,kl->ikjl", H1[0][d_slices[0][chg0], d_slices[0][chg0]], np.eye(state_dict[1][chg1])) +\
+                np.einsum("ij,kl->ikjl", np.eye(state_dict[0][chg0]), H1[1][d_slices[1][chg1], d_slices[1][chg1]])
+
+    full = full.reshape(n_states[0] * n_states[1],
+                        n_states[0] * n_states[1])
+
+    full_eigvals_raw, full_eigvec_l_unsorted, full_eigvec_r_unsorted = sp.linalg.eig(full, left=True, right=True)
+    full_eigvals_check, full_eigvec_r = sort_eigen((full_eigvals_raw, full_eigvec_r_unsorted))
+    final_en = full_eigvals_check[target_state]
 
     #return energies[-1], final_orb_opt_en, final_en
     return energies[-1], final_en
@@ -204,4 +222,4 @@ def run_xr(displacement, max_iter, xr_order_final, xr_order_solver=0, dens_filte
 
 
 print(run_xr(4.5, 50, 0, single_thresh=1/7, double_thresh=1/5, triple_thresh=1/3.5,  # single_thresh=1/6, double_thresh=1/4, triple_thresh=1/2.5,# sp_thresh=1/1.005,
-             grad_level="herm_full", state_prep=False, target_state=[0], dens_filter_thresh_solver=1e-6))
+             grad_level="full", state_prep=False, target_state=0, dens_filter_thresh_solver=1e-6))
