@@ -266,10 +266,10 @@ def state_screening(dens_builder_stuff, ints, monomer_charges, n_orbs, frozen, n
                 if ex not in missing_states[frag][chg].keys():
                     missing_states[frag][chg][ex] = dens_builder_stuff[frag][0][chg].configs.index(ex)
 
-    # neutral contributions from two el ints for single excitations (less important, but still relevant for high precision...)    
+    # neutral contributions from two el ints for single excitations   
     gs = total_gs_config_neutral
     for frag in range(2):
-        # the following loop is unique here, because one should also loop over charge 1, but for
+        # TODO: The following loop is unique here, because one should also loop over charge 1, but for
         # Be with frozen core only the frozen electron is left for the cation for one spin contribution.
         # That means, one could only excite the electron of the other spin, corresponding to a shake up
         # state over two different spins...These contributions are expected to be small though and due to
@@ -307,7 +307,7 @@ def state_screening(dens_builder_stuff, ints, monomer_charges, n_orbs, frozen, n
             frag_inds[special_ind] = frag
             int = get_v(tuple(frag_inds))
             for comb in get_large(int, thresh_frac=(1/1.5) * single_thresh * double_thresh * triple_thresh, compress_ouput=False):
-                # to understand the following sorting you must know, that according to the working equaitons B30 and B31
+                # to understand the following sorting you must know, that according to the working equaitons B36 and B37
                 # the last two indices of the two el int always refer to annihilations and the first two always to creations
                 if any(elem in frozen for elem in comb):
                     continue

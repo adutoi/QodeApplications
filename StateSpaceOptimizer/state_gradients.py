@@ -155,7 +155,7 @@ def state_gradients(frag_ind, ints, dens_builder_stuff, dens, monomer_charges, n
     H2 = H2.reshape((H1[0].shape[0], H1[1].shape[0]))#, H1[0].shape[1], H1[1].shape[1]))
 
     # the following is the contribution <psi psi | H - E | phi psi>
-    if grad_level == "full" or grad_level == "herm_full":
+    if "full" in grad_level:
         # TODO: this is a waste...one can also obtain the corresponding grad terms from biorthogonalizing the kets of the integrals
         # instead of the bras, which is much faster than building the new densities
         dens[frag_map[0]] = densities.build_tensors(*dens_builder_stuff[frag_map[0]][:-1], options=dens_builder_stuff[frag_map[0]][-1] + ["ket_det"], n_threads=n_threads, dets=dets)
@@ -191,13 +191,14 @@ def state_gradients(frag_ind, ints, dens_builder_stuff, dens, monomer_charges, n
             gradient_states[chg] += H2[d_slices[frag_map[0]][chg], c_slices[frag_map[0]][chg]]  # dimer H term
         # this line also relies on equal charges on fragments A and B
         gradient_states[chg] += np.einsum("ip,ki->kp", c0, H1[frag_map[1]][d_slices[frag_map[0]][chg], d_slices[frag_map[0]][chg]])  # frag B monomer H term
-        #gradient_states[chg] *= 2
+        #if not "full" in grad_level:
+        #    gradient_states[chg] *= 2
 
         # TODO: check for stronger interacting systems whether this should be the one term for the "herm" gradient option
         # the following is the contribution <psi psi | H - E | phi psi>
-        if grad_level == "full" or grad_level == "herm_full":
+        if "full" in grad_level:
             gradient_states[chg] += np.einsum("ip,ki->kp", H1_new[frag_map[0]][d_slices[frag_map[0]][chg], c_slices[frag_map[0]][chg]], new_overlaps[chg])  # frag A monomer H term
-            gradient_states[chg] -= np.einsum("ip,ki->kp", c0, new_overlaps[chg]) * E  # E term
+            gradient_states[chg] -= np.einsum("ip,ik->kp", c0, new_overlaps[chg]) * E  # E term
             if frag_ind == 0:
                 gradient_states[chg] += H2_new[c_slices[frag_map[0]][chg], d_slices[frag_map[0]][chg]].T  # dimer H term
             else:
