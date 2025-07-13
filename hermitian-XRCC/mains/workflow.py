@@ -214,12 +214,27 @@ def run_xr(displacement, max_iter, xr_order_final, xr_order_solver=0, dens_filte
 
     full_eigvals_raw, full_eigvec_l_unsorted, full_eigvec_r_unsorted = sp.linalg.eig(full, left=True, right=True)
     full_eigvals_check, full_eigvec_r = sort_eigen((full_eigvals_raw, full_eigvec_r_unsorted))
-    final_en = full_eigvals_check[target_state]
+    final_en = full_eigvals_check[0:2]
 
     #return energies[-1], final_orb_opt_en, final_en
     return energies[-1], final_en
 
 
 
-print(run_xr(4.5, 50, 0, single_thresh=1/7, double_thresh=1/5, triple_thresh=1/3.5,  # single_thresh=1/6, double_thresh=1/4, triple_thresh=1/2.5,# sp_thresh=1/1.005,
-             grad_level="full", state_prep=False, target_state=0, dens_filter_thresh_solver=1e-6))
+print(run_xr(4.5, 0, 0, single_thresh=1/7, double_thresh=1/5, triple_thresh=1/3.5,  # single_thresh=1/6, double_thresh=1/4, triple_thresh=1/2.5,# sp_thresh=1/1.005,
+             grad_level="herm", state_prep=True, target_state=[0], dens_filter_thresh_solver=1e-7))
+
+"""
+# the following error catching is useful for scans along a reaction coordinate.
+# this error is returned if the subspace collapses.
+ret_list = []
+for i in range(41):
+    try:
+        ret_list.append(
+            run_xr(3.0 + i/10, 50, 1, single_thresh=1/8, double_thresh=1/6, triple_thresh=1/4,
+             grad_level="full", state_prep=False, target_state=0, dens_filter_thresh_solver=1e-7)
+        )
+    except IndexError:
+        ret_list.append([])
+print(ret_list)
+"""
