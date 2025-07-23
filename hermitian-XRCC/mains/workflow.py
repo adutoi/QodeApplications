@@ -41,8 +41,14 @@ from   build_fci_states import get_fci_states
 #from build_Be_rho import build_Be_rho
 import densities
 
+import os
+
+os.environ["OMP_NUM_THREADS"] = "4"
+
 tl.plugins.use_opt_einsum()
 tensornet.backend_contract_path(True)
+
+np.set_printoptions(legacy="1.25")  # this gets rid of the print update in numpy 2
 
 class empty(object):  pass  # for pickle load initialization without get_fci_states
 
@@ -221,7 +227,7 @@ def run_xr(displacement, max_iter, xr_order_final, xr_order_solver=0, dens_filte
 
 
 
-print(run_xr(4.5, 0, 0, single_thresh=1/7, double_thresh=1/5, triple_thresh=1/3.5,  # single_thresh=1/6, double_thresh=1/4, triple_thresh=1/2.5,# sp_thresh=1/1.005,
+print(run_xr(4.5, 0, 1, single_thresh=1/8, double_thresh=1/6, triple_thresh=1/4,  # single_thresh=1/6, double_thresh=1/4, triple_thresh=1/2.5,# sp_thresh=1/1.005,
              grad_level="herm", state_prep=True, target_state=[0], dens_filter_thresh_solver=1e-7))
 
 """

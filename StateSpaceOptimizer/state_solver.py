@@ -85,14 +85,16 @@ def optimize_states(max_iter, xr_order, dens_builder_stuff, ints, n_occ, n_orbs,
         full = full.reshape(n_states[0] * n_states[1],
                             n_states[0] * n_states[1])
 
-        full_eigvals_raw, full_eigvec_l_unsorted, full_eigvec_r_unsorted = sp.linalg.eig(full, left=True, right=True)
-        full_eigvals, full_eigvec_l = sort_eigen((full_eigvals_raw, full_eigvec_l_unsorted))
-        full_eigvals_check, full_eigvec_r = sort_eigen((full_eigvals_raw, full_eigvec_r_unsorted))
-        if any(full_eigvals - full_eigvals_check):  # this check should be unnecessary and might need to be refined for fully degenerate states
-            raise ValueError("sorting went wrong with the sorting")
+        #full_eigvals_raw, full_eigvec_l_unsorted, full_eigvec_r_unsorted = sp.linalg.eig(full, left=True, right=True)
+        #full_eigvals_check, full_eigvec_l = sort_eigen((full_eigvals_raw, full_eigvec_l_unsorted))
+        # If only the right eigenvector is used later also only ask for it, as this will lead to a significant performace gain
+        full_eigvals_raw, full_eigvec_r_unsorted = sp.linalg.eig(full)
+        full_eigvals, full_eigvec_r = sort_eigen((full_eigvals_raw, full_eigvec_r_unsorted))
+        #if any(full_eigvals - full_eigvals_check):  # this check should be unnecessary and might need to be refined for fully degenerate states
+        #    raise ValueError("sorting went wrong with the sorting")
         print(full_eigvals[target_state])
-        if np.linalg.norm(np.imag(full_eigvec_l[:, target_state])) > 1e-10:
-            raise ValueError("imaginary part of eigenvector is not negligible")
+        #if np.linalg.norm(np.imag(full_eigvec_l[:, target_state])) > 1e-10:
+        #    raise ValueError("imaginary part of eigenvector is not negligible")
         if np.linalg.norm(np.imag(full_eigvec_r[:, target_state])) > 1e-10:
             raise ValueError("imaginary part of eigenvector is not negligible")
 
@@ -154,20 +156,51 @@ def optimize_states(max_iter, xr_order, dens_builder_stuff, ints, n_occ, n_orbs,
 
         new_vecs = [np.einsum("ij,jp->ip", np.array(new_large_vecs[frag]), large_vec_map[frag]) for frag in range(2)]
         
+        mixed_states = {}
         chg_sorted_keepers = [{chg: [] for chg in monomer_charges[frag]} for frag in range(2)]
         for frag in range(2):
             for state in new_vecs[frag]:
                 state /= np.linalg.norm(state)
                 norms = {chg: np.linalg.norm(state[c_slices[frag][chg]]) for chg in monomer_charges[frag]}
-                if max(norms.values()) < 0.99:
-                    ValueError(f"mixed state encountered (different charges are mixed for a state on frag {frag}), see {norms}")
-                chg_sorted_keepers[frag][max(norms, key=norms.get)].append(state[c_slices[frag][max(norms, key=norms.get)]])
+                print(norms, max(norms.values()))
+                #if max(norms.values()) < 1 - 1e-6:
+                #    raise ValueError(f"mixed state encountered (different charges are mixed for a state on frag {frag}), see {norms}")
+                if max(norms.values()) > 1 - 1e-8:
+                    chg_sorted_keepers[frag][max(norms, key=norms.get)].append(state[c_slices[frag][max(norms, key=norms.get)]])
+                else:
+                    match = False
+                    for key in mixed_states.keys():
+                        if abs(max(norms.values()) - max(key)) < 1e-10:
+                            # expect them to only turn up pairwise...if this is not the case, something more sophisticated needs to implemented here
+                            # also expect the chg order in the key to be the same as in the current norms dict
+                            for i, chg in enumerate(norms.keys()):
+                                if norms[chg] < 1e-6:
+                                    continue
+                                if abs(key[i]**2 + norms[chg]**2 - 1) > 1e-10:
+                                    raise ValueError("the charge contributions were found to be neither negligible nor adding up pairwise")
+                                chg_state = state[c_slices[frag][chg]] + mixed_states[key][c_slices[frag][chg]]
+                                chg_sorted_keepers[frag][chg].append(chg_state / np.linalg.norm(chg_state))
+                            del mixed_states[key]
+                            match = True
+                            break
+                    if not match:
+                        mixed_states[tuple(norms.values())] = state
+        if mixed_states:
+            print(mixed_states.keys())
+            print("care, the above combs of states couldn't be resolved and will be neglected")
+            #raise NotImplementedError("the current step requires are more refined charge filtering than is currently implemented")
 
         for frag in range(2):
             print(f"fragment {frag}")
             for chg, vecs in chg_sorted_keepers[frag].items():
                 chg_sorted_keepers[frag][chg] = [i for i in orthogonalize(np.array(vecs))]
                 print(f"for charge {chg} {len(chg_sorted_keepers[frag][chg])} states are kept")
+
+        for frag in range(2):
+            for chg in monomer_charges[frag]:
+                if len(chg_sorted_keepers[frag][chg])== 0:
+                    print(f"to prevent algorithm from breaking, because for frag {frag} with charge {chg} no states are kept, we keep the previous states for these charges here")
+                    chg_sorted_keepers[frag][chg] = dens_builder_stuff[frag][0][chg].coeffs
 
         for chg in monomer_charges[0]:
             for i, vec in enumerate(chg_sorted_keepers[0][chg]):
@@ -367,14 +400,39 @@ def optimize_states(max_iter, xr_order, dens_builder_stuff, ints, n_occ, n_orbs,
 
         new_vecs = [np.einsum("ij,jp->ip", np.array(keepers[frag]), large_vec_map[frag]) for frag in range(2)]
         
+        mixed_states = {}
         chg_sorted_keepers = [{chg: [] for chg in monomer_charges[frag]} for frag in range(2)]
         for frag in range(2):
             for state in new_vecs[frag]:
                 state /= np.linalg.norm(state)
                 norms = {chg: np.linalg.norm(state[c_slices[frag][chg]]) for chg in monomer_charges[frag]}
-                if max(norms.values()) < 0.99:
-                    ValueError(f"mixed state encountered (different charges are mixed for a state on frag {frag}), see {norms}")
-                chg_sorted_keepers[frag][max(norms, key=norms.get)].append(state[c_slices[frag][max(norms, key=norms.get)]])
+                print(norms, max(norms.values()))
+                #if max(norms.values()) < 1 - 1e-6:
+                #    raise ValueError(f"mixed state encountered (different charges are mixed for a state on frag {frag}), see {norms}")
+                if max(norms.values()) > 1 - 1e-8:
+                    chg_sorted_keepers[frag][max(norms, key=norms.get)].append(state[c_slices[frag][max(norms, key=norms.get)]])
+                else:
+                    match = False
+                    for key in mixed_states.keys():
+                        if abs(max(norms.values()) - max(key)) < 1e-10:
+                            # expect them to only turn up pairwise...if this is not the case, something more sophisticated needs to implemented here
+                            # also expect the chg order in the key to be the same as in the current norms dict
+                            for i, chg in enumerate(norms.keys()):
+                                if norms[chg] < 1e-6:
+                                    continue
+                                if abs(key[i]**2 + norms[chg]**2 - 1) > 1e-10:
+                                    raise ValueError("the charge contributions were found to be neither negligible nor adding up pairwise")
+                                chg_state = state[c_slices[frag][chg]] + mixed_states[key][c_slices[frag][chg]]
+                                chg_sorted_keepers[frag][chg].append(chg_state / np.linalg.norm(chg_state))
+                            del mixed_states[key]
+                            match = True
+                            break
+                    if not match:
+                        mixed_states[tuple(norms.values())] = state
+        if mixed_states:
+            print(mixed_states.keys())
+            print("care, the above combs of states couldn't be resolved and will be neglected")
+            #raise NotImplementedError("the current step requires are more refined charge filtering than is currently implemented")
 
         for frag in range(2):
             print(f"fragment {frag}")
@@ -384,6 +442,12 @@ def optimize_states(max_iter, xr_order, dens_builder_stuff, ints, n_occ, n_orbs,
                     final_keepers.append(vec)
                 chg_sorted_keepers[frag][chg] = final_keepers
                 print(f"for charge {chg} {len(chg_sorted_keepers[frag][chg])} states are kept")
+
+        #for frag in range(2):
+        #    for chg in monomer_charges[frag]:
+        #        if len(chg_sorted_keepers[frag][chg])== 0:
+        #            print(f"to prevent algorithm from breaking, because for frag {frag} with charge {chg} no states are kept, we keep the previous states for these charges here")
+        #            chg_sorted_keepers[frag][chg] = dens_builder_stuff[frag][0][chg].coeffs
 
         for frag in range(2):
             for chg in monomer_charges[frag]:

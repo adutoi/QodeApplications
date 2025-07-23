@@ -176,6 +176,10 @@ def state_gradients(frag_ind, ints, dens_builder_stuff, dens, monomer_charges, n
     if grad_level == "full":
         H_dl = np.einsum("ik,i->k", H_no_dets, dl.reshape((H_no_dets.shape[0])))
         dl_H_dr_partial = np.einsum("il,ml->im", H_dl.reshape(dl.shape), dr)
+
+    E_prefac = -1
+    if grad_level == "full":
+        E_prefac = 1
     
     for chg in monomer_charges[frag_map[0]]:
         if dets:
@@ -184,7 +188,7 @@ def state_gradients(frag_ind, ints, dens_builder_stuff, dens, monomer_charges, n
         else:
             c0 = state_coeffs[frag_map[0]][chg]
         gradient_states[chg] = np.einsum("pi,ki->kp", H1[frag_map[0]][c_slices[frag_map[0]][chg], d_slices[frag_map[0]][chg]], new_overlaps[chg])  # frag A monomer H term
-        gradient_states[chg] -= np.einsum("ip,ki->kp", c0, new_overlaps[chg]) * E  # E term
+        gradient_states[chg] += E_prefac * np.einsum("ip,ki->kp", c0, new_overlaps[chg]) * E  # E term
         if frag_ind == 0:
             gradient_states[chg] += H2[c_slices[frag_map[0]][chg], d_slices[frag_map[0]][chg]].T  # dimer H term
         else:
@@ -198,7 +202,7 @@ def state_gradients(frag_ind, ints, dens_builder_stuff, dens, monomer_charges, n
         # the following is the contribution <psi psi | H - E | phi psi>
         if "full" in grad_level:
             gradient_states[chg] += np.einsum("ip,ki->kp", H1_new[frag_map[0]][d_slices[frag_map[0]][chg], c_slices[frag_map[0]][chg]], new_overlaps[chg])  # frag A monomer H term
-            gradient_states[chg] -= np.einsum("ip,ik->kp", c0, new_overlaps[chg]) * E  # E term
+            gradient_states[chg] += E_prefac * np.einsum("ip,ik->kp", c0, new_overlaps[chg]) * E  # E term
             if frag_ind == 0:
                 gradient_states[chg] += H2_new[c_slices[frag_map[0]][chg], d_slices[frag_map[0]][chg]].T  # dimer H term
             else:

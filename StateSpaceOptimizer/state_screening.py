@@ -278,27 +278,18 @@ def state_screening(dens_builder_stuff, ints, monomer_charges, n_orbs, frozen, n
         # an ionization and excitation in the same spin, which is not possible though for Be with frozen core.
         for chg in [0]:#range(min(monomer_charges[frag]), max(monomer_charges[frag])):  # loops over -1 and 0
             int = v0101
-            #for elem in missing_orbs(int, dens, frag):  # ref_inds 2 and 3 should be equal to 0 and 1
-            for elem in get_large(int, thresh_frac=single_thresh)[frag]:
-                if elem in frozen:
+            for full_comb in get_large(two_el_int, thresh_frac=single_thresh, compress_ouput=False):
+                comb = (full_comb[frag], full_comb[frag + 2])
+                if any(elem in frozen for elem in comb):
                     continue
-                if elem in conf_decoder(total_gs_config_neutral, n_orbs):  # filter out occupied orbitals
+                if comb[0] == comb[1]:
                     continue
-                # build excitation from gs det into singly excited det
-                if elem >= n_orbs:  # beta requires beta excitation
-                    #gs = min([abs(i - beta_gs_config) for i in dens_builder_stuff[0][0][0].configs]) + beta_gs_config
-                    ion = gs - 2**(n_orbs - 1 + n_occ[1])
-                else:  # alpha requires alpha excitation
-                    #gs = min(dens_builder_stuff[0][0][0].configs)  # this works, if spin flip is not allowed
-                    ion = gs - 2**(n_occ[0] - 1)
-                if chg == 0:
-                    ex = ion + 2**elem
-                elif chg == -1:
-                    ex = gs + 2**elem
-                else:
-                    raise ValueError(f"chg {chg} not accepted")
-                if ex not in missing_states[frag][chg].keys():
-                    missing_states[frag][chg][ex] = dens_builder_stuff[frag][0][chg].configs.index(ex)
+                if comb[1] not in conf_decoder(total_gs_config_neutral, n_orbs):
+                    continue
+                if comb[0] in conf_decoder(total_gs_config_neutral, n_orbs):
+                    continue
+                ex = total_gs_config_neutral + 2**comb[0] - 2**comb[1]
+                missing_states[frag][0][ex] = dens_builder_stuff[frag][0][0].configs.index(ex)
 
     # charged contributions from two el ints for single and double excitations
     for frag in range(2):
@@ -483,6 +474,35 @@ def state_screening(dens_builder_stuff, ints, monomer_charges, n_orbs, frozen, n
             new_states = orthogonalize(np.array(new_states))
             dens_builder_stuff[frag][0][chg].coeffs = [i for i in new_states]
     """
+
+    # build all neutral spin-flips here
+    """
+    for frag in range(2):
+        for i in range(n_orbs):
+            for j in range(i):
+                if any(elem in frozen for elem in (i,j)):
+                    continue
+                base = sum([2**f for f in frozen])
+                ex_alpha = base + 2**i + 2**j
+                ex_beta = base + 2**(i + n_orbs) + 2 **(j + n_orbs)
+                missing_states[frag][0][ex_alpha] = dens_builder_stuff[frag][0][0].configs.index(ex_alpha)
+                missing_states[frag][0][ex_beta] = dens_builder_stuff[frag][0][0].configs.index(ex_beta)
+    """
+
+    # build all neutral excitations
+    """
+    for frag in range(2):
+        for i in range(2 * n_orbs):
+            for j in range(i):
+                if any(elem in frozen for elem in (i,j)):
+                    continue
+                base = sum([2**f for f in frozen])
+                ex_alpha = base + 2**i + 2**j
+                #ex_beta = base + 2**(i + n_orbs) + 2 **(j + n_orbs)
+                missing_states[frag][0][ex_alpha] = dens_builder_stuff[frag][0][0].configs.index(ex_alpha)
+                #missing_states[frag][0][ex_beta] = dens_builder_stuff[frag][0][0].configs.index(ex_beta)
+    """
+
     ret = {}
     for frag in range(2):
         ret[frag] = {}
@@ -497,6 +517,10 @@ def state_screening(dens_builder_stuff, ints, monomer_charges, n_orbs, frozen, n
                 det_states.append(np.zeros_like(dens_builder_stuff[frag][0][chg].coeffs[0]))
                 det_states[-1][ind] = 1.
                 already_included.append(det)
+                #if chg != 1:
+                #    det_states.append(np.zeros_like(dens_builder_stuff[frag][0][chg].coeffs[0]))
+                #    det_states[-1][ind] = 1.
+                #    already_included.append(det)
                 # the following part "sorts" the filtered determinants such that every non-singlet determinant is followed by its counterpart,
                 # e.g. the alpha HOMO -> beta LUMO determinant is followed by the beta HOMO -> alpha LUMO determinant for a singlet reference system.
                 # However, it was found for Be 6-31g that no sorting yields the best results!
