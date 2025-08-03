@@ -17,6 +17,7 @@
 #
 
 import numpy
+import torch
 from qode.util import recursive_looper, compound_range
 
 def _evaluate_block(result, op_blocks, frag_order, active_diagrams, subsys_indices, subsys_charges):
@@ -57,7 +58,8 @@ def _evaluate_block(result, op_blocks, frag_order, active_diagrams, subsys_indic
                     diagram_block = op_blocks[tuple(m[x] for x in frags)][tuple(subsys_charges[x] for x in frags)][diagram]
                     if diagram_block is not None:
                         if block is None:
-                            block = numpy.zeros(n_states_i+n_states_j)    # concatenate lists and make ndarray
+                            #block = numpy.zeros(n_states_i+n_states_j)    # concatenate lists and make ndarray
+                            block = torch.zeros(n_states_i+n_states_j, dtype=torch.float64)    # concatenate lists and make ndarray
                         # !!! phases not yet implemented should be handled here.
                         for I in compound_range([range(n) for n in n_states_i], inactive=frags):    # with frags of interest inactive, i vs j does not matter here
                             for frag in frags:  I[frag] = full
@@ -65,6 +67,8 @@ def _evaluate_block(result, op_blocks, frag_order, active_diagrams, subsys_indic
                             block[indices] += diagram_block
                 if block is not None:
                     block = block.reshape(numpy.prod(n_states_i), numpy.prod(n_states_j))
+                    # changing the following is not necessary
+                    #block = block.reshape(torch.prod(torch.tensor(n_states_i), dtype=torch.float64), torch.prod(torch.tensor(n_states_j), dtype=torch.float64))
                     result += block
     recursive_looper(loops, kernel)
 
@@ -72,7 +76,8 @@ def monomer_matrix(op_blocks, active_diagrams, subsys_index, charge_blocks):
     # This code is restricted specifically to monomer (sub)systems
     rho = op_blocks.densities[subsys_index]
     dim = sum(rho['n_states'][chg] for chg in charge_blocks)
-    Matrix = numpy.zeros((dim,dim))
+    #Matrix = numpy.zeros((dim,dim))
+    Matrix = torch.zeros((dim,dim), dtype=torch.float64)
     #
     Ibeg = 0
     for chg_i in charge_blocks:
@@ -92,9 +97,11 @@ def dimer_matrix(op_blocks, active_diagrams, subsys_indices, charge_blocks):
     # This code is restricted specifically to dimer (sub)systems
     rho1, rho2 = (op_blocks.densities[m] for m in subsys_indices)
     dim = sum(rho1['n_states'][chg1]*rho2['n_states'][chg2] for chg1,chg2 in charge_blocks)
-    Matrix = numpy.zeros((dim,dim))
+    #Matrix = numpy.zeros((dim,dim))
+    Matrix = torch.zeros((dim,dim), dtype=torch.float64)
     #
     Ibeg = 0
+    #print("charge blocks", charge_blocks)
     for chg_i1,chg_i2 in charge_blocks:
         Iend = Ibeg + rho1['n_states'][chg_i1]*rho2['n_states'][chg_i2]
         Jbeg = 0
@@ -102,6 +109,7 @@ def dimer_matrix(op_blocks, active_diagrams, subsys_indices, charge_blocks):
             Jend = Jbeg + rho1['n_states'][chg_j1]*rho2['n_states'][chg_j2]
             result = Matrix[Ibeg:Iend,Jbeg:Jend]
             subsys_charges = [(chg_i1,chg_j1),(chg_i2,chg_j2)]
+            #print("subsys charges", subsys_charges)
             for frag_order in active_diagrams:
                 _evaluate_block(result, op_blocks, frag_order, active_diagrams[frag_order], subsys_indices, subsys_charges)
             Jbeg = Jend

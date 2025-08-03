@@ -18,6 +18,12 @@
 
 import numpy
 from qode.util import recursive_looper
+import time
+#import tensorly as tl
+#import ray
+import torch
+
+#tl.set_backend("pytorch")
 
 ##########
 # This function does the heavy lifting.  Called by instances of innermost class below.
@@ -31,13 +37,18 @@ def _build_block(diagram_term, n_states, permutation):
         n_states_i, n_states_j = n_states
         dims = [(m,n_states_i[m]) for m in permutation] + [(frag_order+m,n_states_j[m]) for m in permutation]
         loops = [(m,range(r)) for m,r in dims]
-        result = numpy.zeros([r for m,r in dims])
+        #result = numpy.zeros([r for m,r in dims])
+        result = torch.zeros([r for m,r in dims], dtype=torch.float64)
+
+        #@ray.remote
         def kernel(*states):
             ordering, states = list(zip(*states))
             indices = [None]*len(states)
             for i,o in enumerate(ordering):
                 indices[o] = states[i]
+            #print(tuple(indices), *states)
             result[tuple(indices)] = diagram_term(*states)    # This is where the actual evaluation of the diagram happens
+
         recursive_looper(loops, kernel, order_aware=True)
     return result
 
@@ -60,6 +71,7 @@ class _charges(object):
         n_states_j = []
         for m in permutation:
             chg_i, chg_j = self._charges[m]
+            #print(chg_i, chg_j)
             n_states_i += [self._densities[self._subsystem[m]]['n_states'][chg_i]]
             n_states_j += [self._densities[self._subsystem[m]]['n_states'][chg_j]]
         return n_states_i, n_states_j
@@ -67,6 +79,11 @@ class _charges(object):
         if label not in self._results:
             frag_order = len(self._subsystem)
             try:
+                #if not "v" in label:
+                #if label != "s01v0000":
+                #    terms = [(None, None)]
+                #else:
+                print(label)
                 terms = self._diagrams.catalog[frag_order][label](self._densities, self._integrals, self._subsystem, self._charges)
             except:
                 raise NotImplementedError("diagram \'{}\' not implemented for {} bodies".format(label, frag_order))
@@ -74,7 +91,11 @@ class _charges(object):
                 self._results[label] = None
                 for term,permutation in terms:
                     if term is not None:
+                        start = time.time()
+                        #result_distributed = _build_block(term, self._n_states(permutation), permutation)
                         result = _build_block(term, self._n_states(permutation), permutation)
+                        print(time.time() - start)
+                        #result = numpy.copy(result_distributed)
                         if self._results[label] is None:  self._results[label]  = result
                         else:                             self._results[label] += result
         return self._results[label]

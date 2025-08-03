@@ -20,7 +20,7 @@ import tensorly
 from qode.math import precise_numpy_inverse, linear_inner_product_space, iterative_biorthog, biorthog_iteration
 from qode.util.PyC import Double
 from qode.atoms.integrals.fragments import AO_integrals, fragMO_integrals, bra_transformed, ket_transformed, spin_orb_integrals, Nuc_repulsion, as_raw_mat, as_frag_blocked_mat, zeros2, Id, mat_as_rows, mat_as_columns, space_traits, add, subtract, mat_mul, cached
-
+import qode.atoms.integrals.spatial_to_spin as spatial_to_spin
 
 
 def tensorly_wrapper(rule):
@@ -174,7 +174,15 @@ def get_ints(fragments):
     Sinv = direct_Sinv(fragments, FragMO_ints.S)
     BiFragMO_ints = bra_transformed(Sinv, FragMO_ints)    # no need to cache because each block only called once
 
-    FragMO_spin_ints   = spin_orb_integrals(  FragMO_ints, rule_wrappers=[tensorly_wrapper], cache=True)     # no need to cache? because each block only called once by contraction code
-    BiFragMO_spin_ints = spin_orb_integrals(BiFragMO_ints, rule_wrappers=[tensorly_wrapper], cache=True)     # no need to cache? because each block only called once by contraction code
+    arrange = (spatial_to_spin.one_electron_blocked, spatial_to_spin.two_electron_blocked)  # use this with homebrew fci densities
+    #arrange = (spatial_to_spin.one_electron_alternating, spatial_to_spin.two_electron_alternating)
+    #arrange = (spatial_to_spin.one_electron_alternating_blocks, spatial_to_spin.two_electron_alternating_blocks)  # use this with adcc densities
+    print("get_ints uses blocked at the moment (for fci densities)")
+    #print("get_ints uses alternating blocks at the moment (for adcc densities)")
+
+    FragMO_spin_ints   = spin_orb_integrals(  FragMO_ints, arrange, rule_wrappers=[tensorly_wrapper], cache=True)     # no need to cache? because each block only called once by contraction code
+    BiFragMO_spin_ints = spin_orb_integrals(BiFragMO_ints, arrange, rule_wrappers=[tensorly_wrapper], cache=True)     # no need to cache? because each block only called once by contraction code
+    #FragMO_spin_ints   = spin_orb_integrals(  FragMO_ints, rule_wrappers=[tensorly_wrapper], cache=True)     # no need to cache? because each block only called once by contraction code
+    #BiFragMO_spin_ints = spin_orb_integrals(BiFragMO_ints, rule_wrappers=[tensorly_wrapper], cache=True)     # no need to cache? because each block only called once by contraction code
 
     return FragMO_spin_ints, BiFragMO_spin_ints, Nuc_repulsion(fragments).matrix

@@ -17,7 +17,7 @@
 #
 
 from tendot import tendot
-
+#import ray
 
 
 class _empty(object):  pass    # Basically just a dictionary
@@ -33,7 +33,8 @@ def _parameters(densities, integrals, subsystem, charges, permutation=(0,)):
     data = _empty()
     data.P = 0 if permutation==(0,1) else 1    # This line of code is specific to two fragments (needs to be generalized for >=3).
     #
-    Dchg_rhos = {+2:["aa", "caaa"], +1:["a","caa","ccaaa"], 0:["ca","ccaa"], -1:["c","cca","cccaa"], -2:["cc", "ccca"]}
+    #Dchg_rhos = {+2:["aa", "caaa"], +1:["a","caa","ccaaa"], 0:["ca","ccaa"], -1:["c","cca","cccaa"], -2:["cc", "ccca"]}
+    Dchg_rhos = {+2:["aa", "caaa"], +1:["a","caa"], 0:["ca","ccaa"], -1:["c","cca"], -2:["cc", "ccca"]}
     n_i = 0
     n_i_label = ""
     for m0,m0_ in reversed(list(enumerate(permutation))):
@@ -41,8 +42,10 @@ def _parameters(densities, integrals, subsystem, charges, permutation=(0,)):
         n_i_label = m0_str + n_i_label
         chg_i_m0 , chg_j_m0  = charges[m0]
         chg_i_m0_, chg_j_m0_ = charges[m0_]
+        #print(chg_i_m0_, chg_j_m0_)
         Dchg_m0_ = chg_i_m0_ - chg_j_m0_
         n_i += densities[m0]['n_elec'][chg_i_m0]    # this is not an error!
+        #print(n_i)
         data.__dict__["Dchg_"+m0_str] = Dchg_m0_
         data.__dict__["n_i"+n_i_label] = n_i%2
         for Dchg,rhos in Dchg_rhos.items():
@@ -59,8 +62,6 @@ def _parameters(densities, integrals, subsystem, charges, permutation=(0,)):
                     data.__dict__["V_"+m0123_str] = V[m0_,m1_,m2_,m3_]
     return data
 
-
-
 ##########
 # Here are the implementations of the actual diagrams.
 # They must take the arguments (densities, integrals, subsystem, charges), but after that, it is up to you.
@@ -76,11 +77,37 @@ def v0000(densities, integrals, subsystem, charges):
     if X.Dchg_0==0:
         prefactor = 1
         def diagram(i0,j0):
+            """
+            for i in range(len(X.V_0000)):
+                for j in range(len(X.V_0000)):
+                    for k in range(len(X.V_0000)):
+                        for l in range(len(X.V_0000)):
+                            if X.ccaa_0[i0][j0][i,j,k,l] != 0.0:
+                                print(f"ccaa{[i0,j0],[i,j,k,l]}", X.ccaa_0[i0][j0][i,j,k,l])
+            for i in range(len(X.V_0000)):
+                for j in range(len(X.V_0000)):
+                    for k in range(len(X.V_0000)):
+                        for l in range(len(X.V_0000)):
+                            if X.V_0000[i,j,k,l] >= 1e-1:
+                                print(f"V_0000{[i,j,k,l]}", X.V_0000[i,j,k,l])
+            """
             return prefactor * tendot(X.V_0000, X.ccaa_0[i0][j0], axes=([0, 1, 2, 3], [0, 1, 3, 2]))
         return [(diagram, (0,))]
     else:
         return [(None, None)]
-
+"""    
+def v0000_mean(densities, integrals, subsystem, charges):
+    X = _parameters(densities, integrals, subsystem, charges)
+    if X.Dchg_0==0:
+        prefactor = 1
+        def diagram(i0,j0):
+            v_mean = tendot(X.V_0000, X.ca_0[i0][j0], axes=([1, 3], [1, 0]))
+            return prefactor * tendot(v_mean, X.ca_0[i0][j0], axes=([0, 1], [0, 1]))
+            #return prefactor * tendot(X.V_0000, X.ccaa_0[i0][j0], axes=([0, 1, 2, 3], [0, 1, 3, 2]))
+        return [(diagram, (0,))]
+    else:
+        return [(None, None)]
+"""
 
 
 # dimer diagrams
@@ -222,6 +249,7 @@ def _s01v0000(densities, integrals, subsystem, charges, permutation):
     X = _parameters(densities, integrals, subsystem, charges, permutation)
     if X.Dchg_0==-1 and X.Dchg_1==+1:
         prefactor = (-1)**(X.n_i1 + X.P)
+        #@ray.remote
         def diagram(i0,i1,j0,j1):
             partial =          tendot(X.S_01,            X.a_1[i1][j1], axes=([1], [0]))
             partial =          tendot(X.cccaa_0[i0][j0], partial,       axes=([2], [0]))
@@ -229,7 +257,23 @@ def _s01v0000(densities, integrals, subsystem, charges, permutation):
         return diagram, permutation
     else:
         return None, None
-
+"""
+def s01v0000_mean(densities, integrals, subsystem, charges):
+    result01 = _s01v0000_mean(densities, integrals, subsystem, charges, permutation=(0,1))
+    result10 = _s01v0000_mean(densities, integrals, subsystem, charges, permutation=(1,0))
+    return [result01, result10]
+def _s01v0000_mean(densities, integrals, subsystem, charges, permutation):
+    X = _parameters(densities, integrals, subsystem, charges, permutation)
+    if X.Dchg_0==-1 and X.Dchg_1==+1:
+        prefactor = (-1)**(X.n_i1 + X.P)
+        def diagram(i0,i1,j0,j1):
+            partial =          tendot(v_mean,  X.cca_0[i0][j0], axes=([0, 1], [1, 2]))
+            partial =          tendot(X.S_01,  partial,         axes=([0], [0]))
+            return prefactor * tendot(partial, X.a_1[i1][j1],   axes=([0], [0]))
+        return diagram, permutation
+    else:
+        return None, None
+"""
 # ij,pqrs,pqjrs,i-> :  S_10  V_0000  ccaaa_0  c_1
 def s10v0000(densities, integrals, subsystem, charges):
     result01 = _s10v0000(densities, integrals, subsystem, charges, permutation=(0,1))
@@ -246,7 +290,24 @@ def _s10v0000(densities, integrals, subsystem, charges, permutation):
         return diagram, permutation
     else:
         return None, None
-
+"""    
+def s10v0000_mean(densities, integrals, subsystem, charges):
+    result01 = _s10v0000_mean(densities, integrals, subsystem, charges, permutation=(0,1))
+    result10 = _s10v0000_mean(densities, integrals, subsystem, charges, permutation=(1,0))
+    return [result01, result10]
+def _s10v0000_mean(densities, integrals, subsystem, charges, permutation):
+    X = _parameters(densities, integrals, subsystem, charges, permutation)
+    if X.Dchg_0==+1 and X.Dchg_1==-1:
+        prefactor = (-1)**(X.n_i1 + X.P)
+        def diagram(i0,i1,j0,j1):
+            v_mean = tendot(X.V_0000, X.ca_0[i0][j0], axes=([1, 3], [1, 0]))
+            partial =          tendot(v_mean,  X.caa_0[i0][j0], axes=([0, 1], [0, 2]))
+            partial =          tendot(X.S_10,  partial,         axes=([1], [0]))
+            return prefactor * tendot(partial, X.c_1[i1][j1],   axes=([0], [0]))
+        return diagram, permutation
+    else:
+        return None, None
+"""
 # ij,pqsr,qpir,js-> :  S_01  V_0010  ccca_0  aa_1
 def s01v0010(densities, integrals, subsystem, charges):
     result01 = _s01v0010(densities, integrals, subsystem, charges, permutation=(0,1))
@@ -259,7 +320,8 @@ def _s01v0010(densities, integrals, subsystem, charges, permutation):
         def diagram(i0,i1,j0,j1):
             partial =          tendot(X.S_01,           X.aa_1[i1][j1], axes=([1], [0]))
             partial =          tendot(X.ccca_0[i0][j0], partial,        axes=([2], [0]))
-            return prefactor * tendot(X.V_0010,         partial,        axes=([0, 1, 2, 3], [0, 1, 2, 3]))
+            #return prefactor * tendot(X.V_0010,         partial,        axes=([0, 1, 2, 3], [0, 1, 2, 3]))  # 0,1,2,3  1,0,3,2
+            return prefactor * tendot(X.V_0010,         partial,        axes=([0, 1, 2, 3], [1, 0, 3, 2]))
         return diagram, permutation
     else:
         return None, None
@@ -276,7 +338,7 @@ def _s10v0100(densities, integrals, subsystem, charges, permutation):
         def diagram(i0,i1,j0,j1):
             partial =          tendot(X.S_10,           X.cc_1[i1][j1], axes=([0], [1]))
             partial =          tendot(X.caaa_0[i0][j0], partial,        axes=([1], [0]))
-            return prefactor * tendot(X.V_0100,         partial,        axes=([0, 1, 2, 3], [0, 1, 3, 2]))
+            return prefactor * tendot(X.V_0100,         partial,        axes=([0, 1, 2, 3], [0, 3, 2, 1]))  # 0,1,2,3  0,3,2,1
         return diagram, permutation
     else:
         return None, None
@@ -307,7 +369,8 @@ def _s01v0011(densities, integrals, subsystem, charges, permutation):
 catalog = {}
 
 catalog[1] = {
-    "v0000": v0000
+    "v0000": v0000#,
+    #"v0000_mean": v0000_mean
 }
 
 catalog[2] = {
@@ -323,5 +386,7 @@ catalog[2] = {
     "s01v0000": s01v0000,
     "s01v0010": s01v0010,
     "s10v0100": s10v0100,
-    "s01v0011": s01v0011
+    "s01v0011": s01v0011#,
+    #"s10v0000_mean": s10v0000_mean,
+    #"s01v0000_mean": s01v0000_mean
 }

@@ -17,6 +17,8 @@
 #
 import numpy
 from build_density_tensors import build_density_tensors
+#from build_adc_density_tensors import build_adc_density_tensors, get_psi4_Ca
+import pickle
 
 
 
@@ -60,9 +62,16 @@ class monomer_data(object):
         self.basis = empty()
         self.basis.n_spatial_orb = 9
         self.basis.AOcode = "6-31G"
+        #self.basis.MOcoeffs, self.basis.n_orb_map = get_psi4_Ca()
+        #print(self.basis.n_orb_map)
+        #self.basis.MOcoeffs = pickle.load(open("Mo_coeffs_ref.pkl", mode="rb"))
+        #pickle.dump(self.basis.MOcoeffs, open("Mo_coeffs_ref.pkl", mode="wb"))
         self.basis.MOcoeffs = numpy.load("atomic_states/integrals/Be_C.npy")[:self.basis.n_spatial_orb,:self.basis.n_spatial_orb]	# top-left block because rest of code is for spin-restriced orbitals
+        #print(numpy.asarray(self.basis.MOcoeffs) + numpy.load("atomic_states/integrals/Be_C.npy")[:self.basis.n_spatial_orb,:self.basis.n_spatial_orb])
         self.basis.core = [0]	# indices of spatial MOs to freeze
-    def load_states(self, states_location, n_states, ref_state=(0,0)):
+        if not hasattr(self.basis, "n_orb_map"):
+            self.basis.n_orb_map = {}
+    def load_states(self, states_location, n_states, ref_state=(0,0), coeff_trans_mat=None):
         # Load descriptions of the fragment many-electron states.  Then process them (using build_density_tensors) to arrive at
         # quantities suitable for contracting with the integrals.  In a supersystem, any given fragment may be found as neutral
         # or with an extra or missing electron (anionic or cationic, respectively).  The data structures inside the states dictionary
@@ -75,7 +84,10 @@ class monomer_data(object):
             data = _load_states(val_e, n_st, states_location)
             if data is not None:  states[chg] = data		# Collect together all the states for the different allowed (relative) charges
 
-        self.rho, mem_use = build_density_tensors(states, self.basis.n_spatial_orb, n_core=len(self.basis.core))  # Compute the density tensors (n_core is the number of uncorrelated/frozen orbitals)
+        self.rho, mem_use = build_density_tensors(states, self.basis.n_spatial_orb, n_core=len(self.basis.core), coeff_trans_mat=coeff_trans_mat)  # Compute the density tensors (n_core is the number of uncorrelated/frozen orbitals)
+        #self.rho = build_adc_density_tensors(states)
+        #self.rho = pickle.load(open("dumped_densities.pkl", mode="rb"))
+        #pickle.dump(self.rho, open("dumped_densities.pkl", mode="wb"))
 
         ref_chg, ref_idx = ref_state
         self.state_indices = [(ref_chg,ref_idx)]                                                       # List of all charge and state indices, reference state needs to be first, but otherwise irrelevant order
@@ -84,4 +96,5 @@ class monomer_data(object):
         for chg in states:
             if chg!=ref_chg:  self.state_indices += [(chg,i) for i in range(states[chg].coeffs.shape[0])]
 
-        print("rho computed, storing {} floating point numbers".format(mem_use))
+        #print("rho computed, storing {} floating point numbers".format(mem_use))
+        print("rho computed")

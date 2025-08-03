@@ -17,6 +17,8 @@
 #
 
 import tensorly as tl
+#import ray
+#import numpy as np
 
 # Maybe try this with tensorly.tenalg.tensordot with
 # tensorly.tenalg.set_backend('einsum'), which only does the dispatching different(?),
@@ -34,6 +36,24 @@ import tensorly as tl
 # Hence, it makes sense to return a decomposed tensor object, with the resulting tensor as core tensor,
 # and the remaining decomposed matrices, while the missing decomposed matrices are filled with identities for now
 
+"""
+@ray.remote
+def tendot_ray(a, b, axes):
+    import numpy as np
+    return np.tensordot(a, b, axes=axes)
+
+def tendot(a, b, axes):
+    #a, b = ray.put(a), ray.put(b)
+    #print(type(a), type(b))
+    if not isinstance(a, ray.ObjectRef):
+        a = ray.put(a)
+    if not isinstance(b, ray.ObjectRef):
+        b = ray.put(b)
+    res = ray.get(tendot_ray.remote(a, b, axes))
+    ret = np.copy(res)
+    del res
+    return ret
+"""
 
 def tendot(a, b, axes):
     type_a, type_b = check_decomposed(a), check_decomposed(b)
@@ -71,7 +91,7 @@ def tendot(a, b, axes):
             else:
                 decomp_mats = [vec for i, vec in enumerate(a[1]) if i not in axes[0]]
                 n_identities = tl.ndim(new_core) - len(decomp_mats)
-                identities = [tl.eye(tl.shape(new_core)[i + len(decomp_mats)]) for i in range(n_identities)]
+                identities = [tl.eye(tl.shape(new_core)[i + len(decomp_mats)], dtype=tl.float64) for i in range(n_identities)]
                 return (new_core, decomp_mats + identities, "tucker")
         else:
             raise TypeError(f"tensor of type {type_a} passed")
@@ -108,21 +128,21 @@ def tendot(a, b, axes):
             else:
                 decomp_mats = [vec for i, vec in enumerate(b[1]) if i not in axes[1]]
                 n_identities = tl.ndim(new_core) - len(decomp_mats)
-                identities = [tl.eye(tl.shape(new_core)[i]) for i in range(n_identities)]
+                identities = [tl.eye(tl.shape(new_core)[i], dtype=tl.float64) for i in range(n_identities)]
                 return (new_core, identities + decomp_mats, "tucker")
         else:
             raise TypeError(f"tensor of type {type_b} passed")
     else:
         sorted_axes = sorted([i for i in zip(axes[1], axes[0])])
         axes = ([i[1] for i in sorted_axes], [i[0] for i in sorted_axes])
-        try:
-            transforms = [tl.tensordot(a[1][axes[0][i]], b[1][axes[1][i]], axes=([0], [0])) for i in range(len(axes[0]))]
-        except RuntimeError:
-            for i in range(len(axes[0])):
-                print(tl.shape(a[1][axes[0][i]]), tl.shape(b[1][axes[1][i]]))
-                print(a[1][axes[0][i]])
-                print(b[1][axes[1][i]])
-            transforms = [tl.tensordot(a[1][axes[0][i]], b[1][axes[1][i]], axes=([0], [0])) for i in range(len(axes[0]))]
+        #try:
+        transforms = [tl.tensordot(a[1][axes[0][i]], b[1][axes[1][i]], axes=([0], [0])) for i in range(len(axes[0]))]
+        #except RuntimeError:
+        #    for i in range(len(axes[0])):
+        #        print(tl.shape(a[1][axes[0][i]]), tl.shape(b[1][axes[1][i]]))
+        #        print(a[1][axes[0][i]])
+        #        print(b[1][axes[1][i]])
+        #    transforms = [tl.tensordot(a[1][axes[0][i]], b[1][axes[1][i]], axes=([0], [0])) for i in range(len(axes[0]))]
         if type_a == "CP" and type_b == "CP":
             factor = tl.prod([tl.sum(i) for i in transforms])  # for CP_normalized with CP_normalized just contract transforms with corresponding core
             mats_a = [a[1][i] for i in range(len(a[1])) if i not in axes[0]]
