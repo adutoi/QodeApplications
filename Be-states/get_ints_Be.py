@@ -161,9 +161,9 @@ def iterative_CoreSinv(fragments, S):
     return Left, Right
 
 
-def get_ints(fragments, spin_ints=True):
+def get_ints(fragments, spin_ints=True, backend="psi4"):
     # More needs to be done regarding the basis to prevent mismatches with the fragment states
-    AO_ints     = AO_integrals(fragments)
+    AO_ints     = AO_integrals(fragments, backend=backend)
     FragMO_ints = fragMO_integrals(AO_ints, [frag.basis.MOcoeffs for frag in fragments], cache=True)     # Cache because multiple calls to each block during biorthogonalization
 
     if len(fragments)>1:

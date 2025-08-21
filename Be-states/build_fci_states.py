@@ -26,13 +26,12 @@ from qode.many_body.self_consistent_field.fermionic import RHF_RoothanHall_Nonor
 from get_ints_Be import get_ints
 from qode.atoms.integrals.fragments import unblock_2, unblock_last2, unblock_4
 from qode.many_body.fermion_field import CI_space_traits, field_op_ham, configurations
-import psi4_check
 import qode.util
 from qode.util.PyC import Double
 import densities
 import pickle
 
-def get_fci_states(dist, n_state_list=[(+1, 4), (0, 11), (-1, 8)]):
+def get_fci_states(dist, n_state_list=[(+1, 4), (0, 11), (-1, 8)], backend="psi4"):
     class empty(object):  pass
 
 
@@ -56,26 +55,36 @@ def get_fci_states(dist, n_state_list=[(+1, 4), (0, 11), (-1, 8)]):
     frag0.basis.MOcoeffs = numpy.identity(frag0.basis.n_spatial_orb)    # rest of code assumes spin-restricted orbitals
     frag0.basis.core = [0]	# indices of spatial MOs to freeze in CI portions
 
+    #"""
+    if backend == "psi4":
+        import psi4_check
+        psi4_check.print_HF_energy(
+            "".join("{} {} {} {}\n".format(A,x,y,z) for A,(x,y,z) in frag0.atoms),
+            frag0.basis.AOcode
+            )
+    elif backend == "vlx":
+        import vlx_check
+        vlx_check.print_HF_energy(
+            "".join("{} {} {} {}\n".format(A,x,y,z) for A,(x,y,z) in frag0.atoms),
+            frag0.basis.AOcode
+            )
+    else:
+        raise NotImplementedError(f"backend option {backend} unknown")
+    #"""
 
-
-    psi4_check.print_HF_energy(
-        "".join("{} {} {} {}\n".format(A,x,y,z) for A,(x,y,z) in frag0.atoms),
-        frag0.basis.AOcode
-        )
-
-    symm_ints, bior_ints, nuc_rep = get_ints([frag0], spin_ints=False)
+    symm_ints, bior_ints, nuc_rep = get_ints([frag0], spin_ints=False, backend=backend)
     N, S, T, U, V = nuc_rep[0,0], symm_ints.S[0,0], symm_ints.T[0,0], symm_ints.U[0,0,0], symm_ints.V[0,0,0,0]
     E, e, frag0.basis.MOcoeffs = RHF_RoothanHall_Nonorthogonal(frag0.n_elec_ref, (S, T+U, V), thresh=1e-12)
     print(E)
 
-    symm_ints, bior_ints, nuc_rep = get_ints([frag0], spin_ints=False)
+    symm_ints, bior_ints, nuc_rep = get_ints([frag0], spin_ints=False, backend=backend)
     N, S, T, U, V = nuc_rep[0,0], symm_ints.S[0,0], symm_ints.T[0,0], symm_ints.U[0,0,0], symm_ints.V[0,0,0,0]
     E, e, _ = RHF_RoothanHall_Orthonormal(frag0.n_elec_ref, (T+U, V), thresh=1e-12)
     print(E)
 
 
 
-    symm_ints, bior_ints, nuc_rep = get_ints([frag0], spin_ints=True)
+    symm_ints, bior_ints, nuc_rep = get_ints([frag0], spin_ints=True, backend=backend)
     N, S, T, U, V = nuc_rep[0,0], symm_ints.S[0,0], symm_ints.T[0,0], symm_ints.U[0,0,0], symm_ints.V[0,0,0,0]
     h = T + U
 
