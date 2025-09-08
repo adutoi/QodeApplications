@@ -196,11 +196,11 @@ def optimize_states(max_iter, xr_order, dens_builder_stuff, ints, n_occ, n_orbs,
                 chg_sorted_keepers[frag][chg] = [i for i in orthogonalize(np.array(vecs))]
                 print(f"for charge {chg} {len(chg_sorted_keepers[frag][chg])} states are kept")
 
-        for frag in range(2):
-            for chg in monomer_charges[frag]:
-                if len(chg_sorted_keepers[frag][chg])== 0:
-                    print(f"to prevent algorithm from breaking, because for frag {frag} with charge {chg} no states are kept, we keep the previous states for these charges here")
-                    chg_sorted_keepers[frag][chg] = dens_builder_stuff[frag][0][chg].coeffs
+        #for frag in range(2):
+        #    for chg in monomer_charges[frag]:
+        #        if len(chg_sorted_keepers[frag][chg])== 0:
+        #            print(f"to prevent algorithm from breaking, because for frag {frag} with charge {chg} no states are kept, we keep the previous states for these charges here")
+        #            chg_sorted_keepers[frag][chg] = dens_builder_stuff[frag][0][chg].coeffs
 
         for chg in monomer_charges[0]:
             for i, vec in enumerate(chg_sorted_keepers[0][chg]):
@@ -504,6 +504,9 @@ def optimize_states(max_iter, xr_order, dens_builder_stuff, ints, n_occ, n_orbs,
             state_coeffs_optimized[frag][chg] = dens_builder_stuff[frag][0][chg].coeffs.copy()
             state_tracker[frag][chg] += max_add
         dens[frag] = densities.build_tensors(*dens_builder_stuff[frag][:-1], options=density_options, n_threads=n_threads)
+        #from qode.math.tensornet import raw
+        #print(raw(dens[0]["ca"][(0,0)])[0, 0, :, :])
+        #raise ValueError("stop here")
         return state_coeffs_optimized, dens_builder_stuff, dens
     
 

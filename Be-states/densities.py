@@ -126,8 +126,14 @@ def _build_tensors(states, n_orbs, n_elec_0, thresh, options, xr_order, dets, n_
             else:
                 ket_coeffs  = states[ket_chg].coeffs
             chg_diff = bra_chg - ket_chg
+            #if bra_chg != 0 and ket_chg != 0:
+            #    continue
+            #ket_coeffs = [ket_coeffs[0]]
+            #bra_coeffs = [bra_coeffs[0]]
             if chg_diff in op_strings:
                 for op_string in op_strings[chg_diff]:
+                    #if op_string != "ca":
+                    #    continue
                     if op_string not in densities:  densities[op_string] = {}
                     print(bra_chg, ket_chg, op_string)
                     # TODO: the following line only exists to lower memory requirements and should be deleted for productive calculations

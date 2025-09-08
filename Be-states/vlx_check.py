@@ -24,3 +24,4 @@ def print_HF_energy(geometry, basis_string):
     scfdrv = vlx.ScfRestrictedDriver()
     hf_results = scfdrv.compute(Be, basis)
     print("Psi4 HF energy       = ", hf_results['scf_energy'])
+    return Be, basis, scfdrv, hf_results

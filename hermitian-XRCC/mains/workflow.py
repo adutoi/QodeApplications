@@ -77,7 +77,7 @@ def run_xr(displacement, max_iter, xr_order_final, xr_order_solver=0, dens_filte
     #pre_opt_states = pickle.load(open("pre_opt_coeffs.pkl", mode="rb"))
     #ref_state_coeffs_configs = pickle.load(open("opt_state_coeffs_configs.pkl", mode="rb"))
     for m in range(int(n_frag)):
-        state_obj, dens_var_1, dens_var_2, n_threads, Be = get_fci_states(displacement, n_state_list=[(1, 2), (0, 10), (-1, 10)], backend=backend)
+        state_obj, dens_var_1, dens_var_2, n_threads, Be = get_fci_states(displacement, n_state_list=[(1, 2), (0, 10), (-1, 10)], backend=backend, monomer_charges=monomer_charges[m])
         #state_obj, dens_var_1, dens_var_2, n_threads, Be = build_Be_rho(("6-31g", 9), displacement, n_state_list=[(1, 2), (0, 10), (-1, 10)])
         #Be.basis.MOcoeffs = ref_mos.copy()
         #pickle.dump(Be.basis.MOcoeffs, open(f"check_mos_{m}.pkl", mode="wb"))
@@ -137,7 +137,7 @@ def run_xr(displacement, max_iter, xr_order_final, xr_order_solver=0, dens_filte
         #dens.append(densities.build_tensors(state_obj, dens_var_1, dens_var_2, options=density_options, n_threads=n_threads))
         dens_builder_stuff.append([state_obj, dens_var_1, dens_var_2, density_options])
         state_coeffs_og.append({chg: state_obj[chg].coeffs for chg in state_obj})
-        """
+        #"""
         def conf_decoder(conf):
             ret = []
             for bit in range(n_orbs * 2, -1, -1):
@@ -151,7 +151,8 @@ def run_xr(displacement, max_iter, xr_order_final, xr_order_solver=0, dens_filte
             for i, vec in enumerate(state_obj[chg].coeffs):
                 big_inds = {ind: elem for ind, elem in enumerate(vec) if abs(elem) > 1e-1}
                 print(chg, i, {tuple(conf_decoder(dens_builder_stuff[0][0][chg].configs[j])): val for j, val in big_inds.items()})
-        """
+        #"""
+        print(Be.basis.MOcoeffs)
 
     #global_timings.record("initialize state space")
     #global_timings.start()
@@ -228,7 +229,7 @@ def run_xr(displacement, max_iter, xr_order_final, xr_order_solver=0, dens_filte
 
 
 print(run_xr(4.5, 0, 1, single_thresh=1/8, double_thresh=1/6, triple_thresh=1/4,  # single_thresh=1/6, double_thresh=1/4, triple_thresh=1/2.5,# sp_thresh=1/1.005,
-             grad_level="herm", state_prep=True, target_state=[0], dens_filter_thresh_solver=1e-7, backend="vlx"))
+             grad_level="herm", state_prep=True, target_state=[0], dens_filter_thresh_solver=1e-7, backend="vlx_mtp"))#"vlx_mtp"))
 
 """
 # the following error catching is useful for scans along a reaction coordinate.
