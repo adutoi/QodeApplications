@@ -209,8 +209,8 @@ import sys
 import os
 
 # expose this conspicuosly because we change convention between prose and code
-#frags = (0,1)
-frags = (1,2)
+frags = (0,1)    # for code
+#frags = (1,2)    # for publications
 
 library = ""
 derivation = """\

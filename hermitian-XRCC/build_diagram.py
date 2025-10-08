@@ -121,7 +121,7 @@ class frag_resolve(object):
         #    return _density_array(self._densities, label_template[:-1], self._subsys_chgs, self._n_frag)
         else:
             frag_indices = tuple(int(i) for i in filter(lambda c: c.isdigit(), attr))    # extract the digits from the string (heaven forbid >=9-fragment subsystem)
-            label_template = re.sub("\d", "#", attr)                                     # replace digits with hashes to anonymize the label
+            label_template = re.sub("\\d", "#", attr)                                     # replace digits with hashes to anonymize the label
             label_template = label_template.replace("U#_", "U#")    # underscore throws off later decisions/splits
             if label_template not in self._storage:    # Then it is a density or a precontraction, and ...
                 if "_S" in label_template:             # ... it is a precontraction with S specifically, or ...
