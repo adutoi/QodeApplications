@@ -86,11 +86,11 @@ class frag_resolve(object):
         self._n_frag = len(subsys_chgs)
         self.P = 1 if permutation==(1,0) else 0    # needs to be generalized for n>2.
         # Some diagrams need to know the number of e- in the ket for the combined "latter" frags of the un(!)permuted subsystem
-        n_i = 0
+        n_j = 0
         label = "".join(str(i) for i in range(self._n_frag))
-        for m,(frag_idx,(chg_i,_)) in reversed(list(enumerate(subsys_chgs))):    # before permutation
-            n_i += self._supersys_info.densities[frag_idx]['n_elec'][chg_i]
-            self._storage["n_i"+label[m:]] = n_i%2    # explicitly label which are included in the latter frags (to store all possibilities)
+        for m,(frag_idx,(_,chg_j)) in enumerate(subsys_chgs):    # before permutation
+            n_j += self._supersys_info.densities[frag_idx]['n_elec'][chg_j]
+            self._storage["n_j"+label[:m+1]] = n_j%2    # explicitly label which are included in the latter frags (to store all possibilities)
         # rearrange fragments to given permutation
         self._subsys_chgs = [subsys_chgs[m] for m in permutation]
         # dynamically allocated, cached "virtual" arrays for the target information.  Not all integrals provided (or provided differently
@@ -115,7 +115,7 @@ class frag_resolve(object):
             pass
         self._densities        = _subsys_array(self._supersys_info.densities,   self._subsys_chgs, 1, self._n_frag)
     def __getattr__(self, attr):
-        if attr[:3]=="n_i" or attr=="Dchg" or attr=="n_states":
+        if attr[:3]=="n_j" or attr=="Dchg" or attr=="n_states":
             return self._storage[attr]
         #elif attr == "ket_coeffs":
         #    return _density_array(self._densities, label_template[:-1], self._subsys_chgs, self._n_frag)

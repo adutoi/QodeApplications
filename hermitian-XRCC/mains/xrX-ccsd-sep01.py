@@ -120,19 +120,19 @@ H1 = []
 for m in [0,1]:
     H1_m  = XR_term.monomer_matrix(St_blocks_symm, {
                           1: [
-                              "t00"
-                             ]
+                              "t00",
+                             ],
                          }, m, monomer_charges, matrix_timings)
     H1_m += XR_term.monomer_matrix(Su_blocks_symm, {
                           1: [
-                              "u000"
-                             ]
+                              "u000",
+                             ],
                          }, m, monomer_charges, matrix_timings)
 
     H1_m += XR_term.monomer_matrix(Sv_blocks_symm, {
                           1: [
-                              "v0000"
-                             ]
+                              "v0000",
+                             ],
                          }, m, monomer_charges, matrix_timings)
     H1 += [H1_m]
 

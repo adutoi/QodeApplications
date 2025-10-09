@@ -26,6 +26,7 @@ import pickle
 import numpy
 #import torch
 import tensorly
+from tensorly import plugins as tensorly_plugins
 import qode.util
 from qode.util import struct, timer
 import qode.math
@@ -43,6 +44,8 @@ class empty(object):  pass     # needed for unpickling - remove when all Be-stat
 
 #torch.set_num_threads(4)
 #tensorly.set_backend("pytorch")
+tensorly_plugins.use_opt_einsum()
+qode.math.tensornet.backend_contract_path(False)
 
 global_timings = timer()
 matrix_timings = timer()
@@ -117,19 +120,19 @@ H1 = []
 for m in [0,1]:
     H1_m  = XR_term.monomer_matrix(St_blocks_symm, {
                           1: [
-                              "t00"
-                             ]
+                              "t00",
+                             ],
                          }, m, monomer_charges, matrix_timings)
     H1_m += XR_term.monomer_matrix(Su_blocks_symm, {
                           1: [
-                              "u000"
-                             ]
+                              "u000",
+                             ],
                          }, m, monomer_charges, matrix_timings)
 
     H1_m += XR_term.monomer_matrix(Sv_blocks_symm, {
                           1: [
-                              "v0000"
-                             ]
+                              "v0000",
+                             ],
                          }, m, monomer_charges, matrix_timings)
     H1 += [H1_m]
 
@@ -139,12 +142,12 @@ print("build S2inv")
 
 S2     = XR_term.dimer_matrix(S_blocks, {
                         0: [
-                            "identity"
+                            "identity",
                            ],
                         2: [
                             "s01",
-                            "s01s10", "s01s01"
-                           ]
+                            "s01s10", "s01s01",
+                           ],
                        },  (0,1), all_dimer_charges, matrix_timings)
 
 S2inv = qode.math.precise_numpy_inverse(S2)
@@ -155,62 +158,57 @@ print("build S2H2 (1e)")
 
 S2H2  = XR_term.dimer_matrix(St_blocks_symm, {
                        1: [
-                           "t00"
+                           "t00",
                           ],
                        2: [
                            "t01",
-                           "s01t00", "s01t11",
-                           "s01t10", 
-                           "s01t01"
-                          ]
+                           "s01t10", "s01t00", "s01t11", "s01t01",
+                          ],
                       }, (0,1), all_dimer_charges, matrix_timings)
 S2H2 += XR_term.dimer_matrix(Su_blocks_symm, {
                        1: [
-                           "u000"
+                           "u000",
                           ],
                        2: [
-                           "u100",
-                           "u001", "u101",
-                           "s01u000", "s01u011",
-                           "s01u100", "s01u111",
-                           "s01u010", "s01u110", 
-                           "s01u001", "s01u101"
-                          ]
+                           "u100", "u001", "u101",
+                           "s01u010", "s01u000", "s01u011", "s01u001",
+                           "s01u110", "s01u100", "s01u111", "s01u101",
+                          ],
                      }, (0,1), all_dimer_charges, matrix_timings)
 
 S2H2 += XR_term.dimer_matrix(St_blocks_bior, {
                        2: [
-                           "s01s01t00", "s01s01t10", "s01s01t11", "s01s10t00", "s01s10t01"
-                          ]
+                           "s01s10t00", "s01s01t10", "s01s10t01", "s01s01t00", "s01s01t11", #"s01s01t01",
+                          ],
                       }, (0,1), all_dimer_charges, matrix_timings)
 S2H2 += XR_term.dimer_matrix(Su_blocks_bior, {
                        2: [
-                           "s01s01u000", "s01s01u010", "s01s01u011", "s01s10u000", "s01s10u001", "s01s01u100", "s01s01u110", "s01s01u111", "s01s10u100", "s01s10u101"
-                          ]
+                           "s01s10u000", "s01s01u010", "s01s10u001", "s01s01u000", "s01s01u011", #"s01s01u001",
+                           "s01s10u100", "s01s01u110", "s01s10u101", "s01s01u100", "s01s01u111", #"s01s01u101",
+                          ],
                       }, (0,1), all_dimer_charges, matrix_timings)
 
 print("build S2H2 (2e)")
 
 S2H2 += XR_term.dimer_matrix(Sv_blocks_symm, {
                        1: [
-                           "v0000"
+                           "v0000",
                           ],
                        2: [
-                           "v0110", "v0010", "v0100", "v0011"
-                          ]
+                           "v0101", "v0001", "v0100", "v0011",
+                          ],
                       }, (0,1), all_dimer_charges, matrix_timings)
 S2H2 += XR_term.dimer_matrix(Sv_blocks_diff, {
                        2: [
-                           "s01v0000", "s01v1111",
-                           "s01v0110", "s01v1110", 
-                           "s01v0100", 
-                           "s01v1100", "s01v0010", "s01v0111"#, "s01v0011"
-                          ]
+                           "s01v0100", "s01v1101", "s01v0000", "s01v0101", "s01v1100", "s01v1111", "s01v0001", "s01v0111", #"s01v0011",
+                          ],
                       }, (0,1), all_dimer_charges, matrix_timings)
 S2H2 += XR_term.dimer_matrix(Sv_blocks_bior, {
                        2: [
-                           "s01s01v0000", "s01s01v0100", "s01s01v0110", "s01s01v1100", "s01s01v1110", "s01s01v1111", "s01s10v0000", "s01s10v0010", "s01s10v0011", "s01s10v0100", "s01s10v0110"
-                          ]
+                           # no justification for deleted terms ... just do not have necessary densities
+                           #"s01s01v1100", "s01s10v0000", "s01s10v0101", "s01s01v0100", "s01s01v1101", "s01s10v0001", "s01s10v0100", "s01s01v0000", "s01s01v0101", "s01s01v1111", "s01s10v0011", #"s01s01v0001", "s01s01v0111", "s01s01v0011",
+                           "s01s01v1100", "s01s10v0000", "s01s10v0101", "s01s01v0100", "s01s01v1101", "s01s10v0001", "s01s10v0100",                 "s01s01v0101",               "s01s10v0011", #"s01s01v0001", "s01s01v0111", "s01s01v0011",
+                          ],
                       }, (0,1), all_dimer_charges, matrix_timings)
 
 
@@ -221,19 +219,19 @@ H2blocked = S2inv @ S2H2
 
 H2blocked -= XR_term.dimer_matrix(St_blocks_symm, {
                        1: [
-                           "t00"
-                          ]
+                           "t00",
+                          ],
                       }, (0,1), all_dimer_charges, matrix_timings)
 H2blocked -= XR_term.dimer_matrix(Su_blocks_symm, {
                        1: [
-                           "u000"
-                          ]
+                           "u000",
+                          ],
                      }, (0,1), all_dimer_charges, matrix_timings)
 
 H2blocked -= XR_term.dimer_matrix(Sv_blocks_symm, {
                        1: [
-                           "v0000"
-                          ]
+                           "v0000",
+                          ],
                       }, (0,1), all_dimer_charges, matrix_timings)
 
 global_timings.record("build")

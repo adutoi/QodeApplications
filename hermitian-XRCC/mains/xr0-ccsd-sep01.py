@@ -120,19 +120,19 @@ H1 = []
 for m in [0,1]:
     H1_m  = XR_term.monomer_matrix(St_blocks_symm, {
                           1: [
-                              "t00"
-                             ]
+                              "t00",
+                             ],
                          }, m, monomer_charges, matrix_timings)
     H1_m += XR_term.monomer_matrix(Su_blocks_symm, {
                           1: [
-                              "u000"
-                             ]
+                              "u000",
+                             ],
                          }, m, monomer_charges, matrix_timings)
 
     H1_m += XR_term.monomer_matrix(Sv_blocks_symm, {
                           1: [
-                              "v0000"
-                             ]
+                              "v0000",
+                             ],
                          }, m, monomer_charges, matrix_timings)
     H1 += [H1_m]
 
@@ -142,31 +142,30 @@ print("build H2 (1e)")
 
 H2  = XR_term.dimer_matrix(St_blocks_bior, {
                        1: [
-                           "t00"
+                           "t00",
                           ],
                        2: [
-                           "t01"
-                          ]
+                           "t01",
+                          ],
                       }, (0,1), all_dimer_charges, matrix_timings)
 H2 += XR_term.dimer_matrix(Su_blocks_bior, {
                        1: [
-                           "u000"
+                           "u000",
                           ],
                        2: [
-                           "u100",
-                           "u001", "u101"
-                          ]
+                           "u100", "u001", "u101",
+                          ],
                      }, (0,1), all_dimer_charges, matrix_timings)
 
 print("build H2 (2e)")
 
 H2 += XR_term.dimer_matrix(Sv_blocks_bior, {
                        1: [
-                           "v0000"
+                           "v0000",
                           ],
                        2: [
-                           "v0110", "v0010", "v0100", "v0011"
-                          ]
+                           "v0101", "v0001", "v0100", "v0011",
+                          ],
                       }, (0,1), all_dimer_charges, matrix_timings)
 
 
@@ -175,19 +174,19 @@ print("finish H2 (subtract monomers)")
 
 H2 -= XR_term.dimer_matrix(St_blocks_symm, {
                        1: [
-                           "t00"
-                          ]
+                           "t00",
+                          ],
                       }, (0,1), all_dimer_charges, matrix_timings)
 H2 -= XR_term.dimer_matrix(Su_blocks_symm, {
                        1: [
-                           "u000"
-                          ]
+                           "u000",
+                          ],
                      }, (0,1), all_dimer_charges, matrix_timings)
 
 H2 -= XR_term.dimer_matrix(Sv_blocks_symm, {
                        1: [
-                           "v0000"
-                          ]
+                           "v0000",
+                          ],
                       }, (0,1), all_dimer_charges, matrix_timings)
 
 H2blocked = H2

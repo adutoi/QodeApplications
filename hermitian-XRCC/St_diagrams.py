@@ -38,7 +38,7 @@ def t00(X):
     return 1 * raw(
         #  X.ca0(i0,j0,p,q)
         #@ X.t00(p,q)
-          X.ca0pq_Tpq
+        X.ca0pq_Tpq
         )
 
 # dimer diagrams
@@ -46,7 +46,7 @@ def t00(X):
 def t01(X, contract_last=False):
     if no_result(X, contract_last):  return []
     i0, i1, j0, j1 = state_indices(contract_last)
-    return (-1)**(X.n_i1 + X.P) * raw(
+    return (-1)**(X.n_j0 + X.P) * raw(
         #  X.c0(i0,j0,p)
         #@ X.a1(i1,j1,q)
         #@ X.t01(p,q)
@@ -54,16 +54,40 @@ def t01(X, contract_last=False):
         @ X.a1q_T0q(i1,j1,p)
         )
 
+def s01t10(X, contract_last=False):
+    if no_result(X, contract_last):  return []
+    i0, i1, j0, j1 = state_indices(contract_last)
+    return -1 * raw(
+        #  X.ca0(i0,j0,t,q)
+        #@ X.ca1(i1,j1,p,u)
+        #@ X.s01(t,u)
+        #@ X.t10(p,q)
+          X.ca0tX_St1(i0,j0,q,u)
+        @ X.ca1pX_Tp0(i1,j1,u,q)
+        )
+
 def s01t00(X, contract_last=False):
     if no_result(X, contract_last):  return []
     i0, i1, j0, j1 = state_indices(contract_last)
-    return -1 * (-1)**(X.n_i1 + X.P) * raw(
+    return (-1)**(X.n_j0 + X.P + 1) * raw(
         #  X.cca0(i0,j0,p,t,q)
         #@ X.a1(i1,j1,u)
         #@ X.s01(t,u)
         #@ X.t00(p,q)
           X.cca0pXq_Tpq(i0,j0,t)
         @ X.a1u_S0u(i1,j1,t)
+        )
+
+def s01t11(X, contract_last=False):
+    if no_result(X, contract_last):  return []
+    i0, i1, j0, j1 = state_indices(contract_last)
+    return (-1)**(X.n_j0 + X.P + 1) * raw(
+        #  X.c0(i0,j0,t)
+        #@ X.caa1(i1,j1,p,u,q)
+        #@ X.s01(t,u)
+        #@ X.t11(p,q)
+          X.c0t_St1(i0,j0,u)
+        @ X.caa1pXq_Tpq(i1,j1,u)
         )
 
 def s01t01(X, contract_last=False):
@@ -75,75 +99,7 @@ def s01t01(X, contract_last=False):
         #@ X.s01(t,u)
         #@ X.t01(p,q)
           X.cc0Xt_St1(i0,j0,p,u)
-        @ X.aa1Xq_T0q(i1,j1,u,p) 
-        )
-
-def s01t10(X, contract_last=False):
-    if no_result(X, contract_last):  return []
-    i0, i1, j0, j1 = state_indices(contract_last)
-    return -1 * raw(
-        #  X.ca0(i0,j0,t,q)
-        #@ X.ca1(i1,j1,p,u)
-        #@ X.s01(t,u)
-        #@ X.t10(p,q)
-        ##  X.ca0tX_St1(i0,j0,q,u)
-        ##@ X.ca1pX_Tp0(i1,j1,u,q)
-          X.ca0Xq_T1q(i0,j0,t,p)
-        @ X.ca1Xu_S0u(i1,j1,p,t)
-        )
-
-def s01t11(X, contract_last=False):
-    if no_result(X, contract_last):  return []
-    i0, i1, j0, j1 = state_indices(contract_last)
-    return -1 * (-1)**(X.n_i1 + X.P) * raw(
-        #  X.c0(i0,j0,t)
-        #@ X.caa1(i1,j1,p,u,q)
-        #@ X.s01(t,u)
-        #@ X.t11(p,q)
-          X.c0t_St1(i0,j0,u)
-        @ X.caa1pXq_Tpq(i1,j1,u)
-        )
-
-def s01s01t00(X, contract_last=False):
-    if no_result(X, contract_last):  return []
-    i0, i1, j0, j1 = state_indices(contract_last)
-    return (1/2) * raw(
-        #  X.ccca0(i0,j0,p,t,v,q)
-        #@ X.aa1(i1,j1,w,u)
-        #@ X.s01(t,u)
-        #@ X.s01(v,w)
-        #@ X.t00(p,q)
-          X.ccca0pXXq_Tpq(i0,j0,t,v)
-        @ X.aa1Xu_S0u(i1,j1,w,t)
-        @ X.s01(v,w)
-        )
-
-def s01s01t10(X, contract_last=False):
-    if no_result(X, contract_last):  return []
-    i0, i1, j0, j1 = state_indices(contract_last)
-    return -(1/2) * (-1)**(X.n_i1 + X.P) * raw(
-        #  X.cca0(i0,j0,t,v,q)
-        #@ X.caa1(i1,j1,p,w,u)
-        #@ X.s01(t,u)
-        #@ X.s01(v,w)
-        #@ X.t10(p,q)
-          X.cca0XXq_T1q(i0,j0,t,v,p)
-        @ X.caa1XXu_S0u(i1,j1,p,w,t)
-        @ X.s01(v,w)
-        )
-
-def s01s01t11(X, contract_last=False):
-    if no_result(X, contract_last):  return []
-    i0, i1, j0, j1 = state_indices(contract_last)
-    return (1/2) * raw(
-        #  X.cc0(i0,j0,t,v)
-        #@ X.caaa1(i1,j1,p,w,u,q)
-        #@ X.s01(t,u)
-        #@ X.s01(v,w)
-        #@ X.t11(p,q)
-          X.cc0Xv_Sv1(i0,j0,t,w)
-        @ X.caaa1pXXq_Tpq(i1,j1,w,u)
-        @ X.s01(t,u)
+        @ X.aa1Xq_T0q(i1,j1,u,p)
         )
 
 def s01s10t00(X, contract_last=False):
@@ -160,18 +116,71 @@ def s01s10t00(X, contract_last=False):
         @ X.s10(v,w)
         )
 
+def s01s01t10(X, contract_last=False):
+    if no_result(X, contract_last):  return []
+    i0, i1, j0, j1 = state_indices(contract_last)
+    return (1/2) * (-1)**(X.n_j0 + X.P + 1) * raw(
+        #  X.cca0(i0,j0,t,v,q)
+        #@ X.caa1(i1,j1,p,w,u)
+        #@ X.s01(t,u)
+        #@ X.s01(v,w)
+        #@ X.t10(p,q)
+          X.cca0tXX_St1(i0,j0,v,q,u)
+        @ X.caa1XwX_S0w(i1,j1,p,u,v)
+        @ X.t10(p,q)
+        )
+
 def s01s10t01(X, contract_last=False):
     if no_result(X, contract_last):  return []
     i0, i1, j0, j1 = state_indices(contract_last)
-    return -1 * (-1)**(X.n_i1 + X.P) * raw(
+    return (-1)**(X.n_j0 + X.P + 1) * raw(
         #  X.cca0(i0,j0,p,t,w)
         #@ X.caa1(i1,j1,v,u,q)
         #@ X.s01(t,u)
         #@ X.s10(v,w)
         #@ X.t01(p,q)
-          X.cca0XXw_S1w(i0,j0,p,t,v)
-        @ X.caa1XXq_T0q(i1,j1,v,u,p)
+          X.cca0XtX_St1(i0,j0,p,w,u)
+        @ X.caa1vXX_Sv0(i1,j1,u,q,w)
+        @ X.t01(p,q)
+        )
+
+def s01s01t00(X, contract_last=False):
+    if no_result(X, contract_last):  return []
+    i0, i1, j0, j1 = state_indices(contract_last)
+    return (1/2) * raw(
+        #  X.ccca0(i0,j0,p,t,v,q)
+        #@ X.aa1(i1,j1,w,u)
+        #@ X.s01(t,u)
+        #@ X.s01(v,w)
+        #@ X.t00(p,q)
+          X.ccca0pXXq_Tpq(i0,j0,t,v)
+        @ X.aa1Xu_S0u(i1,j1,w,t)
+        @ X.s01(v,w)
+        )
+
+def s01s01t11(X, contract_last=False):
+    if no_result(X, contract_last):  return []
+    i0, i1, j0, j1 = state_indices(contract_last)
+    return (1/2) * raw(
+        #  X.cc0(i0,j0,t,v)
+        #@ X.caaa1(i1,j1,p,w,u,q)
+        #@ X.s01(t,u)
+        #@ X.s01(v,w)
+        #@ X.t11(p,q)
+          X.cc0tX_St1(i0,j0,v,u)
+        @ X.caaa1pXXq_Tpq(i1,j1,w,u)
+        @ X.s01(v,w)
+        )
+
+def s01s01t01(X, contract_last=False):
+    if no_result(X, contract_last):  return []
+    i0, i1, j0, j1 = state_indices(contract_last)
+    return (1/2) * (-1)**(X.n_j0 + X.P) * raw(
+          X.ccc0(i0,j0,p,t,v)
+        @ X.aaa1(i1,j1,w,u,q)
         @ X.s01(t,u)
+        @ X.s01(v,w)
+        @ X.t01(p,q)
         )
 
 
@@ -189,14 +198,15 @@ catalog[1] = {
     "t00":   build_diagram(t00)
 }
 catalog[2] = {
-    "t01":        build_diagram(t01,       Dchgs=(-1,+1), permutations=[(0,1),(1,0)]),
-    "s01t10":     build_diagram(s01t10,    Dchgs=( 0, 0), permutations=[(0,1),(1,0)]),
-    "s01t00":     build_diagram(s01t00,    Dchgs=(-1,+1), permutations=[(0,1),(1,0)]),
-    "s01t11":     build_diagram(s01t11,    Dchgs=(-1,+1), permutations=[(0,1),(1,0)]),
-    "s01t01":     build_diagram(s01t01,    Dchgs=(-2,+2), permutations=[(0,1),(1,0)]),
-    "s01s01t00":  build_diagram(s01s01t00, Dchgs=(-2,+2), permutations=[(0,1),(1,0)]),
-    "s01s01t10":  build_diagram(s01s01t10, Dchgs=(-1,+1), permutations=[(0,1),(1,0)]),
-    "s01s01t11":  build_diagram(s01s01t11, Dchgs=(-2,+2), permutations=[(0,1),(1,0)]),
-    "s01s10t00":  build_diagram(s01s10t00, Dchgs=( 0, 0), permutations=[(0,1),(1,0)]),
-    "s01s10t01":  build_diagram(s01s10t01, Dchgs=(-1,+1), permutations=[(0,1),(1,0)]),
+    "t01":           build_diagram(t01,          Dchgs=(-1,+1), permutations=[(0,1),(1,0)]),
+    "s01t10":        build_diagram(s01t10,       Dchgs=(0,0),   permutations=[(0,1),(1,0)]),
+    "s01t00":        build_diagram(s01t00,       Dchgs=(-1,+1), permutations=[(0,1),(1,0)]),
+    "s01t11":        build_diagram(s01t11,       Dchgs=(-1,+1), permutations=[(0,1),(1,0)]),
+    "s01t01":        build_diagram(s01t01,       Dchgs=(-2,+2), permutations=[(0,1),(1,0)]),
+    "s01s10t00":     build_diagram(s01s10t00,    Dchgs=(0,0),   permutations=[(0,1),(1,0)]),
+    "s01s01t10":     build_diagram(s01s01t10,    Dchgs=(-1,+1), permutations=[(0,1),(1,0)]),
+    "s01s10t01":     build_diagram(s01s10t01,    Dchgs=(-1,+1), permutations=[(0,1),(1,0)]),
+    "s01s01t00":     build_diagram(s01s01t00,    Dchgs=(-2,+2), permutations=[(0,1),(1,0)]),
+    "s01s01t11":     build_diagram(s01s01t11,    Dchgs=(-2,+2), permutations=[(0,1),(1,0)]),
+    "s01s01t01":     build_diagram(s01s01t01,    Dchgs=(-3,+3), permutations=[(0,1),(1,0)]),
 }
