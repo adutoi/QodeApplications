@@ -25,7 +25,7 @@ p, q, r, s, t, u, v, w = "pqrstuvw"    # some contraction indices for easier rea
 def s01s01s10(X, contract_last=False):
     if no_result(X, contract_last):  return []
     i0, i1, j0, j1 = state_indices(contract_last)    # = 0, 1, 2, 3
-    return (1/2) * (-1)**(X.n_j0 + X.P + 1) * raw(
+    return (1/2) * (-1)**(X.n_j0 + 1) * raw(
           X.cca0(i0,j0,p,r,u)
         @ X.caa1(i1,j1,t,s,q)
         @ X.s01(p,q)
@@ -36,7 +36,7 @@ def s01s01s10(X, contract_last=False):
 def s01s01s01(X, contract_last=False):
     if no_result(X, contract_last):  return []
     i0, i1, j0, j1 = state_indices(contract_last)    # = 0, 1, 2, 3
-    return (1/6) * (-1)**(X.n_j0 + X.P) * raw(
+    return (1/6) * (-1)**(X.n_j0) * raw(
           X.ccc0(i0,j0,p,r,t)
         @ X.aaa1(i1,j1,u,s,q)
         @ X.s01(p,q)

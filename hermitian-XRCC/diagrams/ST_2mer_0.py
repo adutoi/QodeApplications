@@ -25,7 +25,7 @@ p, q, r, s, t, u, v, w = "pqrstuvw"    # some contraction indices for easier rea
 def t01(X, contract_last=False):
     if no_result(X, contract_last):  return []
     i0, i1, j0, j1 = state_indices(contract_last)    # = 0, 1, 2, 3
-    return (-1)**(X.n_j0 + X.P) * raw(
+    return (-1)**(X.n_j0) * raw(
         #  X.c0(i0,j0,p)
         #@ X.a1(i1,j1,q)
         #@ X.t01(p,q)

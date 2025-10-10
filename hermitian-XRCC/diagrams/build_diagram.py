@@ -43,22 +43,22 @@ def build_diagram(contraction, Dchgs, permutations):
         label = contraction.__name__
         # This function is used immediately below.  It feeds permuted input tensors to the contraction and
         # returns the final objective function that does the contraction once informed of the fragment states.
-        def permuted_diagram(X):
+        def permuted_diagram(X, phase):
             def do_contraction(**args):
                 supersys_info.timings.start()
-                result = contraction(X, **args)
+                result = phase * contraction(X, **args)
                 supersys_info.timings.record(label)
                 return result
             return do_contraction
         # build list of fully qualified diagram contraction functions for permutations where charge criteria met
         if permutations is None:    # handles 0-mer/identity case
-            permuted_diagrams = [(permuted_diagram(None), tuple())]
+            permuted_diagrams = [(permuted_diagram(None, +1), tuple())]
         else:
             permuted_diagrams = []
-            for permutation in permutations:
+            for phase,permutation in permutations:
                 X = frag_resolve(supersys_info, subsys_chgs, permutation)    # see below
                 if all(X.Dchg[m]==Dchg for m,Dchg in enumerate(Dchgs)):
-                    permuted_diagrams += [(permuted_diagram(X), permutation)]
+                    permuted_diagrams += [(permuted_diagram(X, phase), permutation)]
                 else:
                     permuted_diagrams += [None]
         return permuted_diagrams
@@ -84,7 +84,6 @@ class frag_resolve(object):
 	#
         self._supersys_info = supersys_info
         self._n_frag = len(subsys_chgs)
-        self.P = 1 if permutation==(1,0) else 0    # needs to be generalized for n>2.
         # Some diagrams need to know the number of e- in the ket for the combined "latter" frags of the un(!)permuted subsystem
         n_j = 0
         label = "".join(str(i) for i in range(self._n_frag))

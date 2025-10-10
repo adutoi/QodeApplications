@@ -36,7 +36,7 @@ def v0101(X, contract_last=False):
 def v0001(X, contract_last=False):
     if no_result(X, contract_last):  return []
     i0, i1, j0, j1 = state_indices(contract_last)    # = 0, 1, 2, 3
-    return 2 * (-1)**(X.n_j0 + X.P + 1) * raw(
+    return 2 * (-1)**(X.n_j0 + 1) * raw(
         #  X.cca0(i0,j0,p,q,r)
         #@ X.a1(i1,j1,s)
         #@ X.v0001(p,q,r,s)
@@ -47,7 +47,7 @@ def v0001(X, contract_last=False):
 def v0100(X, contract_last=False):
     if no_result(X, contract_last):  return []
     i0, i1, j0, j1 = state_indices(contract_last)    # = 0, 1, 2, 3
-    return 2 * (-1)**(X.n_j0 + X.P) * raw(
+    return 2 * (-1)**(X.n_j0) * raw(
         #  X.caa0(i0,j0,p,s,r)
         #@ X.c1(i1,j1,q)
         #@ X.v0100(p,q,r,s)

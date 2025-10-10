@@ -67,7 +67,7 @@ def s01s10v0101(X, contract_last=False):
 def s01s01v0100(X, contract_last=False):
     if no_result(X, contract_last):  return []
     i0, i1, j0, j1 = state_indices(contract_last)    # = 0, 1, 2, 3
-    return (-1)**(X.n_j0 + X.P) * raw(
+    return (-1)**(X.n_j0) * raw(
         #  X.cccaa0(i0,j0,p,t,v,s,r)
         #@ X.caa1(i1,j1,q,w,u)
         #@ X.s01(t,u)
@@ -81,7 +81,7 @@ def s01s01v0100(X, contract_last=False):
 def s01s01v1101(X, contract_last=False):
     if no_result(X, contract_last):  return []
     i0, i1, j0, j1 = state_indices(contract_last)    # = 0, 1, 2, 3
-    return (-1)**(X.n_j0 + X.P + 1) * raw(
+    return (-1)**(X.n_j0 + 1) * raw(
         #  X.cca0(i0,j0,t,v,r)
         #@ X.ccaaa1(i1,j1,p,q,w,u,s)
         #@ X.s01(t,u)
@@ -95,7 +95,7 @@ def s01s01v1101(X, contract_last=False):
 def s01s10v0001(X, contract_last=False):
     if no_result(X, contract_last):  return []
     i0, i1, j0, j1 = state_indices(contract_last)    # = 0, 1, 2, 3
-    return 2 * (-1)**(X.n_j0 + X.P) * raw(
+    return 2 * (-1)**(X.n_j0) * raw(
         #  X.cccaa0(i0,j0,p,q,t,w,r)
         #@ X.caa1(i1,j1,v,u,s)
         #@ X.s01(t,u)
@@ -109,7 +109,7 @@ def s01s10v0001(X, contract_last=False):
 def s01s10v0100(X, contract_last=False):
     if no_result(X, contract_last):  return []
     i0, i1, j0, j1 = state_indices(contract_last)    # = 0, 1, 2, 3
-    return 2 * (-1)**(X.n_j0 + X.P + 1) * raw(
+    return 2 * (-1)**(X.n_j0 + 1) * raw(
         #  X.ccaaa0(i0,j0,p,t,w,s,r)
         #@ X.cca1(i1,j1,q,v,u)
         #@ X.s01(t,u)
@@ -173,7 +173,7 @@ def s01s10v0011(X, contract_last=False):
 def s01s01v0001(X, contract_last=False):
     if no_result(X, contract_last):  return []
     i0, i1, j0, j1 = state_indices(contract_last)    # = 0, 1, 2, 3
-    return (-1)**(X.n_j0 + X.P + 1) * raw(
+    return (-1)**(X.n_j0 + 1) * raw(
           X.cccca0(i0,j0,p,q,t,v,r)
         @ X.aaa1(i1,j1,w,u,s)
         @ X.s01(t,u)
@@ -184,7 +184,7 @@ def s01s01v0001(X, contract_last=False):
 def s01s01v0111(X, contract_last=False):
     if no_result(X, contract_last):  return []
     i0, i1, j0, j1 = state_indices(contract_last)    # = 0, 1, 2, 3
-    return (-1)**(X.n_j0 + X.P) * raw(
+    return (-1)**(X.n_j0) * raw(
           X.ccc0(i0,j0,p,t,v)
         @ X.caaaa1(i1,j1,q,w,u,s,r)
         @ X.s01(t,u)
