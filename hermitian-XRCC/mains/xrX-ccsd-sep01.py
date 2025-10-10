@@ -36,6 +36,7 @@ import XR_term                  # knows how to use ^this information to pack a m
 from diagrams import S_diagrams, ST_diagrams, SU_diagrams, SV_diagrams    # definitions of diagrams needed for S and SH
 from   get_ints import get_ints
 from precontract import precontract
+from diagram_lists import *
 
 class empty(object):  pass     # needed for unpickling - remove when all Be-states drivers updated to use struct instead
 
@@ -84,14 +85,14 @@ for BeN_rho_m in BeN_rho:                                # These lines to be rem
     BeN_rho_m['n_states_bra'] = BeN_rho_m['n_states']    # ... up with Be states code again (now works with Be-states from main branch).
 contract_cache = precontract(BeN_rho, symm_ints.S, precontract_timings)
 S_blocks       = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=symm_ints.S,                               diagrams=S_diagrams,  contract_cache=contract_cache, timings=diagram_timings, precon_timings=precontract_timings)
-St_blocks_symm = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, T=symm_ints.T),      diagrams=ST_diagrams, contract_cache=contract_cache, timings=diagram_timings, precon_timings=precontract_timings)
-Su_blocks_symm = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, U=symm_ints.U),      diagrams=SU_diagrams, contract_cache=contract_cache, timings=diagram_timings, precon_timings=precontract_timings)
-Sv_blocks_symm = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, V=symm_ints.V),      diagrams=SV_diagrams, contract_cache=contract_cache, timings=diagram_timings, precon_timings=precontract_timings)
-St_blocks_bior = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, T=bior_ints.T),      diagrams=ST_diagrams, contract_cache=contract_cache, timings=diagram_timings, precon_timings=precontract_timings)
-Su_blocks_bior = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, U=bior_ints.U),      diagrams=SU_diagrams, contract_cache=contract_cache, timings=diagram_timings, precon_timings=precontract_timings)
-Sv_blocks_bior = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, V=bior_ints.V),      diagrams=SV_diagrams, contract_cache=contract_cache, timings=diagram_timings, precon_timings=precontract_timings)
-Sv_blocks_half = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, V=bior_ints.V_half), diagrams=SV_diagrams, contract_cache=contract_cache, timings=diagram_timings, precon_timings=precontract_timings)
-Sv_blocks_diff = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, V=bior_ints.V_diff), diagrams=SV_diagrams, contract_cache=contract_cache, timings=diagram_timings, precon_timings=precontract_timings)
+ST_blocks_symm = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, T=symm_ints.T),      diagrams=ST_diagrams, contract_cache=contract_cache, timings=diagram_timings, precon_timings=precontract_timings)
+SU_blocks_symm = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, U=symm_ints.U),      diagrams=SU_diagrams, contract_cache=contract_cache, timings=diagram_timings, precon_timings=precontract_timings)
+SV_blocks_symm = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, V=symm_ints.V),      diagrams=SV_diagrams, contract_cache=contract_cache, timings=diagram_timings, precon_timings=precontract_timings)
+ST_blocks_bior = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, T=bior_ints.T),      diagrams=ST_diagrams, contract_cache=contract_cache, timings=diagram_timings, precon_timings=precontract_timings)
+SU_blocks_bior = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, U=bior_ints.U),      diagrams=SU_diagrams, contract_cache=contract_cache, timings=diagram_timings, precon_timings=precontract_timings)
+SV_blocks_bior = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, V=bior_ints.V),      diagrams=SV_diagrams, contract_cache=contract_cache, timings=diagram_timings, precon_timings=precontract_timings)
+SV_blocks_half = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, V=bior_ints.V_half), diagrams=SV_diagrams, contract_cache=contract_cache, timings=diagram_timings, precon_timings=precontract_timings)
+SV_blocks_diff = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, V=bior_ints.V_diff), diagrams=SV_diagrams, contract_cache=contract_cache, timings=diagram_timings, precon_timings=precontract_timings)
 
 # charges under consideration
 monomer_charges = [0, +1, -1]
@@ -115,39 +116,18 @@ print("build H1")
 
 H1 = []
 for m in [0,1]:
-    H1_m  = XR_term.monomer_matrix(St_blocks_symm, {
-                          1: [
-                              "t00",
-                             ],
-                         }, m, monomer_charges, matrix_timings)
-    H1_m += XR_term.monomer_matrix(Su_blocks_symm, {
-                          1: [
-                              "u000",
-                             ],
-                         }, m, monomer_charges, matrix_timings)
+    H1 += [  XR_term.monomer_matrix(ST_blocks_symm, {1: ST1[0]}, m, monomer_charges, matrix_timings) \
+           + XR_term.monomer_matrix(SU_blocks_symm, {1: SU1[0]}, m, monomer_charges, matrix_timings) \
+           + XR_term.monomer_matrix(SV_blocks_symm, {1: SV1[0]}, m, monomer_charges, matrix_timings) ]
 
-    H1_m += XR_term.monomer_matrix(Sv_blocks_symm, {
-                          1: [
-                              "v0000",
-                             ],
-                         }, m, monomer_charges, matrix_timings)
-    H1 += [H1_m]
+print("build trivial H2 (zeros)")
 
-
-
-print("build H2 (0e)")
-
-H2  = XR_term.dimer_matrix(St_blocks_bior, {
-                       1: [
-                          ],
-                      }, (0,1), all_dimer_charges, matrix_timings)
+H2 = XR_term.dimer_matrix(ST_blocks_bior, {1: []}, (0,1), all_dimer_charges, matrix_timings)
 
 H2blocked = H2
 
 global_timings.record("build")
 global_timings.start()
-
-
 
 print("Apply H")
 
