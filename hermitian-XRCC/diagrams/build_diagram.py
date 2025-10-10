@@ -1,4 +1,4 @@
-#    (C) Copyright 2024 Anthony D. Dutoi and Marco Bauer
+#    (C) Copyright 2024, 2025 Anthony D. Dutoi and Marco Bauer
 # 
 #    This file is part of QodeApplications.
 # 
@@ -36,7 +36,7 @@ from qode.util.dynamic_array import dynamic_array
 
 # This function informs a primitive contraction of the charge cases for which it is valid and the permutations
 # of the anonymized fragments for which it should be executed.
-def build_diagram(contraction, Dchgs=(0,), permutations=((0,),)):
+def build_diagram(contraction, Dchgs, permutations):
     # The returned function further requires information about the actual fragments composing the subsystem
     # being computed, and their charges.
     def get_permuted_diagrams(supersys_info, subsys_chgs):

@@ -23,13 +23,13 @@ from permute import permutation_subs
 from primitives import index, h_int, v_int, s_int, r_int, delta, c_op, a_op, scalar_sum
 
 # this syntax because operations performed by classes, but not in place
-def frag_sorted(obj):             return obj._frag_sorted()
-def frag_factorized(obj, frags):  return obj._frag_factorized(frags)
-def frag_permuted(obj,perm):      return obj._frag_permuted(perm)
-def simplified(obj):              return obj._simplified()
-def condense_perm(obj, frags):    return obj._condense_perm(frags)
-def ct_ordered(obj):              return obj._ct_ordered()
-def mult_by(obj, x):              return obj._mult_by(x)
+def frag_sorted(obj):         return obj._frag_sorted()
+def frag_factorized(obj):     return obj._frag_factorized()
+def frag_permuted(obj,perm):  return obj._frag_permuted(perm)
+def simplified(obj):          return obj._simplified()
+def condense_perm(obj):       return obj._condense_perm()
+def ct_ordered(obj):          return obj._ct_ordered()
+def mult_by(obj, x):          return obj._mult_by(x)
 
 
 
@@ -106,9 +106,6 @@ class integral_product(object):
     def ct_character(self):
         _1, _2, _3, _4, r_ints = self._integrals_by_type()
         return tuple(rho.ct_character() for rho in r_ints)
-    def s_order(self):
-        _1, _2, s_ints, _3, _4 = self._integrals_by_type()
-        return len(s_ints)
     def abbrev_hack(self):
         _1, hv_ints, s_ints, _2, _3 = self._integrals_by_type()
         return "".join(integral.abbrev_hack() for integral in s_ints+hv_ints)
@@ -162,7 +159,8 @@ class operator_string(object):
                 if other_frag>frag:
                     perm += len(other_ops)
         return perm, operator_string(sorted_ops)
-    def _frag_factorized(self, frags):
+    def _frag_factorized(self):
+        frags = self._braket
         frag_pows = []
         integrals = []
         #
@@ -220,7 +218,7 @@ class operator_string(object):
 # Represents a single contraction of sigma & molecular integrals with field operators, in either raw or matrix element form
 # (upon provision of states).  So a list of integrals and operators must be provided
 class diagram(object):
-    def __init__(self, arg1, arg2=None, scalar=None, perm_list=None):
+    def __init__(self, arg1, arg2=None, scalar=None, perm_list=None, _frags=None):
         if arg2 is None:    # if not copying, first two arguments are mandatory
             other = arg1
             integrals = other._integrals
@@ -230,6 +228,7 @@ class diagram(object):
             self._publication_ordered = other._publication_ordered
             self._abbreviated         = other._abbreviated
             self._code                = other._code
+            self._frags               = other._frags
         else:
             integrals, op_string = arg1, arg2
             scalar    = 1  if scalar    is None else scalar
@@ -237,6 +236,7 @@ class diagram(object):
             self._publication_ordered = False
             self._abbreviated         = False
             self._code                = False
+            self._frags               = _frags
         self._integrals = integral_product(integrals)                       # promote ...
         self._op_string = operator_string(op_string)                        # ... types and ...
         self._scalar    = scalar_sum(scalar)                                # ... force ...
@@ -255,13 +255,13 @@ class diagram(object):
         permute, op_string = frag_sorted(self._op_string)
         scalar = scalar_sum(self._scalar)
         scalar.perm_mult(permute)
-        return diagram(self._integrals, op_string, scalar)
-    def _frag_factorized(self, frags):
+        return diagram(self._integrals, op_string, scalar, _frags=self._frags)
+    def _frag_factorized(self):
         integrals, scalar = integral_product(self._integrals), scalar_sum(self._scalar)    # copies, so ok to modify
-        frag_pows, ints_factorized = frag_factorized(self._op_string, frags)
+        frag_pows, ints_factorized = frag_factorized(self._op_string)
         scalar.frag_phase_mult(frag_pows)
         integrals.append(ints_factorized)
-        return diagram(integrals, [], scalar)    # new from modified copies
+        return diagram(integrals, [], scalar, _frags=self._frags)    # new from modified copies
     def _frag_permuted(self, perm):    # return a copy with fragment indices permuted
         new_term = copy.deepcopy(self)
         new_term._integrals.permute_frags(perm)
@@ -288,11 +288,10 @@ class diagram(object):
         return scalar_sum(self._scalar)
     def name(self):
         return self._integrals.abbrev_hack()
-    def s_order(self):
-        return self._integrals.s_order()
     def rho_notation(self):           # toggle ...
         self._integrals.rho_notation()
     def as_braket(self, frags):       # toggle ...
+        self._frags = frags
         self._op_string.as_braket(frags)
     def abbreviated(self):            # toggle ...
         self._abbreviated = not self._abbreviated
@@ -318,19 +317,26 @@ class diagram(object):
         Dchgs = format_charges(self._integrals.ct_character())
         permutations = []
         for sign,perm in self._perm_list:    # sign is stored as a character
-            permutations += [tuple(P for P in perm.values())]
-        permutations = str(permutations).replace(" ", "")
+            phase = f"{sign}1"
+            permutations += [(phase, tuple(P for P in perm.values()))]
+        permutations = [f"({phase},{perm})" for phase,perm in permutations]
+        permutations = ",".join(perm.replace(" ", "") for perm in permutations)
+        permutations = f"[{permutations}]"
         return f"    {name1:15s}  build_diagram({name2:13s} Dchgs={Dchgs:8s} permutations={permutations}),"
     def __str__(self):
         if self._code:
             if len(self._op_string)>0:
                 raise RuntimeError("can only output code for terms that have been reduced to products of MO integrals and single-fragment densities")
-            string = f"def {self.name()}(X, contract_last=False):\n" \
-                      "    if no_result(X, contract_last):  return []\n" \
-                      "    i0, i1, j0, j1 = state_indices(contract_last)\n" \
-                     f"    return {self._scalar} * raw(\n" \
-                     f"          {self._integrals}\n" \
-                      "        )\n"
+            if len(self._frags)>1:
+                string = f"def {self.name()}(X, contract_last=False):\n" \
+                          "    if no_result(X, contract_last):  return []\n" \
+                          "    i0, i1, j0, j1 = state_indices(contract_last)    # = 0, 1, 2, 3\n"
+            else:
+                string = f"def {self.name()}(X):\n" \
+                          "    i0, j0 = 0, 1\n"
+            string += f"    return {self._scalar} * raw(\n" \
+                      f"          {self._integrals}\n" \
+                       "        )\n"
         else:
             string = f"~{self._op_string}" if len(self._op_string)>0 else ""
             if self._publication_ordered:
@@ -345,14 +351,14 @@ class diagram(object):
 
 
 class diagram_sum(object):
-    def __init__(self, terms):
+    def __init__(self, terms, _frags=None):
         self._terms = list(terms)
-        self._order = self._terms[0].s_order()   # should be the same for all terms
         self._code = False
+        self._frags = _frags
     def _frag_sorted(self):
-        return diagram_sum([frag_sorted(term) for term in self._terms])
-    def _frag_factorized(self, frags):
-        return diagram_sum([frag_factorized(term, frags) for term in self._terms])
+        return diagram_sum([frag_sorted(term) for term in self._terms], self._frags)
+    def _frag_factorized(self):
+        return diagram_sum([frag_factorized(term) for term in self._terms], self._frags)
     def _simplified(self):    # collects together terms that are identical or related by a phase factor
         same = []    # eventually a list of groups (tuples of indices) of equivalent terms (ordered and hashable), but with duplicate groups
         for term_1 in self._terms:
@@ -371,9 +377,9 @@ class diagram_sum(object):
                 other_scalar.perm_mult(0 if diagram.compare_signs(term, other_term)==+1 else 1)
                 scalar.increment(other_scalar)    # automatically simplified after each increment
             new_terms += [diagram(term, scalar=scalar)]
-        return diagram_sum(new_terms)
-    def _condense_perm(self, frags):    # identify and condense terms that differ only by a permutation of fragments
-        perms = permutation_subs(frags)
+        return diagram_sum(new_terms, self._frags)
+    def _condense_perm(self):    # identify and condense terms that differ only by a permutation of fragments
+        perms = permutation_subs(self._frags)
         new_terms = []    # the new terms, where each stores information about fragment permuations
         exclude = []      # indices of terms to exclude from later iterations because they were taken care of in previous iterations
         for i,term_i in enumerate(self._terms):
@@ -391,15 +397,16 @@ class diagram_sum(object):
                                 perm_list += [(sign, perm)]    # list of permutations and associated signs for this term
                                 exclude += [j]                 # exclude terms identified as permutations of prior terms
                 new_terms += [diagram(term_i, perm_list=perm_list)]
-        return diagram_sum(new_terms)
+        return diagram_sum(new_terms, self._frags)
     def _ct_ordered(self):
-        return diagram_sum(sorted([diagram(term) for term in self._terms], reverse=True, key=lambda x: sorted(x.ct_character())))    # sorting the CT character gives the lowest overall first without fragment bias
+        return diagram_sum(sorted([diagram(term) for term in self._terms], reverse=True, key=lambda x: sorted(x.ct_character())), self._frags)    # sorting the CT character gives the lowest overall first without fragment bias
     def _mult_by(self, x):
-        return diagram_sum(mult_by(term,x) for term in self._terms)
+        return diagram_sum([mult_by(term,x) for term in self._terms], self._frags)
     def rho_notation(self):           # toggle ...
         for term in self._terms:  term.rho_notation()
         return self
     def as_braket(self, frags):              # toggle ...
+        self._frags = frags
         for term in self._terms:  term.as_braket(frags)
         return self
     def abbreviated(self):            # toggle ...
@@ -415,7 +422,7 @@ class diagram_sum(object):
     def __str__(self):
         if self._code:
             connect = "\n"
-            string  =  "[" + ", ".join(f"\"{term.name()}\"" for term in self._terms) + "]\n\n"
+            string  =  f"{len(self._frags)}: [\n    " + ", ".join(f"\"{term.name()}\"" for term in self._terms) + ",\n   ]\n\n"
         else:
             connect = "\\\\\n&+~"
             string = ""
@@ -423,7 +430,7 @@ class diagram_sum(object):
         if not self._code and len(self._terms)>1:
             string = " &~~~~~" + string + "~ "
         if self._code:
-            string += f"\ncatalog[{self._order}] = {{\n"
+            string += f"\ncatalog[{len(self._frags)}] = {{\n"
             string += connect.join(term.catalog_entry() for term in self._terms)
             string +=  "\n}"
         return string

@@ -75,6 +75,7 @@
 # To do:  for purposes of aesthetics, clean up the "printing" options (abbreviated, rho_notation, code, etc).
 # It is so messy and hard to follow, culminating in .abbrev_hack() and .catalog_entry().  The mistake was making
 # these things internal flags so that I could use str().  Just specify from outside at render time.  
+# And now even .as_braket() makes a non-trivial permanent change.
 
 
 
@@ -178,7 +179,7 @@ def make_section(MOint, max_order, frags, letters="pqrstuvwxyzabcdefghijklmno"):
             sorted_terms = frag_sorted(terms).as_braket(frags[:N])
             new_section += eq_equation(sorted_terms)
             #
-            factored_terms = frag_factorized(sorted_terms, frags[:N])
+            factored_terms = frag_factorized(sorted_terms)
             new_section += eq_equation(factored_terms)
             new_section += eq_equation(factored_terms.rho_notation())
             #
@@ -188,7 +189,7 @@ def make_section(MOint, max_order, frags, letters="pqrstuvwxyzabcdefghijklmno"):
             simplified_terms = simplified(ordered_terms)
             new_section += eq_equation(simplified_terms)
             #
-            condensed_terms = condense_perm(simplified_terms, frags[:N])
+            condensed_terms = condense_perm(simplified_terms)
             new_section += eq_equation(condensed_terms.publication_ordered())
             new_section += eq_equation(f"{S_order}!\\Big[" + str(condensed_terms.abbreviated()) + "\\Big]")
             #
