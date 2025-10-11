@@ -73,6 +73,12 @@ class integral_type(object):
             self._rho_notation = not self._rho_notation
         except AttributeError:
             pass
+    def frag_indices(self):
+        return [p.fragment for p in self.c_indices + self.a_indices]
+    def code_components(self):
+            fragments = [str(p.fragment) for p in self.c_indices + self.a_indices]
+            letters   = [p.letter        for p in self.c_indices + self.a_indices]
+            return self.symbols(), fragments, letters
     def _code_labels(self):   # return index labels in code style
         return (
             "".join(str(p.fragment) for p in self.c_indices + self.a_indices),
@@ -97,6 +103,8 @@ class h_int(integral_type):
     def abbrev_hack(self):
         frags, letters = self._code_labels()
         return f"h{frags}"
+    def symbols(self):
+        return "h", "H"
     def __str__(self):
         if self._code:
             frags, letters = self._code_labels()
@@ -120,6 +128,8 @@ class s_int(integral_type):
     def abbrev_hack(self):
         frags, letters = self._code_labels()
         return f"s{frags}"
+    def symbols(self):
+        return "s", "S"
     def __str__(self):
         if self._code:
             frags, letters = self._code_labels()
@@ -141,6 +151,8 @@ class v_int(integral_type):
     def abbrev_hack(self):
         frags, letters = self._code_labels()
         return f"v{frags}"
+    def symbols(self):
+        return "v", "V"
     def __str__(self):
         if self._code:
             frags, letters = self._code_labels()
@@ -171,6 +183,9 @@ class r_int(integral_type):
         return self._fragment
     def ct_character(self):
         return len(self.a_indices) - len(self.c_indices)
+    def symbols(self):
+        symbol = "c"*len(self.c_indices) + "a"*len(self.a_indices)
+        return symbol, symbol
     def __str__(self):
         if self._code:
             ca = "c"*len(self.c_indices) + "a"*len(self.a_indices)

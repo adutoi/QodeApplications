@@ -110,14 +110,66 @@ class integral_product(object):
         _1, hv_ints, s_ints, _2, _3 = self._integrals_by_type()
         return "".join(integral.abbrev_hack() for integral in s_ints+hv_ints)
     def __str__(self):
-        hvs_ints, _1, _2, d_ints, r_ints = self._integrals_by_type()
-        enclose = "{}"
-        deltas = ""
         # this all seems a little hectic.  how to clean up?
+        hvs_ints, hv_int, s_ints, d_ints, r_ints = self._integrals_by_type()
         if self._code:
-            connect = "\n        @ "
-            integrals  = d_ints + r_ints + hvs_ints
+            string = "#  " + "\n        #@ ".join(str(integral) for integral in d_ints+r_ints+hvs_ints)
+            #
+            r_ints_precontract = {r_int.fragment():None for r_int in r_ints}
+
+            if len(hv_int)==1:
+                hv_indices = hv_int[0].frag_indices()
+                idx = max(set(hv_indices), key=hv_indices.count)    # finds the most frequently occuring index in hv_indices
+                r_ints_precontract[idx] = hv_int[0]
+
+            for frag in r_ints_precontract:
+                if r_ints_precontract[frag] is None:
+                    for i,s_int in enumerate(s_ints):
+                        if frag in s_int.frag_indices():
+                            r_ints_precontract[frag] = s_int
+                            del(s_ints[i])
+                            break
+
+            all_integrals = [str(d_int) for d_int in d_ints]
+            for r_int in r_ints:
+                intA = r_int
+                if r_ints_precontract[r_int.fragment()] is not None:
+                    intB = r_ints_precontract[r_int.fragment()]
+                    #all_integrals += [str(intA) + " @ " + str(intB)]
+                    symbolA, fragsA, lettersA = intA.code_components()
+                    symbolB, fragsB, lettersB = intB.code_components()
+                    #fragsA = fragsA[0]
+                    #fragsB = "".join(fragsB)
+                    #lettersA = ",".join(lettersA)
+                    #lettersB = ",".join(lettersB)
+                    #all_integrals += [f"X.{symbolA[0]}{fragsA}(i{fragsA},j{fragsA},{lettersA}) @ X.{symbolB[0]}{fragsB}({lettersB})"]
+                    free_indices = [f"(i{fragsA[0]},j{fragsA[0]}"]
+                    precontract = f"X.{symbolA[1]}{fragsA[0]}"
+                    for p in lettersA:
+                        if p in lettersB:
+                            precontract  += p
+                        else:
+                            precontract  += "X"
+                            free_indices += [p]
+                    precontract += f"_{symbolB[1]}"
+                    for p,f in zip(lettersB,fragsB):
+                        if p in lettersA:
+                            precontract  += p
+                        else:
+                            precontract  += f"{f}"
+                            free_indices += [p]
+                    precontract += ",".join(free_indices) + ")"
+                    all_integrals += [precontract]
+                else:
+                    all_integrals += [str(intA)]
+            all_integrals += [str(s_int) for s_int in s_ints]
+
+            string += "\n          " + "\n        @ ".join(all_integrals)
+            #
+            return string
         else:
+            enclose = "{}"
+            deltas = ""
             connect = " ~ "
             if self._abbreviated:
                 integrals = hvs_ints
@@ -127,7 +179,7 @@ class integral_product(object):
                 integrals  = d_ints + r_ints + hvs_ints
             else:
                 integrals = self._integrals
-        return deltas + enclose.format(connect.join(str(integral) for integral in integrals))
+            return deltas + enclose.format(connect.join(str(integral) for integral in integrals))
 
 
 
@@ -335,7 +387,7 @@ class diagram(object):
                 string = f"def {self.name()}(X):\n" \
                           "    i0, j0 = 0, 1\n"
             string += f"    return {self._scalar} * raw(\n" \
-                      f"          {self._integrals}\n" \
+                      f"        {self._integrals}\n" \
                        "        )\n"
         else:
             string = f"~{self._op_string}" if len(self._op_string)>0 else ""
