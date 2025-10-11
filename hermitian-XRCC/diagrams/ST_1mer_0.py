@@ -26,5 +26,5 @@ def t00(X):
     return 1 * raw(
         #  X.ca0(i0,j0,p,q)
         #@ X.t00(p,q)
-        X.ca0pq_Tpq
+          X.ca0pq_Tpq(i0,j0)
         )

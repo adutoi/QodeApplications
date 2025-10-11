@@ -23,15 +23,24 @@ p, q, r, s, t, u, v, w = "pqrstuvw"    # some contraction indices for easier rea
 
 
 
+#def u100(X, contract_last=False):
+#    if no_result(X, contract_last):  return []
+#    i0, i1, j0, j1 = state_indices(contract_last)    # = 0, 1, 2, 3
+#    return 1 * raw(
+#        #  delta(i1,j1)
+#        #@ X.ca0(i0,j0,p,q)
+#        #@ X.u1_00(p,q)
+#          delta(i1,j1)
+#        @ X.ca0pq_U1pq(i0,j0)
+#        )
+
 def u100(X, special_processing=None):
     (i0s,j0s),(i1s,j1s) = X.n_states[0], X.n_states[1]
     result = numpy.zeros((i0s, i1s, j0s, j1s))
     def get_standard(tensor):  # updates tensor in place
         i0, j0 = 0, 1
         res = 1 * raw(
-            #  X.ca0(i0,j0,p,q)
-            #@ X.u1_00(p,q)
-            X.ca0pq_U1pq
+            X.ca0pq_U1pq(i0,j0)
             )
         for i1 in range(i1s):
             j1 = i1
@@ -85,13 +94,6 @@ def u100(X, special_processing=None):
     else:
         raise ValueError(f"special processing {special_processing} can not be handled")
     return result
-    #if i1==j1:
-    #    return 1 * raw(
-    #          X.ca0(i0,j0,p,q)
-    #        @ X.u1_00(p,q)
-    #        )
-    #else:
-    #    return 0
 
 def u001(X, contract_last=False):
     if no_result(X, contract_last):  return []
@@ -100,8 +102,8 @@ def u001(X, contract_last=False):
         #  X.c0(i0,j0,p)
         #@ X.a1(i1,j1,q)
         #@ X.u0_01(p,q)
-          X.c0(i0,j0,p)
-        @ X.a1q_U00q(i1,j1,p)
+          X.c0p_U0p1(i0,j0,q)
+        @ X.a1(i1,j1,q)
         )
 
 def u101(X, contract_last=False):
@@ -111,6 +113,6 @@ def u101(X, contract_last=False):
         #  X.c0(i0,j0,p)
         #@ X.a1(i1,j1,q)
         #@ X.u1_01(p,q)
-          X.c0(i0,j0,p)
-        @ X.a1q_U10q(i1,j1,p)
+          X.c0p_U1p1(i0,j0,q)
+        @ X.a1(i1,j1,q)
         )

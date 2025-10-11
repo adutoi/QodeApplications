@@ -22,9 +22,9 @@ p, q, r, s, t, u, v, w = "pqrstuvw"    # some contraction indices for easier rea
 
 
 def u000(X):
-    i0, j0, = 0, 1
+    i0, j0 = 0, 1
     return 1 * raw(
         #  X.ca0(i0,j0,p,q)
         #@ X.u0_00(p,q)
-        X.ca0pq_U0pq
+          X.ca0pq_U0pq(i0,j0)
         )

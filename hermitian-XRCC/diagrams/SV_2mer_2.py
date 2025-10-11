@@ -31,8 +31,8 @@ def s01s01v1100(X, contract_last=False):
         #@ X.s01(t,u)
         #@ X.s01(v,w)
         #@ X.v1100(p,q,r,s)
-          X.ccaa0tXXX_St1(i0,j0,v,s,r,u)
-        @ X.ccaa1pqXX_Vpq00(i1,j1,w,u,r,s)
+          X.ccaa0XXsr_V11rs(i0,j0,t,v,p,q)
+        @ X.ccaa1XXXu_S0u(i1,j1,p,q,w,t)
         @ X.s01(v,w)
         )
 
@@ -59,8 +59,8 @@ def s01s10v0101(X, contract_last=False):
         #@ X.s01(t,u)
         #@ X.s10(v,w)
         #@ X.v0101(p,q,r,s)
-          X.ccaa0XtXX_St1(i0,j0,p,w,r,u)
-        @ X.ccaa1qXXs_V0q0s(i1,j1,v,u,p,r)
+          X.ccaa0pXXr_Vp1r1(i0,j0,t,w,q,s)
+        @ X.ccaa1XXuX_S0u(i1,j1,q,v,s,t)
         @ X.s10(v,w)
         )
 
@@ -124,11 +124,14 @@ def s01s01v0000(X, contract_last=False):
     if no_result(X, contract_last):  return []
     i0, i1, j0, j1 = state_indices(contract_last)    # = 0, 1, 2, 3
     return (1/2) * raw(
-          X.ccccaa0(i0,j0,p,q,t,v,s,r)
-        @ X.aa1(i1,j1,w,u)
-        @ X.s01(t,u)
+        #  X.ccccaa0(i0,j0,p,q,t,v,s,r)
+        #@ X.aa1(i1,j1,w,u)
+        #@ X.s01(t,u)
+        #@ X.s01(v,w)
+        #@ X.v0000(p,q,r,s)
+          X.ccccaa0pqXXsr_Vpqrs(i0,j0,t,v)
+        @ X.aa1Xu_S0u(i1,j1,w,t)
         @ X.s01(v,w)
-        @ X.v0000(p,q,r,s)
         )
 
 def s01s01v0101(X, contract_last=False):
@@ -140,8 +143,8 @@ def s01s01v0101(X, contract_last=False):
         #@ X.s01(t,u)
         #@ X.s01(v,w)
         #@ X.v0101(p,q,r,s)
-          X.ccca0XtXX_St1(i0,j0,p,v,r,u)
-        @ X.caaa1qXXs_V0q0s(i1,j1,w,u,p,r)
+          X.ccca0pXXr_Vp1r1(i0,j0,t,v,q,s)
+        @ X.caaa1XXuX_S0u(i1,j1,q,w,s,t)
         @ X.s01(v,w)
         )
 
@@ -149,11 +152,14 @@ def s01s01v1111(X, contract_last=False):
     if no_result(X, contract_last):  return []
     i0, i1, j0, j1 = state_indices(contract_last)    # = 0, 1, 2, 3
     return (1/2) * raw(
-          X.cc0(i0,j0,t,v)
-        @ X.ccaaaa1(i1,j1,p,q,w,u,s,r)
-        @ X.s01(t,u)
+        #  X.cc0(i0,j0,t,v)
+        #@ X.ccaaaa1(i1,j1,p,q,w,u,s,r)
+        #@ X.s01(t,u)
+        #@ X.s01(v,w)
+        #@ X.v1111(p,q,r,s)
+          X.cc0tX_St1(i0,j0,v,u)
+        @ X.ccaaaa1pqXXsr_Vpqrs(i1,j1,w,u)
         @ X.s01(v,w)
-        @ X.v1111(p,q,r,s)
         )
 
 def s01s10v0011(X, contract_last=False):
@@ -165,8 +171,8 @@ def s01s10v0011(X, contract_last=False):
         #@ X.s01(t,u)
         #@ X.s10(v,w)
         #@ X.v0011(p,q,r,s)
-          X.ccca0XXtX_St1(i0,j0,p,q,w,u)
-        @ X.caaa1XXsr_V00rs(i1,j1,v,u,p,q)
+          X.ccca0pqXX_Vpq11(i0,j0,t,w,r,s)
+        @ X.caaa1XuXX_S0u(i1,j1,v,s,r,t)
         @ X.s10(v,w)
         )
 
@@ -174,31 +180,40 @@ def s01s01v0001(X, contract_last=False):
     if no_result(X, contract_last):  return []
     i0, i1, j0, j1 = state_indices(contract_last)    # = 0, 1, 2, 3
     return (-1)**(X.n_j0 + 1) * raw(
-          X.cccca0(i0,j0,p,q,t,v,r)
-        @ X.aaa1(i1,j1,w,u,s)
-        @ X.s01(t,u)
+        #  X.cccca0(i0,j0,p,q,t,v,r)
+        #@ X.aaa1(i1,j1,w,u,s)
+        #@ X.s01(t,u)
+        #@ X.s01(v,w)
+        #@ X.v0001(p,q,r,s)
+          X.cccca0pqXXr_Vpqr1(i0,j0,t,v,s)
+        @ X.aaa1XuX_S0u(i1,j1,w,s,t)
         @ X.s01(v,w)
-        @ X.v0001(p,q,r,s)
         )
 
 def s01s01v0111(X, contract_last=False):
     if no_result(X, contract_last):  return []
     i0, i1, j0, j1 = state_indices(contract_last)    # = 0, 1, 2, 3
     return (-1)**(X.n_j0) * raw(
-          X.ccc0(i0,j0,p,t,v)
-        @ X.caaaa1(i1,j1,q,w,u,s,r)
-        @ X.s01(t,u)
+        #  X.ccc0(i0,j0,p,t,v)
+        #@ X.caaaa1(i1,j1,q,w,u,s,r)
+        #@ X.s01(t,u)
+        #@ X.s01(v,w)
+        #@ X.v0111(p,q,r,s)
+          X.ccc0XtX_St1(i0,j0,p,v,u)
+        @ X.caaaa1qXXsr_V0qrs(i1,j1,w,u,p)
         @ X.s01(v,w)
-        @ X.v0111(p,q,r,s)
         )
 
 def s01s01v0011(X, contract_last=False):
     if no_result(X, contract_last):  return []
     i0, i1, j0, j1 = state_indices(contract_last)    # = 0, 1, 2, 3
     return (1/2) * raw(
-          X.cccc0(i0,j0,p,q,t,v)
-        @ X.aaaa1(i1,j1,w,u,s,r)
-        @ X.s01(t,u)
+        #  X.cccc0(i0,j0,p,q,t,v)
+        #@ X.aaaa1(i1,j1,w,u,s,r)
+        #@ X.s01(t,u)
+        #@ X.s01(v,w)
+        #@ X.v0011(p,q,r,s)
+          X.cccc0pqXX_Vpq11(i0,j0,t,v,r,s)
+        @ X.aaaa1XuXX_S0u(i1,j1,w,s,r,t)
         @ X.s01(v,w)
-        @ X.v0011(p,q,r,s)
         )

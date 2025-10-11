@@ -45,9 +45,9 @@ def s01s01t10(X, contract_last=False):
         #@ X.s01(t,u)
         #@ X.s01(v,w)
         #@ X.t10(p,q)
-          X.cca0tXX_St1(i0,j0,v,q,u)
-        @ X.caa1XwX_S0w(i1,j1,p,u,v)
-        @ X.t10(p,q)
+          X.cca0XXq_T1q(i0,j0,t,v,p)
+        @ X.caa1XXu_S0u(i1,j1,p,w,t)
+        @ X.s01(v,w)
         )
 
 def s01s10t01(X, contract_last=False):
@@ -59,9 +59,9 @@ def s01s10t01(X, contract_last=False):
         #@ X.s01(t,u)
         #@ X.s10(v,w)
         #@ X.t01(p,q)
-          X.cca0XtX_St1(i0,j0,p,w,u)
-        @ X.caa1vXX_Sv0(i1,j1,u,q,w)
-        @ X.t01(p,q)
+          X.cca0pXX_Tp1(i0,j0,t,w,q)
+        @ X.caa1XuX_S0u(i1,j1,v,q,t)
+        @ X.s10(v,w)
         )
 
 def s01s01t00(X, contract_last=False):
@@ -96,9 +96,12 @@ def s01s01t01(X, contract_last=False):
     if no_result(X, contract_last):  return []
     i0, i1, j0, j1 = state_indices(contract_last)    # = 0, 1, 2, 3
     return (1/2) * (-1)**(X.n_j0) * raw(
-          X.ccc0(i0,j0,p,t,v)
-        @ X.aaa1(i1,j1,w,u,q)
-        @ X.s01(t,u)
+        #  X.ccc0(i0,j0,p,t,v)
+        #@ X.aaa1(i1,j1,w,u,q)
+        #@ X.s01(t,u)
+        #@ X.s01(v,w)
+        #@ X.t01(p,q)
+          X.ccc0pXX_Tp1(i0,j0,t,v,q)
+        @ X.aaa1XuX_S0u(i1,j1,w,q,t)
         @ X.s01(v,w)
-        @ X.t01(p,q)
         )

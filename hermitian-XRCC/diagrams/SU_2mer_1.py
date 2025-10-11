@@ -30,8 +30,8 @@ def s01u010(X, contract_last=False):
         #@ X.ca1(i1,j1,p,u)
         #@ X.s01(t,u)
         #@ X.u0_10(p,q)
-          X.ca0tX_St1(i0,j0,q,u)
-        @ X.ca1pX_U0p0(i1,j1,u,q)
+          X.ca0Xq_U01q(i0,j0,t,p)
+        @ X.ca1Xu_S0u(i1,j1,p,t)
         )
 
 def s01u000(X, contract_last=False):
@@ -66,8 +66,8 @@ def s01u001(X, contract_last=False):
         #@ X.aa1(i1,j1,u,q)
         #@ X.s01(t,u)
         #@ X.u0_01(p,q)
-          X.cc0Xt_St1(i0,j0,p,u)
-        @ X.aa1Xq_U00q(i1,j1,u,p)
+          X.cc0pX_U0p1(i0,j0,t,q)
+        @ X.aa1uX_S0u(i1,j1,q,t)
         )
 
 def s01u110(X, contract_last=False):
@@ -78,8 +78,8 @@ def s01u110(X, contract_last=False):
         #@ X.ca1(i1,j1,p,u)
         #@ X.s01(t,u)
         #@ X.u1_10(p,q)
-          X.ca0tX_St1(i0,j0,q,u)
-        @ X.ca1pX_U1p0(i1,j1,u,q)
+          X.ca0Xq_U11q(i0,j0,t,p)
+        @ X.ca1Xu_S0u(i1,j1,p,t)
         )
 
 def s01u100(X, contract_last=False):
@@ -114,6 +114,6 @@ def s01u101(X, contract_last=False):
         #@ X.aa1(i1,j1,u,q)
         #@ X.s01(t,u)
         #@ X.u1_01(p,q)
-          X.cc0Xt_St1(i0,j0,p,u)
-        @ X.aa1Xq_U10q(i1,j1,u,p)
+          X.cc0pX_U1p1(i0,j0,t,q)
+        @ X.aa1uX_S0u(i1,j1,q,t)
         )

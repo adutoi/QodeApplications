@@ -29,6 +29,6 @@ def t01(X, contract_last=False):
         #  X.c0(i0,j0,p)
         #@ X.a1(i1,j1,q)
         #@ X.t01(p,q)
-          X.c0(i0,j0,p)
-        @ X.a1q_T0q(i1,j1,p)
+          X.c0p_Tp1(i0,j0,q)
+        @ X.a1(i1,j1,q)
         )

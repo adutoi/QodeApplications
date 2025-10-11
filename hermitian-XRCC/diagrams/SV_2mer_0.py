@@ -29,8 +29,8 @@ def v0101(X, contract_last=False):
         #  X.ca0(i0,j0,p,r)
         #@ X.ca1(i1,j1,q,s)
         #@ X.v0101(p,q,r,s)
-          X.ca0(i0,j0,p,r)
-        @ X.ca1qs_V0q0s(i1,j1,p,r)
+          X.ca0pr_Vp1r1(i0,j0,q,s)
+        @ X.ca1(i1,j1,q,s)
         )
 
 def v0001(X, contract_last=False):
@@ -62,6 +62,6 @@ def v0011(X, contract_last=False):
         #  X.cc0(i0,j0,p,q)
         #@ X.aa1(i1,j1,s,r)
         #@ X.v0011(p,q,r,s)
-          X.cc0(i0,j0,p,q)
-        @ X.aa1sr_V00rs(i1,j1,p,q)
+          X.cc0pq_Vpq11(i0,j0,r,s)
+        @ X.aa1(i1,j1,s,r)
         )

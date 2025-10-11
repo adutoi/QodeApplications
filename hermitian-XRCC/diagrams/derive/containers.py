@@ -109,6 +109,12 @@ class integral_product(object):
     def abbrev_hack(self):
         _1, hv_ints, s_ints, _2, _3 = self._integrals_by_type()
         return "".join(integral.abbrev_hack() for integral in s_ints+hv_ints)
+    def int_type(self):
+        hvs_ints, hv_int, s_ints, d_ints, r_ints = self._integrals_by_type()
+        symbol = "S"
+        if len(hv_int)==1:
+            symbol += hv_int[0].symbols()[1][0]
+        return symbol, len(s_ints)
     def __str__(self):
         # this all seems a little hectic.  how to clean up?
         hvs_ints, hv_int, s_ints, d_ints, r_ints = self._integrals_by_type()
@@ -375,6 +381,8 @@ class diagram(object):
         permutations = ",".join(perm.replace(" ", "") for perm in permutations)
         permutations = f"[{permutations}]"
         return f"    {name1:15s}  build_diagram({name2:13s} Dchgs={Dchgs:8s} permutations={permutations}),"
+    def int_type(self):
+        return self._integrals.int_type()
     def __str__(self):
         if self._code:
             if len(self._op_string)>0:
@@ -473,8 +481,9 @@ class diagram_sum(object):
         return self
     def __str__(self):
         if self._code:
+            int_type, order = self._terms[0].int_type()
             connect = "\n"
-            string  =  f"{len(self._frags)}: [\n    " + ", ".join(f"\"{term.name()}\"" for term in self._terms) + ",\n   ]\n\n"
+            string  =  f"{int_type}{len(self._frags)}[{order}] = [\n          " + ", ".join(f"\"{term.name()}\"" for term in self._terms) + ",\n         ]\n\n"
         else:
             connect = "\\\\\n&+~"
             string = ""

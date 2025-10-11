@@ -86,6 +86,11 @@ import itertools
 from primitives import index, s_int, h_int, v_int
 from containers import diagram, diagram_sum
 
+#h_symbols = ("h","h","H")
+#h_symbols = ("t","t","T")
+#h_symbols = ("u0","u0_","U0")
+h_symbols = ("u1","u1_","U1")
+
 def make_terms(frags, MOint, S_order, letters):
     ### A one-off utility for combining lists interpreted as lists of factors
     def combine(old, new):
@@ -109,7 +114,7 @@ def make_terms(frags, MOint, S_order, letters):
         new_prototerms = []
         for p_frag in frags:
             for q_frag in frags:
-                new_prototerms += [h_int(index(p, p_frag), index(q, q_frag))]
+                new_prototerms += [h_int(index(p, p_frag), index(q, q_frag), h_symbols)]
         prototerms = [combine(old,new) for old,new in itertools.product(prototerms, new_prototerms)]
     if MOint=="v":
         p, q, r, s = letters[0:4]
@@ -213,20 +218,19 @@ import os
 frags = (0,1)    # for code
 #frags = (1,2)    # for publications
 
-library = ""
 derivation = """\
 The Einstein summation convention applies for all repeated indices, regardless of whether they are sub/superscript.
 A subscript on an index itself indicates a restriction of that index to the specified fragment.
 """
 section, functions = make_section("S", 4, frags)
 derivation += section
-library += functions 
+open("diagrams-S.py", "w").write(functions)
 section, functions = make_section("h", 2, frags)
 derivation += section
-library += functions 
+open("diagrams-h.py", "w").write(functions)
 section, functions = make_section("v", 2, frags)
 derivation += section
-library += functions 
+open("diagrams-v.py", "w").write(functions)
 
 if not "no-compile" in sys.argv:
     template = open("template.tex", "r").read()
@@ -234,8 +238,5 @@ if not "no-compile" in sys.argv:
     texout.write(template.replace("%-%-%-%-% CONTENTS %-%-%-%-%", derivation))
     texout.close()
     os.system("pdflatex diagrams; pdflatex diagrams")
-    pyout = open("diagrams.py", "w")
-    pyout.write(library)
-    pyout.close()
     if not "leave-tex" in sys.argv:
         os.system("rm -rf diagrams.aux diagrams.log texput.log diagrams.tex")

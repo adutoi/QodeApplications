@@ -26,5 +26,5 @@ def v0000(X):
     return 1 * raw(
         #  X.ccaa0(i0,j0,p,q,s,r)
         #@ X.v0000(p,q,r,s)
-        X.ccaa0pqsr_Vpqrs
+          X.ccaa0pqsr_Vpqrs(i0,j0)
         )

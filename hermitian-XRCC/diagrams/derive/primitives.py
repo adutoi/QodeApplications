@@ -93,25 +93,27 @@ class integral_type(object):
 # 2-index h integral
 class h_int(integral_type):
     kind = "h"
-    def __init__(self, arg1, arg2=None):
+    def __init__(self, arg1, arg2=None, symbols=("h","h","H")):
         if arg2 is None:   # copy
             other = arg1
             integral_type.__init__(self, other, _kind=self.kind)
+            self._symbols = other._symbols
         else:   # new from two indices
             p, q = arg1, arg2
             integral_type.__init__(self, [p], [q])
+            self._symbols = symbols
     def abbrev_hack(self):
         frags, letters = self._code_labels()
-        return f"h{frags}"
+        return f"{self._symbols[0]}{frags}"
     def symbols(self):
-        return "h", "H"
+        return self._symbols[1:]
     def __str__(self):
         if self._code:
             frags, letters = self._code_labels()
-            return f"X.h{frags}({letters})"
+            return f"X.{self._symbols[1]}{frags}({letters})"
         else:
             c, a = self._tex_labels()
-            return f"h^{{{c}}}_{{{a}}}"
+            return f"{self.kind}^{{{c}}}_{{{a}}}"
 
 # 2-index sigma integral (indices not allowed to be the same)
 class s_int(integral_type):
@@ -133,7 +135,7 @@ class s_int(integral_type):
     def __str__(self):
         if self._code:
             frags, letters = self._code_labels()
-            return f"X.s{frags}({letters})"
+            return f"X.{self.kind}{frags}({letters})"
         else:
             c, a = self._tex_labels()
             return f"\\sigma_{{{c} {a}}}"
@@ -156,10 +158,10 @@ class v_int(integral_type):
     def __str__(self):
         if self._code:
             frags, letters = self._code_labels()
-            return f"X.v{frags}({letters})"
+            return f"X.{self.kind}{frags}({letters})"
         else:
             c, a = self._tex_labels()
-            return f"v^{{{c}}}_{{{a}}}"
+            return f"{self.kind}^{{{c}}}_{{{a}}}"
 
 # rho integral with arbitrary indices
 class r_int(integral_type):
@@ -355,13 +357,13 @@ class scalar_sum(object):
                     ### n_i1 or n_i2 conventions
                     #powers = "+".join(f"X.n_i{frag}" for frag in scalar.frag_pows)
                     ### n_j1 or n_j2 conventions
-                    powers = "+".join(f"X.n_j{frag}" for frag in scalar.frag_pows)
+                    powers = " + ".join(f"X.n_j{frag}" for frag in scalar.frag_pows)
                 else:
                     ### n_i1 or n_i2 conventions
                     #powers = "+".join(f"n_{{i_{frag}}}" for frag in scalar.frag_pows)
                     ### n_j1 or n_j2 conventions
-                    powers = "+".join(f"n_{{j_{frag}}}" for frag in scalar.frag_pows)
-                if scalar.const_pow:  powers += "+1"
+                    powers = " + ".join(f"n_{{j_{frag}}}" for frag in scalar.frag_pows)
+                if scalar.const_pow:  powers += " + 1"
                 if self._code:  factors += [f"(-1)**({powers})"]
                 else:           factors += [f"(-1)^{{{powers}}}"]
                 if self._code:                   mult = " * "      # multiplication convention ...

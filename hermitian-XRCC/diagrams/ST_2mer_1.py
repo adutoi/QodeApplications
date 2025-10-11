@@ -30,8 +30,8 @@ def s01t10(X, contract_last=False):
         #@ X.ca1(i1,j1,p,u)
         #@ X.s01(t,u)
         #@ X.t10(p,q)
-          X.ca0tX_St1(i0,j0,q,u)
-        @ X.ca1pX_Tp0(i1,j1,u,q)
+          X.ca0Xq_T1q(i0,j0,t,p)
+        @ X.ca1Xu_S0u(i1,j1,p,t)
         )
 
 def s01t00(X, contract_last=False):
@@ -66,6 +66,6 @@ def s01t01(X, contract_last=False):
         #@ X.aa1(i1,j1,u,q)
         #@ X.s01(t,u)
         #@ X.t01(p,q)
-          X.cc0Xt_St1(i0,j0,p,u)
-        @ X.aa1Xq_T0q(i1,j1,u,p)
+          X.cc0pX_Tp1(i0,j0,t,q)
+        @ X.aa1uX_S0u(i1,j1,q,t)
         )

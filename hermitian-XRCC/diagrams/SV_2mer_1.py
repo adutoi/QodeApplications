@@ -78,8 +78,8 @@ def s01v1100(X, contract_last=False):
         #@ X.cca1(i1,j1,p,q,u)
         #@ X.s01(t,u)
         #@ X.v1100(p,q,r,s)
-          X.caa0tXX_St1(i0,j0,s,r,u)
-        @ X.cca1pqX_Vpq00(i1,j1,u,r,s)
+          X.caa0Xsr_V11rs(i0,j0,t,p,q)
+        @ X.cca1XXu_S0u(i1,j1,p,q,t)
         )
 
 def s01v1111(X, contract_last=False):
@@ -122,10 +122,10 @@ def s01v0011(X, contract_last=False):
     if no_result(X, contract_last):  return []
     i0, i1, j0, j1 = state_indices(contract_last)    # = 0, 1, 2, 3
     return (-1)**(X.n_j0) * raw(
-          X.ccc0(i0,j0,p,q,t)
-        @ X.aaa1(i1,j1,u,s,r)
-        @ X.s01(t,u)
-        @ X.v0011(p,q,r,s)
-        #  X.ccc0pqX_Vpq11(i0,j0,t,r,s)    # should be right, ...
-        #@ X.aaa1uXX_S0u(i1,j1,s,r,t)      # ... but 3xCT not yet tested
+        #  X.ccc0(i0,j0,p,q,t)
+        #@ X.aaa1(i1,j1,u,s,r)
+        #@ X.s01(t,u)
+        #@ X.v0011(p,q,r,s)
+          X.ccc0pqX_Vpq11(i0,j0,t,r,s)
+        @ X.aaa1uXX_S0u(i1,j1,s,r,t)
         )
