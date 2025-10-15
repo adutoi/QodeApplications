@@ -111,37 +111,6 @@ def anti(tensor, groups):
 
 i, j, p, q, r, s, t, u, v, w, x, y, z = range(13)
 
-def delta(dim):
-    return tens_wrap(numpy.identity(dim))
-
-def ccaa():
-    caC   = Be.rho["caC"]
-    ccaaC = Be.rho["ccaaC"]
-    caV   = Be.rho["caV"  ][(+1,+1)]
-    dim = caV.shape[0]
-    return anti(caC(p,s) @ caV(i,j,q,r), [((p,),(q,)), ((r,),(s,))])  +  delta(dim)(i,j) @ ccaaC(p,q,r,s)
-
-def cccaa():
-    caC   = Be.rho["caC"]
-    ccaaC = Be.rho["ccaaC"]
-    cV    = Be.rho["cV"   ][(0,+1)]
-    ccaV  = Be.rho["ccaV" ][(0,+1)]
-    return -anti(caC(p,t) @ ccaV(i,j,q,r,s), [((p,),(q,r)), ((s,),(t,))]) + anti(ccaaC(p,q,s,t) @ cV(i,j,r), [((p,q),(r,))])
-
-def ccaaa():
-    caC   = Be.rho["caC"]
-    ccaaC = Be.rho["ccaaC"]
-    aV    = Be.rho["aV"   ][(+1,0)]
-    caaV  = Be.rho["caaV" ][(+1,0)]
-    return -anti(caC(p,t) @ caaV(i,j,q,r,s), [((p,),(q,)), ((r,s),(t,))]) + anti(ccaaC(p,q,s,t) @ aV(i,j,r), [((r,),(s,t))])
-
-def cccaaa():
-    caC   = Be.rho["caC"]
-    ccaaC = Be.rho["ccaaC"]
-    caV   = Be.rho["caV"  ][(0,0)]
-    ccaaV = Be.rho["ccaaV"][(0,0)]
-    return anti(caC(p,u) @ ccaaV(i,j,q,r,s,t), [((p,),(q,r)), ((s,t),(u,))]) + anti(ccaaC(p,q,t,u) @ caV(i,j,r,s), [((p,q),(r,)), ((s,),(t,u))])
-
 def ccccaa():
     caC    = Be.rho["caC"]
     ccaaC  = Be.rho["ccaaC"]
@@ -156,19 +125,48 @@ def ccaaaa():
     caaaV  = Be.rho["caaaV"][(+1,-1)]
     return anti(caC(p,u) @ caaaV(i,j,q,r,s,t), [((p,),(q,)), ((r,s,t),(u,))]) + anti(ccaaC(p,q,t,u) @ aaV(i,j,r,s), [((r,s),(t,u))])
 
+def ccccaaaA():
+    caC    = Be.rho["caC"]
+    ccaaC  = Be.rho["ccaaC"]
+    ccaV   = Be.rho["ccaV"  ][(-1,0)]
+    cccaaV = Be.rho["cccaaV"][(-1,0)]
+    return -anti(caC(p,v) @ cccaaV(i,j,q,r,s,t,u), [((p,),(q,r,s)), ((t,u),(v,))]) + anti(ccaaC(p,q,u,v) @ ccaV(i,j,r,s,t), [((p,q),(r,s)), ((t,),(u,v))])
+
+def ccccaaaB():
+    caC    = Be.rho["caC"]
+    ccaaC  = Be.rho["ccaaC"]
+    ccaV   = Be.rho["ccaV"  ][(0,+1)]
+    cccaaV = Be.rho["cccaaV"][(0,+1)]
+    return anti(ccaaC(p,q,u,v) @ ccaV(i,j,r,s,t), [((p,q),(r,s)), ((t,),(u,v))])
+
+def cccaaaaA():
+    caC    = Be.rho["caC"]
+    ccaaC  = Be.rho["ccaaC"]
+    caaV   = Be.rho["caaV"  ][(0,-1)]
+    ccaaaV = Be.rho["ccaaaV"][(0,-1)]
+    return -anti(caC(p,v) @ ccaaaV(i,j,q,r,s,t,u), [((p,),(q,r)), ((s,t,u),(v,))]) + anti(ccaaC(p,q,u,v) @ caaV(i,j,r,s,t), [((p,q),(r,)), ((s,t),(u,v))])
+
+def cccaaaaB():
+    caC    = Be.rho["caC"]
+    ccaaC  = Be.rho["ccaaC"]
+    caaV   = Be.rho["caaV"  ][(+1,0)]
+    ccaaaV = Be.rho["ccaaaV"][(+1,0)]
+    return anti(ccaaC(p,q,u,v) @ caaV(i,j,r,s,t), [((p,q),(r,)), ((s,t),(u,v))])
 
 
 
 if True:
-    Be.rho["ccaa"][(+1,+1)] = ccaa()
-    Be.rho["cccaa"][(0,+1)] = cccaa()
-    Be.rho["ccaaa"][(+1,0)] = ccaaa()
-    Be.rho["cccaaa"][(0,0)] = cccaaa()
     Be.rho["ccccaa"] = {}
     Be.rho["ccccaa"][(-1,+1)] = ccccaa()
     Be.rho["ccaaaa"] = {}
     Be.rho["ccaaaa"][(+1,-1)] = ccaaaa()
-    pickle.dump(Be, open(f"rho/Be-Be_{frag}_6-31G_nth_compress-factored.pkl", "wb"))
+    Be.rho["ccccaaa"] = {}
+    Be.rho["ccccaaa"][(-1,0)] = ccccaaaA()
+    Be.rho["ccccaaa"][(0,+1)] = ccccaaaB()
+    Be.rho["cccaaaa"] = {}
+    Be.rho["cccaaaa"][(0,-1)] = cccaaaaA()
+    Be.rho["cccaaaa"][(+1,0)] = cccaaaaB()
+    pickle.dump(Be, open(f"rho/Be-Be_{frag}_6-31G_nth_compress-factored2.pkl", "wb"))
 
 
 if False:
