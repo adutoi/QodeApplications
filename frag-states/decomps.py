@@ -133,10 +133,8 @@ def ccccaaaA():
     return -anti(caC(p,v) @ cccaaV(i,j,q,r,s,t,u), [((p,),(q,r,s)), ((t,u),(v,))]) + anti(ccaaC(p,q,u,v) @ ccaV(i,j,r,s,t), [((p,q),(r,s)), ((t,),(u,v))])
 
 def ccccaaaB():
-    caC    = Be.rho["caC"]
     ccaaC  = Be.rho["ccaaC"]
     ccaV   = Be.rho["ccaV"  ][(0,+1)]
-    cccaaV = Be.rho["cccaaV"][(0,+1)]
     return anti(ccaaC(p,q,u,v) @ ccaV(i,j,r,s,t), [((p,q),(r,s)), ((t,),(u,v))])
 
 def cccaaaaA():
@@ -147,11 +145,31 @@ def cccaaaaA():
     return -anti(caC(p,v) @ ccaaaV(i,j,q,r,s,t,u), [((p,),(q,r)), ((s,t,u),(v,))]) + anti(ccaaC(p,q,u,v) @ caaV(i,j,r,s,t), [((p,q),(r,)), ((s,t),(u,v))])
 
 def cccaaaaB():
-    caC    = Be.rho["caC"]
     ccaaC  = Be.rho["ccaaC"]
     caaV   = Be.rho["caaV"  ][(+1,0)]
-    ccaaaV = Be.rho["ccaaaV"][(+1,0)]
     return anti(ccaaC(p,q,u,v) @ caaV(i,j,r,s,t), [((p,q),(r,)), ((s,t),(u,v))])
+
+def cccccaaa():
+    ccaaC  = Be.rho["ccaaC"]
+    cccaV  = Be.rho["cccaV"][(-1,+1)]
+    return anti(ccaaC(p,q,v,w) @ cccaV(i,j,r,s,t,u), [((p,q),(r,s,t)), ((u,),(v,w))])
+
+def ccccaaaaA():
+    caC     = Be.rho["caC"]
+    ccaaC   = Be.rho["ccaaC"]
+    ccaaV   = Be.rho["ccaaV"  ][(-1,-1)]
+    cccaaaV = Be.rho["cccaaaV"][(-1,-1)]
+    return anti(caC(p,w) @ cccaaaV(i,j,q,r,s,t,u,v), [((p,),(q,r,s)), ((t,u,v),(w,))]) + anti(ccaaC(p,q,v,w) @ ccaaV(i,j,r,s,t,u), [((p,q),(r,s)), ((t,u),(v,w))])
+
+def ccccaaaaB():
+    ccaaC   = Be.rho["ccaaC"]
+    ccaaV   = Be.rho["ccaaV"  ][(0,0)]
+    return anti(ccaaC(p,q,v,w) @ ccaaV(i,j,r,s,t,u), [((p,q),(r,s)), ((t,u),(v,w))])
+
+def cccaaaaa():
+    ccaaC  = Be.rho["ccaaC"]
+    caaaV  = Be.rho["caaaV"][(+1,-1)]
+    return anti(ccaaC(p,q,v,w) @ caaaV(i,j,r,s,t,u), [((p,q),(r,)), ((s,t,u,),(v,w))])
 
 
 
@@ -166,7 +184,14 @@ if True:
     Be.rho["cccaaaa"] = {}
     Be.rho["cccaaaa"][(0,-1)] = cccaaaaA()
     Be.rho["cccaaaa"][(+1,0)] = cccaaaaB()
-    pickle.dump(Be, open(f"rho/Be-Be_{frag}_6-31G_nth_compress-factored2.pkl", "wb"))
+    Be.rho["cccccaaa"] = {}
+    Be.rho["cccccaaa"][(-1,+1)] = cccccaaa()
+    Be.rho["ccccaaaa"] = {}
+    Be.rho["ccccaaaa"][(-1,-1)] = ccccaaaaA()
+    Be.rho["ccccaaaa"][( 0, 0)] = ccccaaaaB()
+    Be.rho["cccaaaaa"] = {}
+    Be.rho["cccaaaaa"][(+1,-1)] = cccaaaaa()
+    pickle.dump(Be, open(f"rho/Be-Be_{frag}_6-31G_nth_compress-factored3.pkl", "wb"))
 
 
 if False:
