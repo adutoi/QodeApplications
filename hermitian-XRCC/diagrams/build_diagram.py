@@ -188,5 +188,7 @@ def _precontract_array(contract_cache, label, subsys_chgs, n_indices, n_frag):
                 contraction = contraction[braket_charge]
         except KeyError:
             contraction = None    # eventually return an object whose __getitem__ member reports exactly what is missing (in case access is attempted)
+        except RuntimeError as err:
+            raise RuntimeError(str(err) + f"\nrelative fragments are {indices}")
         return contraction
     return dynamic_array(_rule, [range(n_frag)]*n_indices)
