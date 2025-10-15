@@ -1,3 +1,4 @@
+import sys
 import pickle
 import itertools
 import numpy
@@ -5,11 +6,13 @@ import tensorly
 from qode.util.PyC       import Double
 from qode.math.tensornet import raw, tl_tensor, tensor_sum
 
+frag = sys.argv[1]
+
 def tens_wrap(tensor):
     return tl_tensor(tensorly.tensor(tensor, dtype=Double.tensorly))
 
 
-Be = pickle.load(open("rho/Be-Be_0_6-31G_nth_compress.pkl","rb"))
+Be = pickle.load(open(f"rho/Be-Be_{frag}_6-31G_nth_compress.pkl", "rb"))
 nstates = Be.rho["n_states"]
 
 projC, projV = [0]*18, [0]*18
@@ -68,7 +71,8 @@ def test_formulas(reference, formulas, *, description=None, verbose=False):
             print()
             if verbose:  print(extra, end="")
 
-def anti(tensor, groupA, groupB):
+def anti(tensor, groups):
+    #
     def unique(iterable, size):
         indexable = list(iterable)
         if size==1:
@@ -79,6 +83,10 @@ def anti(tensor, groupA, groupB):
                 nested = unique(indexable[i+1:], size-1)
                 result += [[x]+n for n in nested]
         return result
+    #
+    groupA, groupB = groups.pop()
+    if len(groups)>0:
+        tensor = anti(tensor, groups)
     if len(groupB)<len(groupA):
         groupA, groupB = groupB, groupA
     permutations = [(+1, list(range(len(tensor.shape))))]
@@ -101,6 +109,8 @@ def anti(tensor, groupA, groupB):
 
 
 
+i, j, p, q, r, s, t, u, v, w, x, y, z = range(13)
+
 def delta(dim):
     return tens_wrap(numpy.identity(dim))
 
@@ -109,47 +119,94 @@ def ccaa():
     ccaaC = Be.rho["ccaaC"]
     caV   = Be.rho["caV"  ][(+1,+1)]
     dim = caV.shape[0]
-    return anti(anti(caC(2,5) @ caV(0,1,3,4), (2,),(3,)), (4,),(5,))  +  delta(dim)(0,1) @ ccaaC(2,3,4,5)
+    return anti(caC(p,s) @ caV(i,j,q,r), [((p,),(q,)), ((r,),(s,))])  +  delta(dim)(i,j) @ ccaaC(p,q,r,s)
 
 def cccaa():
     caC   = Be.rho["caC"]
     ccaaC = Be.rho["ccaaC"]
     cV    = Be.rho["cV"   ][(0,+1)]
     ccaV  = Be.rho["ccaV" ][(0,+1)]
-    return -anti(anti(caC(2,6) @ ccaV(0,1,3,4,5), (2,),(3,4)), (5,),(6,)) + anti(ccaaC(2,3,5,6) @ cV(0,1,4), (2,3),(4,))
+    return -anti(caC(p,t) @ ccaV(i,j,q,r,s), [((p,),(q,r)), ((s,),(t,))]) + anti(ccaaC(p,q,s,t) @ cV(i,j,r), [((p,q),(r,))])
+
+def ccaaa():
+    caC   = Be.rho["caC"]
+    ccaaC = Be.rho["ccaaC"]
+    aV    = Be.rho["aV"   ][(+1,0)]
+    caaV  = Be.rho["caaV" ][(+1,0)]
+    return -anti(caC(p,t) @ caaV(i,j,q,r,s), [((p,),(q,)), ((r,s),(t,))]) + anti(ccaaC(p,q,s,t) @ aV(i,j,r), [((r,),(s,t))])
 
 def cccaaa():
     caC   = Be.rho["caC"]
     ccaaC = Be.rho["ccaaC"]
     caV   = Be.rho["caV"  ][(0,0)]
     ccaaV = Be.rho["ccaaV"][(0,0)]
-    return anti(anti(caC(2,7) @ ccaaV(0,1,3,4,5,6), (2,),(3,4)), (5,6),(7,)) + anti(anti(ccaaC(2,3,6,7) @ caV(0,1,4,5), (2,3),(4,)), (5,),(6,7))
+    return anti(caC(p,u) @ ccaaV(i,j,q,r,s,t), [((p,),(q,r)), ((s,t),(u,))]) + anti(ccaaC(p,q,t,u) @ caV(i,j,r,s), [((p,q),(r,)), ((s,),(t,u))])
+
+def ccccaa():
+    caC    = Be.rho["caC"]
+    ccaaC  = Be.rho["ccaaC"]
+    ccV    = Be.rho["ccV"  ][(-1,+1)]
+    cccaV  = Be.rho["cccaV"][(-1,+1)]
+    return anti(caC(p,u) @ cccaV(i,j,q,r,s,t), [((p,),(q,r,s)), ((t,),(u,))]) + anti(ccaaC(p,q,t,u) @ ccV(i,j,r,s), [((p,q),(r,s))])
+
+def ccaaaa():
+    caC    = Be.rho["caC"]
+    ccaaC  = Be.rho["ccaaC"]
+    aaV    = Be.rho["aaV"  ][(+1,-1)]
+    caaaV  = Be.rho["caaaV"][(+1,-1)]
+    return anti(caC(p,u) @ caaaV(i,j,q,r,s,t), [((p,),(q,)), ((r,s,t),(u,))]) + anti(ccaaC(p,q,t,u) @ aaV(i,j,r,s), [((r,s),(t,u))])
 
 
 
-test_formulas(
-    Be.rho["ccaa"][(+1,+1)],
-    [
-        ("ccaa", ccaa),
-    ],
-    description="ccaa",
-    #verbose=True
-)
 
-test_formulas(
-    Be.rho["cccaa"][(0,+1)],
-    [
-        ("cccaa", cccaa),
-    ],
-    description="cccaa",
-    #verbose=True
-)
+if True:
+    Be.rho["ccaa"][(+1,+1)] = ccaa()
+    Be.rho["cccaa"][(0,+1)] = cccaa()
+    Be.rho["ccaaa"][(+1,0)] = ccaaa()
+    Be.rho["cccaaa"][(0,0)] = cccaaa()
+    Be.rho["ccccaa"] = {}
+    Be.rho["ccccaa"][(-1,+1)] = ccccaa()
+    Be.rho["ccaaaa"] = {}
+    Be.rho["ccaaaa"][(+1,-1)] = ccaaaa()
+    pickle.dump(Be, open(f"rho/Be-Be_{frag}_6-31G_nth_compress-factored.pkl", "wb"))
 
-test_formulas(
-    Be.rho["cccaaa"][(0,0)],
-    [
-        ("cccaaa", cccaaa),
-    ],
-    description="cccaaa",
-    #verbose=True
-)
+
+if False:
+    test_formulas(
+        Be.rho["ccaa"][(+1,+1)],
+        [
+            ("ccaa", ccaa),
+        ],
+        description="ccaa",
+        #verbose=True
+    )
+
+if False:
+    test_formulas(
+        Be.rho["cccaa"][(0,+1)],
+        [
+            ("cccaa", cccaa),
+        ],
+        description="cccaa",
+        #verbose=True
+    )
+
+if False:
+    test_formulas(
+        Be.rho["ccaaa"][(+1,0)],
+        [
+            ("ccaaa", ccaaa),
+        ],
+        description="ccaaa",
+        #verbose=True
+    )
+
+if False:
+    test_formulas(
+        Be.rho["cccaaa"][(0,0)],
+        [
+            ("cccaaa", cccaaa),
+        ],
+        description="cccaaa",
+        #verbose=True
+    )
