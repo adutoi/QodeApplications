@@ -1,64 +1,64 @@
 import pickle
+import itertools
 import numpy
-from qode.math.tensornet import raw, np_tensor, tensor_sum
-from qode.util.dynamic_array import dynamic_array
+import tensorly
+from qode.util.PyC       import Double
+from qode.math.tensornet import raw, tl_tensor, tensor_sum
 
-core = [slice(0,1), slice(9,10)]
-valence = [slice(1,9), slice(10,18)]
+def tens_wrap(tensor):
+    return tl_tensor(tensorly.tensor(tensor, dtype=Double.tensorly))
+
 
 Be = pickle.load(open("rho/Be-Be_0_6-31G_nth_compress.pkl","rb"))
 nstates = Be.rho["n_states"]
 
-ca_   = {}
-caC   = {}
-caV   = {}
-ccaa_ = {}
-ccaaC = {}
-ccaaV = {}
-cccaaa_ = {}
-for i in range(nstates[0]):
-    for j in range(nstates[0]):
-        # np_tensor(raw()) should be unnecessary. I guess there is a bug in handling slices.
-        ca_[i,j]     = raw(Be.rho["ca"    ][0,0][i,j,:,:])
-        ccaa_[i,j]   = raw(Be.rho["ccaa"  ][0,0][i,j,:,:,:,:])
-        cccaaa_[i,j] = np_tensor(raw(Be.rho["cccaaa"][0,0][i,j,:,:,:,:,:,:]))
-        caC[i,j] = numpy.zeros_like(ca_[i,j])
-        caV[i,j] = numpy.zeros_like(ca_[i,j])
-        ccaaC[i,j] = numpy.zeros_like(ccaa_[i,j])
-        ccaaV[i,j] = numpy.zeros_like(ccaa_[i,j])
-        for p in core:
-            for q in core:
-                caC[i,j][p,q] = ca_[i,j][p,q]
-                for r in core:
-                    for s in core:
-                        ccaaC[i,j][p,q,r,s] = ccaa_[i,j][p,q,r,s]
-        for p in valence:
-            for q in valence:
-                caV[i,j][p,q] = ca_[i,j][p,q]
-                for r in valence:
-                    for s in valence:
-                        ccaaV[i,j][p,q,r,s] = ccaa_[i,j][p,q,r,s]
-        ca_[i,j] = np_tensor(ca_[i,j])
-        ccaa_[i,j] = np_tensor(ccaa_[i,j])
-        caC[i,j] = np_tensor(caC[i,j])
-        ccaaC[i,j] = np_tensor(ccaaC[i,j])
-        caV[i,j] = np_tensor(caV[i,j])
-        ccaaV[i,j] = np_tensor(ccaaV[i,j])
+projC, projV = [0]*18, [0]*18
+projC[0], projC[9] = 1, 1
+for p in range(18):
+    if projC[p]!=1:
+        projV[p] = 1
+projC = tens_wrap(numpy.diag(projC))
+projV = tens_wrap(numpy.diag(projV))
 
-def test_formulas(reference, formulas, nbra, nket, *, description=None, verbose=False):
-    headers, formulas = zip(*formulas)
-    tests = [dynamic_array(formula, (range(nbra),range(nket))) for formula in formulas]
-    tests = list(zip(headers, tests))
+op_loop = list(Be.rho.keys())    # because we add to the ...
+for op_string in op_loop:        # ... dict while looping
+    n_ops = len(op_string)
+    indices = list(range(2+n_ops))
+    Be.rho[op_string+"C"] = {}
+    Be.rho[op_string+"V"] = {}
+    if op_string in ("n_elec", "n_states"):
+        pass
+    else:
+        for charges in Be.rho[op_string]:
+            tmp = Be.rho[op_string][charges]
+            for p in range(2, 2+n_ops):
+                contract = list(indices)
+                contract[p] = "p"
+                tmp = tmp(*contract) @ projC("p", p)
+            Be.rho[op_string+"C"][charges] = tmp
+            tmp = Be.rho[op_string][charges]
+            for p in range(2, 2+n_ops):
+                contract = list(indices)
+                contract[p] = "p"
+                tmp = tmp(*contract) @ projV("p", p)
+            Be.rho[op_string+"V"][charges] = tmp
+#Be.rho["caC"]   = Be.rho["caC"  ][(0,0)][0,0,:,:]        # ok, but makes ...
+#Be.rho["ccaaC"] = Be.rho["ccaaC"][(0,0)][0,0,:,:,:,:]    # ... tests slower
+Be.rho["caC"]   = tens_wrap(raw(Be.rho["caC"  ][(0,0)][0,0,:,:]))
+Be.rho["ccaaC"] = tens_wrap(raw(Be.rho["ccaaC"][(0,0)][0,0,:,:,:,:]))
+
+def test_formulas(reference, formulas, *, description=None, verbose=False):
     if description:  print(description)
-    print(f" i,  j: |" + "".join(f"{header:9s}|" for header in headers))
-    for i in range(nbra):
-        for j in range(nket):
+    print(f" i,  j: |" + "".join(f"{header:9s}|" for header,_ in formulas))
+    formulas = [(header,formula()) for header,formula in formulas]
+    for i in range(reference.shape[0]):
+        for j in range(reference.shape[1]):
             extra = ""
             print(f"{i:2d}, {j:2d}:", end="")
-            ref_val = raw(reference[i,j])
+            ref_val = raw(reference[i,j,...])
             ref_norm  = numpy.linalg.norm(ref_val)
-            for header,test in tests:
-                test_val = raw(test[i,j])
+            for header,formula in formulas:
+                test_val  = raw(formula[i,j,...])
                 test_norm = numpy.linalg.norm(test_val)
                 diff_norm = numpy.linalg.norm(test_val - ref_val)
                 error = 100 * diff_norm/ref_norm    
@@ -68,85 +68,88 @@ def test_formulas(reference, formulas, nbra, nket, *, description=None, verbose=
             print()
             if verbose:  print(extra, end="")
 
-
-
-def anti2(formula):
-    def tensor(i, j):
-        result = formula(i, j)
-        return ( result(0,1,2,3) - result(1,0,2,3) - result(0,1,3,2) + result(1,0,3,2) ) / 2
-    return tensor
-
-def kernel2(ca1, ca2):
-    return ca1(0,3) @ ca2(1,2)
-
-@anti2
-def basic2(i,j):
-    return kernel2(ca_[i,j], ca_[i,j])
-
-@anti2
-def RI2(i,j):
-    delta = np_tensor(numpy.identity(ca_[0,0].shape[0]))
+def anti(tensor, groupA, groupB):
+    def unique(iterable, size):
+        indexable = list(iterable)
+        if size==1:
+            result = [[x] for x in indexable]
+        else:
+            result = []
+            for i,x in enumerate(indexable):
+                nested = unique(indexable[i+1:], size-1)
+                result += [[x]+n for n in nested]
+        return result
+    if len(groupB)<len(groupA):
+        groupA, groupB = groupB, groupA
+    permutations = [(+1, list(range(len(tensor.shape))))]
+    for perm_len in range(len(groupA)+1):
+        uniqueA = unique(groupA, perm_len)
+        uniqueB = unique(groupB, perm_len)
+        for swapA in uniqueA:
+            for swapB in uniqueB:
+                permutation = list(range(len(tensor.shape)))
+                for a,b in zip(swapA, swapB):
+                    permutation[a] = b
+                    permutation[b] = a
+                permutations += [((-1)**perm_len, permutation)]
+    #for sign,permutation in permutations:
+    #    print(f"{sign:+d}  {permutation}")
     result = tensor_sum()
-    for k in range(nstates[0]):
-        result += kernel2(ca_[i,k], ca_[k,j])
-    result -= delta(1,3) @ ca_[i,j](0,2)
+    for sign,permutation in permutations:
+        result += sign * tensor(*permutation)
     return result
 
-@anti2
-def RI2_short(i,j):
-    delta = np_tensor(numpy.identity(ca_[0,0].shape[0]))
-    result = tensor_sum()
-    for k in range(nstates[0]):
-        result += kernel2(ca_[i,k], ca_[k,j])
-    return result
 
-"""
+
+def delta(dim):
+    return tens_wrap(numpy.identity(dim))
+
+def ccaa():
+    caC   = Be.rho["caC"]
+    ccaaC = Be.rho["ccaaC"]
+    caV   = Be.rho["caV"  ][(+1,+1)]
+    dim = caV.shape[0]
+    return anti(anti(caC(2,5) @ caV(0,1,3,4), (2,),(3,)), (4,),(5,))  +  delta(dim)(0,1) @ ccaaC(2,3,4,5)
+
+def cccaa():
+    caC   = Be.rho["caC"]
+    ccaaC = Be.rho["ccaaC"]
+    cV    = Be.rho["cV"   ][(0,+1)]
+    ccaV  = Be.rho["ccaV" ][(0,+1)]
+    return -anti(anti(caC(2,6) @ ccaV(0,1,3,4,5), (2,),(3,4)), (5,),(6,)) + anti(ccaaC(2,3,5,6) @ cV(0,1,4), (2,3),(4,))
+
+def cccaaa():
+    caC   = Be.rho["caC"]
+    ccaaC = Be.rho["ccaaC"]
+    caV   = Be.rho["caV"  ][(0,0)]
+    ccaaV = Be.rho["ccaaV"][(0,0)]
+    return anti(anti(caC(2,7) @ ccaaV(0,1,3,4,5,6), (2,),(3,4)), (5,6),(7,)) + anti(anti(ccaaC(2,3,6,7) @ caV(0,1,4,5), (2,3),(4,)), (5,),(6,7))
+
+
+
 test_formulas(
-    ccaa_,
+    Be.rho["ccaa"][(+1,+1)],
     [
-        ("basic2", basic2),
-        ("RI2", RI2),
-        ("RI2 short", RI2_short)
+        ("ccaa", ccaa),
     ],
-    nstates[0], nstates[0],
     description="ccaa",
+    #verbose=True
 )
-"""
-
-
-def kernel3(ca, ccaa):
-    return (
-          ca(0,5) @ ccaa(1,2,3,4)
-        - ca(0,4) @ ccaa(1,2,3,5)
-        - ca(0,3) @ ccaa(1,2,5,4)
-        - ca(1,5) @ ccaa(0,2,3,4)
-        + ca(1,4) @ ccaa(0,2,3,5)
-        + ca(1,3) @ ccaa(0,2,5,4)
-        - ca(2,5) @ ccaa(1,0,3,4)
-        + ca(2,4) @ ccaa(1,0,3,5)
-        + ca(2,3) @ ccaa(1,0,5,4)
-    ) 
-
-def basic3(i,j):
-    return kernel3(ca_[i,j], ccaa_[i,j]) / 3
-
-def CVsep(i,j):
-    return kernel3(caC[i,j], ccaaV[i,j]) + kernel3(caV[i,j], ccaaC[i,j])
-
-def CVsep_hack(i,j):
-    return kernel3(caC[i,i], ccaaV[i,j]) + kernel3(caV[i,j], ccaaC[i,i])
 
 test_formulas(
-    cccaaa_,
+    Be.rho["cccaa"][(0,+1)],
     [
-        ("basic3", basic3),
-        ("CVsep", CVsep),
-        ("CVsep_hack", CVsep_hack),
+        ("cccaa", cccaa),
     ],
-    nstates[0], nstates[0],
-    description="cccaaa",
-    #verbose = True
+    description="cccaa",
+    #verbose=True
 )
 
-#numpy.set_printoptions(precision=1, linewidth=500)
-#print(raw(ca_[0,0]))
+test_formulas(
+    Be.rho["cccaaa"][(0,0)],
+    [
+        ("cccaaa", cccaaa),
+    ],
+    description="cccaaa",
+    #verbose=True
+)
