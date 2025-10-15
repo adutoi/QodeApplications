@@ -1,4 +1,4 @@
-#    (C) Copyright 2023, 2024, 2025 Anthony D. Dutoi and Marco Bauer
+#    (C) Copyright 2024, 2025 Anthony D. Dutoi and Marco Bauer
 # 
 #    This file is part of QodeApplications.
 # 

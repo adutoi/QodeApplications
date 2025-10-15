@@ -20,6 +20,8 @@ from .ST_1mer_0 import *
 from .ST_2mer_0 import *
 from .ST_2mer_1 import *
 from .ST_2mer_2 import *
+from .ST_2mer_3 import *
+from .ST_2mer_4 import *
 
 
 
@@ -41,4 +43,22 @@ catalog[2] = {
     "s01s01t00":     build_diagram(s01s01t00,    Dchgs=(-2,+2), permutations=[(+1,(0,1)),(+1,(1,0))]),
     "s01s01t11":     build_diagram(s01s01t11,    Dchgs=(-2,+2), permutations=[(+1,(0,1)),(+1,(1,0))]),
     "s01s01t01":     build_diagram(s01s01t01,    Dchgs=(-3,+3), permutations=[(+1,(0,1)),(-1,(1,0))]),
+    "s01s01s10t10":  build_diagram(s01s01s10t10, Dchgs=(0,0),   permutations=[(+1,(0,1)),(+1,(1,0))]),
+    "s01s01s10t00":  build_diagram(s01s01s10t00, Dchgs=(-1,+1), permutations=[(+1,(0,1)),(-1,(1,0))]),
+    "s01s01s10t11":  build_diagram(s01s01s10t11, Dchgs=(-1,+1), permutations=[(+1,(0,1)),(-1,(1,0))]),
+    "s01s01s01t10":  build_diagram(s01s01s01t10, Dchgs=(-2,+2), permutations=[(+1,(0,1)),(+1,(1,0))]),
+    "s01s01s10t01":  build_diagram(s01s01s10t01, Dchgs=(-2,+2), permutations=[(+1,(0,1)),(+1,(1,0))]),
+    "s01s01s01t00":  build_diagram(s01s01s01t00, Dchgs=(-3,+3), permutations=[(+1,(0,1)),(-1,(1,0))]),
+    "s01s01s01t11":  build_diagram(s01s01s01t11, Dchgs=(-3,+3), permutations=[(+1,(0,1)),(-1,(1,0))]),
+    "s01s01s01t01":  build_diagram(s01s01s01t01, Dchgs=(-4,+4), permutations=[(+1,(0,1)),(+1,(1,0))]),
+    "s01s01s10s10t00":  build_diagram(s01s01s10s10t00, Dchgs=(0,0),   permutations=[(+1,(0,1)),(+1,(1,0))]),
+    "s01s01s01s10t10":  build_diagram(s01s01s01s10t10, Dchgs=(-1,+1), permutations=[(+1,(0,1)),(-1,(1,0))]),
+    "s01s01s10s10t01":  build_diagram(s01s01s10s10t01, Dchgs=(-1,+1), permutations=[(+1,(0,1)),(-1,(1,0))]),
+    "s01s01s01s10t00":  build_diagram(s01s01s01s10t00, Dchgs=(-2,+2), permutations=[(+1,(0,1)),(+1,(1,0))]),
+    "s01s01s01s10t11":  build_diagram(s01s01s01s10t11, Dchgs=(-2,+2), permutations=[(+1,(0,1)),(+1,(1,0))]),
+    "s01s01s01s01t10":  build_diagram(s01s01s01s01t10, Dchgs=(-3,+3), permutations=[(+1,(0,1)),(-1,(1,0))]),
+    "s01s01s01s10t01":  build_diagram(s01s01s01s10t01, Dchgs=(-3,+3), permutations=[(+1,(0,1)),(-1,(1,0))]),
+    "s01s01s01s01t00":  build_diagram(s01s01s01s01t00, Dchgs=(-4,+4), permutations=[(+1,(0,1)),(+1,(1,0))]),
+    "s01s01s01s01t11":  build_diagram(s01s01s01s01t11, Dchgs=(-4,+4), permutations=[(+1,(0,1)),(+1,(1,0))]),
+    "s01s01s01s01t01":  build_diagram(s01s01s01s01t01, Dchgs=(-5,+5), permutations=[(+1,(0,1)),(-1,(1,0))]),
 }

@@ -86,10 +86,10 @@ import itertools
 from primitives import index, s_int, h_int, v_int
 from containers import diagram, diagram_sum
 
-#h_symbols = ("h","h","H")
+h_symbols = ("h","h","H")
 #h_symbols = ("t","t","T")
 #h_symbols = ("u0","u0_","U0")
-h_symbols = ("u1","u1_","U1")
+#h_symbols = ("u1","u1_","U1")
 
 def make_terms(frags, MOint, S_order, letters):
     ### A one-off utility for combining lists interpreted as lists of factors
@@ -215,8 +215,8 @@ import sys
 import os
 
 # expose this conspicuosly because we change convention between prose and code
-frags = (0,1)    # for code
-#frags = (1,2)    # for publications
+#frags = (0,1)    # for code
+frags = (1,2)    # for publications
 
 derivation = """\
 The Einstein summation convention applies for all repeated indices, regardless of whether they are sub/superscript.
@@ -225,10 +225,10 @@ A subscript on an index itself indicates a restriction of that index to the spec
 section, functions = make_section("S", 4, frags)
 derivation += section
 open("diagrams-S.py", "w").write(functions)
-section, functions = make_section("h", 2, frags)
+section, functions = make_section("h", 4, frags)
 derivation += section
 open("diagrams-h.py", "w").write(functions)
-section, functions = make_section("v", 2, frags)
+section, functions = make_section("v", 4, frags)
 derivation += section
 open("diagrams-v.py", "w").write(functions)
 
