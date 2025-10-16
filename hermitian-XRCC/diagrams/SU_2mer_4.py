@@ -18,7 +18,7 @@
 from qode.math.tensornet import raw
 from .diagram_hack import state_indices, no_result
 
-p, q, r, s, t, u, v, w, x, y = "pqrstuvwxy"    # some contraction indices for easier reading
+p, q, r, s, t, u, v, w, x, y, z, a = "pqrstuvwxyza"    # some contraction indices for easier reading
 
 
 

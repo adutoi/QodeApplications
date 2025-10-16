@@ -1,0 +1,86 @@
+#!/bin/bash
+
+order=4
+mkdir -p xr$order
+
+runit() {
+  order=$1
+  dist_raw=$2
+  dist=`./convert_dist $dist_raw`
+  python -u xr$order-ccsd-sep01.py $dist Be-Be_0_6-31G_nth_compress-factored3 Be-Be_1_6-31G_nth_compress-factored3 no-proj > xr$order/$dist_raw
+}
+
+runit $order 4.5
+runit $order 3.0
+runit $order 3.4
+runit $order 4.0
+runit $order 5.0
+
+runit $order 3.2
+runit $order 3.8
+runit $order 3.6
+runit $order 4.4
+runit $order 4.6
+
+runit $order 4.2
+runit $order 4.8
+
+runit $order 2.0
+runit $order 2.2
+runit $order 2.4
+runit $order 2.6
+runit $order 2.8
+
+runit $order 5.1
+runit $order 5.2
+runit $order 5.3
+runit $order 5.4
+runit $order 5.5
+runit $order 5.6
+runit $order 5.7
+runit $order 5.8
+runit $order 5.9
+
+runit $order 6.0
+runit $order 6.1
+runit $order 6.2
+runit $order 6.3
+runit $order 6.4
+runit $order 6.5
+runit $order 6.6
+runit $order 6.7
+runit $order 6.8
+runit $order 6.9
+
+runit $order 7.0
+runit $order 7.1
+runit $order 7.2
+runit $order 7.3
+runit $order 7.4
+runit $order 7.5
+runit $order 7.6
+runit $order 7.7
+runit $order 7.8
+runit $order 7.9
+
+runit $order 8.0
+runit $order 8.1
+runit $order 8.2
+runit $order 8.3
+runit $order 8.4
+runit $order 8.5
+runit $order 8.6
+runit $order 8.7
+runit $order 8.8
+runit $order 8.9
+
+runit $order 9.0
+runit $order 9.1
+runit $order 9.2
+runit $order 9.3
+runit $order 9.4
+runit $order 9.5
+runit $order 9.6
+runit $order 9.7
+runit $order 9.8
+runit $order 9.9
