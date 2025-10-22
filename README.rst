@@ -45,7 +45,7 @@ Testing and Development
 testing
 ^^^^^^^
 
-There are no tests.  These basically are tests.
+The preliminary test suite is located in tests and can be executed using pytest.
 
 contributing
 ^^^^^^^^^^^^
