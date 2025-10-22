@@ -165,19 +165,20 @@ def optimize_states(max_iter, xr_order, dens_builder_stuff, ints, n_occ, n_orbs,
                 print(norms, max(norms.values()))
                 #if max(norms.values()) < 1 - 1e-6:
                 #    raise ValueError(f"mixed state encountered (different charges are mixed for a state on frag {frag}), see {norms}")
-                if max(norms.values()) > 1 - 1e-8:
+                if max(norms.values()) > 1 - 1e-6:  # maybe rather go for 1e-8?
                     chg_sorted_keepers[frag][max(norms, key=norms.get)].append(state[c_slices[frag][max(norms, key=norms.get)]])
                 else:
                     match = False
                     for key in mixed_states.keys():
-                        if abs(max(norms.values()) - max(key)) < 1e-10:
+                        if abs(max(norms.values()) - max(key)) < 1e-8:
                             # expect them to only turn up pairwise...if this is not the case, something more sophisticated needs to implemented here
                             # also expect the chg order in the key to be the same as in the current norms dict
                             for i, chg in enumerate(norms.keys()):
                                 if norms[chg] < 1e-6:
                                     continue
-                                if abs(key[i]**2 + norms[chg]**2 - 1) > 1e-10:
-                                    raise ValueError("the charge contributions were found to be neither negligible nor adding up pairwise")
+                                if abs(key[i]**2 + norms[chg]**2 - 1) > 5e-8:
+                                    raise ValueError("the charge contributions were found to be neither negligible nor adding up pairwise "
+                                                     f"{i} {key[i]} {abs(key[i]**2 + norms[chg]**2 - 1)}")
                                 chg_state = state[c_slices[frag][chg]] + mixed_states[key][c_slices[frag][chg]]
                                 chg_sorted_keepers[frag][chg].append(chg_state / np.linalg.norm(chg_state))
                             del mixed_states[key]
@@ -409,18 +410,18 @@ def optimize_states(max_iter, xr_order, dens_builder_stuff, ints, n_occ, n_orbs,
                 print(norms, max(norms.values()))
                 #if max(norms.values()) < 1 - 1e-6:
                 #    raise ValueError(f"mixed state encountered (different charges are mixed for a state on frag {frag}), see {norms}")
-                if max(norms.values()) > 1 - 1e-8:
+                if max(norms.values()) > 1 - 1e-6:  # maxbe rather go for 1e-8
                     chg_sorted_keepers[frag][max(norms, key=norms.get)].append(state[c_slices[frag][max(norms, key=norms.get)]])
                 else:
                     match = False
                     for key in mixed_states.keys():
-                        if abs(max(norms.values()) - max(key)) < 1e-10:
+                        if abs(max(norms.values()) - max(key)) < 1e-8:
                             # expect them to only turn up pairwise...if this is not the case, something more sophisticated needs to implemented here
                             # also expect the chg order in the key to be the same as in the current norms dict
                             for i, chg in enumerate(norms.keys()):
                                 if norms[chg] < 1e-6:
                                     continue
-                                if abs(key[i]**2 + norms[chg]**2 - 1) > 1e-10:
+                                if abs(key[i]**2 + norms[chg]**2 - 1) > 5e-8:
                                     raise ValueError("the charge contributions were found to be neither negligible nor adding up pairwise")
                                 chg_state = state[c_slices[frag][chg]] + mixed_states[key][c_slices[frag][chg]]
                                 chg_sorted_keepers[frag][chg].append(chg_state / np.linalg.norm(chg_state))

@@ -53,7 +53,7 @@ np.set_printoptions(legacy="1.21")  # this gets rid of the print update in numpy
 class empty(object):  pass  # for pickle load initialization without get_fci_states
 
 def run_xr(displacement, max_iter, xr_order_final, xr_order_solver=0, dens_filter_thresh_solver=1e-7, orb_max_iter=0, target_state=0,
-           single_thresh=1/5, double_thresh=1/3.5, triple_thresh=1/2.5, sp_thresh=1/1.1, grad_level="herm", state_prep=False, backend="psi4"):#, n_threads):
+           single_thresh=1/5, double_thresh=1/3.5, triple_thresh=1/2.5, sp_thresh=1/1.1, grad_level="herm", state_prep=False, backend="psi4", load_ref=""):#, n_threads):
     tensornet.initialize_timer()
     tensornet.tensorly_backend.initialize_timer()
 
@@ -80,8 +80,17 @@ def run_xr(displacement, max_iter, xr_order_final, xr_order_solver=0, dens_filte
         state_obj, dens_var_1, dens_var_2, n_threads, Be = get_fci_states(displacement, n_state_list=[(1, 2), (0, 10), (-1, 10)], backend=backend, monomer_charges=monomer_charges[m])
         #state_obj, dens_var_1, dens_var_2, n_threads, Be = build_Be_rho(("6-31g", 9), displacement, n_state_list=[(1, 2), (0, 10), (-1, 10)])
         #Be.basis.MOcoeffs = ref_mos.copy()
-        #pickle.dump(Be.basis.MOcoeffs, open(f"check_mos_{m}.pkl", mode="wb"))
         # the following provide two possibilities to start from a dumped reference
+        if len(load_ref) > 0:
+            #pickle.dump(Be.basis.MOcoeffs, open(f"../../tests/ref_data/check_mos_{m}.pkl", mode="wb"))
+            Be.basis.MOcoeffs = pickle.load(open(f"{load_ref}/check_mos_{m}.pkl", mode="rb"))
+            #state_obj = {}
+            for chg in monomer_charges[m]:
+                #pickle.dump(state_obj[chg].coeffs, open(f"../../tests/ref_data/check_states_{m}_{chg}.pkl", mode="wb"))
+                #pickle.dump(state_obj[chg].configs, open(f"../../tests/ref_data/check_configs_{m}_{chg}.pkl", mode="wb"))
+                state_obj[chg] = empty()
+                state_obj[chg].coeffs = pickle.load(open(f"{load_ref}/check_states_{m}_{chg}.pkl", mode="rb"))
+                state_obj[chg].configs = pickle.load(open(f"{load_ref}/check_configs_{m}_{chg}.pkl", mode="rb"))
         """
         frag0 = empty()
         frag0.atoms = [("Be",[0,0,0])]
@@ -228,8 +237,12 @@ def run_xr(displacement, max_iter, xr_order_final, xr_order_solver=0, dens_filte
 
 
 
-print(run_xr(4.5, 0, 1, single_thresh=1/8, double_thresh=1/6, triple_thresh=1/4,  # single_thresh=1/6, double_thresh=1/4, triple_thresh=1/2.5,# sp_thresh=1/1.005,
-             grad_level="herm", state_prep=True, target_state=[0], dens_filter_thresh_solver=1e-7, backend="vlx_mtp"))#"vlx_mtp"))
+#print(run_xr(4.5, 0, 1, single_thresh=1/8, double_thresh=1/6, triple_thresh=1/4,  # single_thresh=1/6, double_thresh=1/4, triple_thresh=1/2.5,# sp_thresh=1/1.005,
+#             grad_level="herm", state_prep=True, target_state=[0, 1], dens_filter_thresh_solver=1e-7, backend="psi4 in_house"))#"vlx_mtp"))
+
+#print(run_xr(4.5, 50, 1, single_thresh=1/6, double_thresh=1/4, triple_thresh=1/2.5,
+#                  grad_level="herm", state_prep=False, target_state=[0], dens_filter_thresh_solver=1e-6, backend="psi4 in_house",
+#                  load_ref="../../tests/ref_data"))
 
 """
 # the following error catching is useful for scans along a reaction coordinate.

@@ -170,7 +170,8 @@ def get_fci_states(dist, n_state_list=[(+1, 4), (0, 11), (-1, 8)], backend="psi4
         N, S, T, U, V = nuc_rep[0,0], symm_ints.S[0,0], symm_ints.T[0,0], symm_ints.U[0,0,0], symm_ints.V[0,0,0,0]
         E, e, frag0.basis.MOcoeffs = RHF_RoothanHall_Nonorthogonal(frag0.n_elec_ref, (S, T+U, V), thresh=1e-12)
         print(E)
-        frag0.basis.MOcoeffs = hf_result['C_alpha']
+        if "vlx" in backend:
+            frag0.basis.MOcoeffs = hf_result['C_alpha']
 
         symm_ints, bior_ints, nuc_rep = get_ints([frag0], spin_ints=False, backend=backend)
         N, S, T, U, V = nuc_rep[0,0], symm_ints.S[0,0], symm_ints.T[0,0], symm_ints.U[0,0,0], symm_ints.V[0,0,0,0]
