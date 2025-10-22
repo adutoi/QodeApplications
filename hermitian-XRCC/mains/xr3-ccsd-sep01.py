@@ -122,20 +122,21 @@ for m in [0,1]:
 
 print("build S2inv")
 
-S2 = XR_term.dimer_matrix(S_blocks, {0: S0[0], 2: S2[1]},  (0,1), all_dimer_charges, matrix_timings)
+S2 = XR_term.dimer_matrix(S_blocks, {0: S0[0], 2: S2[1]+S2[2]+S2[3]},  (0,1), all_dimer_charges, matrix_timings)
 S2inv = qode.math.precise_numpy_inverse(S2)
 
 print("build S2H2 (1e)")
 
-S2H2 =   XR_term.dimer_matrix(ST_blocks_symm, {1: ST1[0], 2: ST2[0]}, (0,1), all_dimer_charges, matrix_timings) \
-       + XR_term.dimer_matrix(SU_blocks_symm, {1: SU1[0], 2: SU2[0]}, (0,1), all_dimer_charges, matrix_timings) \
-       + XR_term.dimer_matrix(ST_blocks_bior, {           2: ST2[1]}, (0,1), all_dimer_charges, matrix_timings) \
-       + XR_term.dimer_matrix(SU_blocks_bior, {           2: SU2[1]}, (0,1), all_dimer_charges, matrix_timings)
+S2H2 =   XR_term.dimer_matrix(ST_blocks_symm, {1: ST1[0], 2: ST2[0]+ST2[1]+ST2[2]}, (0,1), all_dimer_charges, matrix_timings) \
+       + XR_term.dimer_matrix(SU_blocks_symm, {1: SU1[0], 2: SU2[0]+SU2[1]+SU2[2]}, (0,1), all_dimer_charges, matrix_timings) \
+       + XR_term.dimer_matrix(ST_blocks_bior, {           2: ST2[3]              }, (0,1), all_dimer_charges, matrix_timings) \
+       + XR_term.dimer_matrix(SU_blocks_bior, {           2: SU2[3]              }, (0,1), all_dimer_charges, matrix_timings)
 
 print("build S2H2 (2e)")
 
-S2H2 +=  XR_term.dimer_matrix(SV_blocks_diff, {1: SV1[0], 2: SV2[0]}, (0,1), all_dimer_charges, matrix_timings) \
-       + XR_term.dimer_matrix(SV_blocks_bior, {           2: SV2[1]}, (0,1), all_dimer_charges, matrix_timings)
+S2H2 +=  XR_term.dimer_matrix(SV_blocks_symm, {1: SV1[0], 2: SV2[0]+SV2[1]}, (0,1), all_dimer_charges, matrix_timings) \
+       + XR_term.dimer_matrix(SV_blocks_diff, {           2: SV2[2]       }, (0,1), all_dimer_charges, matrix_timings) \
+       + XR_term.dimer_matrix(SV_blocks_bior, {           2: SV2[3]       }, (0,1), all_dimer_charges, matrix_timings)
 
 print("build S2H2 (apply S2inv and subtract monomers)")
 

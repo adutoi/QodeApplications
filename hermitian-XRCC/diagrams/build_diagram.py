@@ -1,4 +1,4 @@
-#    (C) Copyright 2024 Anthony D. Dutoi and Marco Bauer
+#    (C) Copyright 2024, 2025 Anthony D. Dutoi and Marco Bauer
 # 
 #    This file is part of QodeApplications.
 # 
@@ -36,29 +36,29 @@ from qode.util.dynamic_array import dynamic_array
 
 # This function informs a primitive contraction of the charge cases for which it is valid and the permutations
 # of the anonymized fragments for which it should be executed.
-def build_diagram(contraction, Dchgs=(0,), permutations=((0,),)):
+def build_diagram(contraction, Dchgs, permutations):
     # The returned function further requires information about the actual fragments composing the subsystem
     # being computed, and their charges.
     def get_permuted_diagrams(supersys_info, subsys_chgs):
         label = contraction.__name__
         # This function is used immediately below.  It feeds permuted input tensors to the contraction and
         # returns the final objective function that does the contraction once informed of the fragment states.
-        def permuted_diagram(X):
+        def permuted_diagram(X, phase):
             def do_contraction(**args):
                 supersys_info.timings.start()
-                result = contraction(X, **args)
+                result = phase * contraction(X, **args)
                 supersys_info.timings.record(label)
                 return result
             return do_contraction
         # build list of fully qualified diagram contraction functions for permutations where charge criteria met
         if permutations is None:    # handles 0-mer/identity case
-            permuted_diagrams = [(permuted_diagram(None), tuple())]
+            permuted_diagrams = [(permuted_diagram(None, +1), tuple())]
         else:
             permuted_diagrams = []
-            for permutation in permutations:
+            for phase,permutation in permutations:
                 X = frag_resolve(supersys_info, subsys_chgs, permutation)    # see below
                 if all(X.Dchg[m]==Dchg for m,Dchg in enumerate(Dchgs)):
-                    permuted_diagrams += [(permuted_diagram(X), permutation)]
+                    permuted_diagrams += [(permuted_diagram(X, phase), permutation)]
                 else:
                     permuted_diagrams += [None]
         return permuted_diagrams
@@ -84,13 +84,12 @@ class frag_resolve(object):
 	#
         self._supersys_info = supersys_info
         self._n_frag = len(subsys_chgs)
-        self.P = 1 if permutation==(1,0) else 0    # needs to be generalized for n>2.
         # Some diagrams need to know the number of e- in the ket for the combined "latter" frags of the un(!)permuted subsystem
-        n_i = 0
+        n_j = 0
         label = "".join(str(i) for i in range(self._n_frag))
-        for m,(frag_idx,(chg_i,_)) in reversed(list(enumerate(subsys_chgs))):    # before permutation
-            n_i += self._supersys_info.densities[frag_idx]['n_elec'][chg_i]
-            self._storage["n_i"+label[m:]] = n_i%2    # explicitly label which are included in the latter frags (to store all possibilities)
+        for m,(frag_idx,(_,chg_j)) in enumerate(subsys_chgs):    # before permutation
+            n_j += self._supersys_info.densities[frag_idx]['n_elec'][chg_j]
+            self._storage["n_j"+label[:m+1]] = n_j%2    # explicitly label which are included in the latter frags (to store all possibilities)
         # rearrange fragments to given permutation
         self._subsys_chgs = [subsys_chgs[m] for m in permutation]
         # dynamically allocated, cached "virtual" arrays for the target information.  Not all integrals provided (or provided differently
@@ -115,13 +114,13 @@ class frag_resolve(object):
             pass
         self._densities        = _subsys_array(self._supersys_info.densities,   self._subsys_chgs, 1, self._n_frag)
     def __getattr__(self, attr):
-        if attr[:3]=="n_i" or attr=="Dchg" or attr=="n_states":
+        if attr[:3]=="n_j" or attr=="Dchg" or attr=="n_states":
             return self._storage[attr]
         #elif attr == "ket_coeffs":
         #    return _density_array(self._densities, label_template[:-1], self._subsys_chgs, self._n_frag)
         else:
             frag_indices = tuple(int(i) for i in filter(lambda c: c.isdigit(), attr))    # extract the digits from the string (heaven forbid >=9-fragment subsystem)
-            label_template = re.sub("\d", "#", attr)                                     # replace digits with hashes to anonymize the label
+            label_template = re.sub("\\d", "#", attr)                                     # replace digits with hashes to anonymize the label
             label_template = label_template.replace("U#_", "U#")    # underscore throws off later decisions/splits
             if label_template not in self._storage:    # Then it is a density or a precontraction, and ...
                 if "_S" in label_template:             # ... it is a precontraction with S specifically, or ...
@@ -189,5 +188,7 @@ def _precontract_array(contract_cache, label, subsys_chgs, n_indices, n_frag):
                 contraction = contraction[braket_charge]
         except KeyError:
             contraction = None    # eventually return an object whose __getitem__ member reports exactly what is missing (in case access is attempted)
+        except RuntimeError as err:
+            raise RuntimeError(str(err) + f"\nrelative fragments are {indices}")
         return contraction
     return dynamic_array(_rule, [range(n_frag)]*n_indices)

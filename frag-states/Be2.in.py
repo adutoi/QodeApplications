@@ -31,6 +31,8 @@ frags = [
     )
 ]
 
+op_strings = {2:["aa", "caaa"], 1:["a", "caa", "ccaaa"], 0:["ca", "ccaa", "cccaaa"]}
+
 thresh    = 1e-6
 #nstates   = 30
 

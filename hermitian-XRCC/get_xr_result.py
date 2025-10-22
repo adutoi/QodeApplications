@@ -30,15 +30,17 @@ import qode.math
 import excitonic
 import diagrammatic_expansion   # defines information structure for housing results of diagram evaluations
 import XR_term                  # knows how to use ^this information to pack a matrix for use in XR model
-import S_diagrams               # contains definitions of actual diagrams needed for S operator in BO rep
+from diagrams import S_diagrams, ST_diagrams, SU_diagrams, SV_diagrams    # definitions of diagrams needed for S and SH
+#import S_diagrams               # contains definitions of actual diagrams needed for S operator in BO rep
 #import Sn_diagrams              # contains definitions of actual diagrams needed for SH operator in BO rep
-import St_diagrams              # contains definitions of actual diagrams needed for SH operator in BO rep
-import Su_diagrams              # contains definitions of actual diagrams needed for SH operator in BO rep
-import Sv_diagrams              # contains definitions of actual diagrams needed for SH operator in BO rep
+#import St_diagrams              # contains definitions of actual diagrams needed for SH operator in BO rep
+#import Su_diagrams              # contains definitions of actual diagrams needed for SH operator in BO rep
+#import Sv_diagrams              # contains definitions of actual diagrams needed for SH operator in BO rep
 #import combo_diagram
 #from   get_ints import get_ints
 from qode.util import struct, timer
 from precontract import precontract
+import diagram_lists as D   # sorry this is so ugly ... just making it run - fix with some find and replace
 
 # needed for unpickling?!
 #class empty(object):  pass     # Basically just a dictionary class
@@ -67,14 +69,14 @@ def get_xr_H(ints, dens, xr_order, monomer_charges, bra_det=False, ket_det=False
     contract_cache = precontract(BeN_rho, symm_ints.S, precon_timer)
 
     S_blocks       = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=symm_ints.S,                               diagrams=S_diagrams,  contract_cache=contract_cache, timings=diag_timer, precon_timings=precon_timer)
-    St_blocks_symm = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, T=symm_ints.T),      diagrams=St_diagrams, contract_cache=contract_cache, timings=diag_timer, precon_timings=precon_timer, bra_det=bra_det, ket_det=ket_det)
-    Su_blocks_symm = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, U=symm_ints.U),      diagrams=Su_diagrams, contract_cache=contract_cache, timings=diag_timer, precon_timings=precon_timer, bra_det=bra_det, ket_det=ket_det)
-    Sv_blocks_symm = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, V=symm_ints.V),      diagrams=Sv_diagrams, contract_cache=contract_cache, timings=diag_timer, precon_timings=precon_timer, bra_det=bra_det, ket_det=ket_det)
-    St_blocks_bior = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, T=bior_ints.T),      diagrams=St_diagrams, contract_cache=contract_cache, timings=diag_timer, precon_timings=precon_timer, bra_det=bra_det, ket_det=ket_det)
-    Su_blocks_bior = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, U=bior_ints.U),      diagrams=Su_diagrams, contract_cache=contract_cache, timings=diag_timer, precon_timings=precon_timer, bra_det=bra_det, ket_det=ket_det)
-    Sv_blocks_bior = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, V=bior_ints.V),      diagrams=Sv_diagrams, contract_cache=contract_cache, timings=diag_timer, precon_timings=precon_timer, bra_det=bra_det, ket_det=ket_det)
-    #Sv_blocks_half = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, V=bior_ints.V_half), diagrams=Sv_diagrams, contract_cache=contract_cache, timings=diag_timer, precon_timings=precon_timer, bra_det=bra_det, ket_det=ket_det)
-    Sv_blocks_diff = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, V=bior_ints.V_diff), diagrams=Sv_diagrams, contract_cache=contract_cache, timings=diag_timer, precon_timings=precon_timer, bra_det=bra_det, ket_det=ket_det)
+    ST_blocks_symm = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, T=symm_ints.T),      diagrams=ST_diagrams, contract_cache=contract_cache, timings=diag_timer, precon_timings=precon_timer, bra_det=bra_det, ket_det=ket_det)
+    SU_blocks_symm = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, U=symm_ints.U),      diagrams=SU_diagrams, contract_cache=contract_cache, timings=diag_timer, precon_timings=precon_timer, bra_det=bra_det, ket_det=ket_det)
+    SV_blocks_symm = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, V=symm_ints.V),      diagrams=SV_diagrams, contract_cache=contract_cache, timings=diag_timer, precon_timings=precon_timer, bra_det=bra_det, ket_det=ket_det)
+    ST_blocks_bior = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, T=bior_ints.T),      diagrams=ST_diagrams, contract_cache=contract_cache, timings=diag_timer, precon_timings=precon_timer, bra_det=bra_det, ket_det=ket_det)
+    SU_blocks_bior = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, U=bior_ints.U),      diagrams=SU_diagrams, contract_cache=contract_cache, timings=diag_timer, precon_timings=precon_timer, bra_det=bra_det, ket_det=ket_det)
+    SV_blocks_bior = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, V=bior_ints.V),      diagrams=SV_diagrams, contract_cache=contract_cache, timings=diag_timer, precon_timings=precon_timer, bra_det=bra_det, ket_det=ket_det)
+    #SV_blocks_half = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, V=bior_ints.V_half), diagrams=SV_diagrams, contract_cache=contract_cache, timings=diag_timer, precon_timings=precon_timer, bra_det=bra_det, ket_det=ket_det)
+    SV_blocks_diff = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, V=bior_ints.V_diff), diagrams=SV_diagrams, contract_cache=contract_cache, timings=diag_timer, precon_timings=precon_timer, bra_det=bra_det, ket_det=ket_det)
 
     #Combo_blocks_bior = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, T=bior_ints.T, U=bior_ints.U, V=bior_ints.V),      diagrams=combo_diagram, contract_cache=contract_cache, timings=diag_timer, precon_timings=precon_timer, bra_det=bra_det, ket_det=ket_det)
 
@@ -100,21 +102,15 @@ def get_xr_H(ints, dens, xr_order, monomer_charges, bra_det=False, ket_det=False
             #                        ]
             #                    }, m, monomer_charges)
             
-            H1_m = XR_term.monomer_matrix(St_blocks_bior, {
-                                1: [
-                                    "t00"
-                                    ]
+            H1_m = XR_term.monomer_matrix(ST_blocks_bior, {
+                                1: D.ST1[0]
                                 }, m, monomer_charges[m], matrix_timer)
-            H1_m += XR_term.monomer_matrix(Su_blocks_bior, {
-                                1: [
-                                    "u000"
-                                    ]
+            H1_m += XR_term.monomer_matrix(SU_blocks_bior, {
+                                1: D.SU1[0]
                                 }, m, monomer_charges[m], matrix_timer)
             
-            H1_m += XR_term.monomer_matrix(Sv_blocks_bior, {
-                                1: [
-                                    "v0000"
-                                    ]
+            H1_m += XR_term.monomer_matrix(SV_blocks_bior, {
+                                1: D.SV1[0]
                                 }, m, monomer_charges[m], matrix_timer)
             
             H1 += [H1_m]
@@ -123,24 +119,17 @@ def get_xr_H(ints, dens, xr_order, monomer_charges, bra_det=False, ket_det=False
         print("starting S2H2")
         
         print("starting T")
-        S2H2  = XR_term.dimer_matrix(St_blocks_bior, {
-                                2: [
-                                    "t01"
-                                ]
+        S2H2  = XR_term.dimer_matrix(ST_blocks_bior, {
+                                2: D.ST2[0]
                             }, (0,1), all_dimer_charges, matrix_timer, bra_det=bra_det, ket_det=ket_det)
         print("starting U")
-        S2H2  += XR_term.dimer_matrix(Su_blocks_bior, {
-                                2: [
-                                    "u100",
-                                    "u001", "u101"
-                                ]
+        S2H2  += XR_term.dimer_matrix(SU_blocks_bior, {
+                                2: D.SU2[0]
                             }, (0,1), all_dimer_charges, matrix_timer, bra_det=bra_det, ket_det=ket_det)
         
         print("starting V")
-        S2H2  += XR_term.dimer_matrix(Sv_blocks_bior, {
-                                2: [
-                                    "v0110", "v0010", "v0100", "v0011"
-                                ]
+        S2H2  += XR_term.dimer_matrix(SV_blocks_bior, {
+                                2: D.SV2[0]
                             }, (0,1), all_dimer_charges, matrix_timer, bra_det=bra_det, ket_det=ket_det)
         
 
@@ -160,21 +149,15 @@ def get_xr_H(ints, dens, xr_order, monomer_charges, bra_det=False, ket_det=False
             #                        ]
             #                    }, m, monomer_charges)
             
-            H1_m = XR_term.monomer_matrix(St_blocks_symm, {
-                                1: [
-                                    "t00"
-                                    ]
+            H1_m = XR_term.monomer_matrix(ST_blocks_symm, {
+                                1: D.ST1[0]
                                 }, m, monomer_charges[m], matrix_timer)
-            H1_m += XR_term.monomer_matrix(Su_blocks_symm, {
-                                1: [
-                                    "u000"
-                                    ]
+            H1_m += XR_term.monomer_matrix(SU_blocks_symm, {
+                                1: D.SU1[0]
                                 }, m, monomer_charges[m], matrix_timer)
             
-            H1_m += XR_term.monomer_matrix(Sv_blocks_symm, {
-                                1: [
-                                    "v0000"
-                                    ]
+            H1_m += XR_term.monomer_matrix(SV_blocks_symm, {
+                                1: D.SV1[0]
                                 }, m, monomer_charges[m], matrix_timer)
             
             H1 += [H1_m]
@@ -183,12 +166,8 @@ def get_xr_H(ints, dens, xr_order, monomer_charges, bra_det=False, ket_det=False
         print("build S2inv")
 
         S2     = XR_term.dimer_matrix(S_blocks, {
-                                0: [
-                                    "identity"
-                                ],
-                                2: [
-                                    "s01"
-                                ]
+                                0: D.S0[0],
+                                2: D.S2[1]
                             },  (0,1), all_dimer_charges, matrix_timer, bra_det=bra_det, ket_det=ket_det)
 
         S2inv = qode.math.precise_numpy_inverse(S2)
@@ -197,58 +176,31 @@ def get_xr_H(ints, dens, xr_order, monomer_charges, bra_det=False, ket_det=False
 
         print("build S2H2 (1e)")
 
-        S2H2  = XR_term.dimer_matrix(St_blocks_symm, {
-                            1: [
-                                "t00"
-                                ],
-                            2: [
-                                "t01"
-                                ]
+        S2H2  = XR_term.dimer_matrix(ST_blocks_symm, {
+                            1: D.ST1[0],
+                            2: D.ST2[0]
                             }, (0,1), all_dimer_charges, matrix_timer, bra_det=bra_det, ket_det=ket_det)
-        S2H2 += XR_term.dimer_matrix(Su_blocks_symm, {
-                            1: [
-                                "u000"
-                                ],
-                            2: [
-                                "u100",
-                                "u001", "u101"
-                                ]
+        S2H2 += XR_term.dimer_matrix(SU_blocks_symm, {
+                            1: D.SU1[0],
+                            2: D.SU2[0]
                             }, (0,1), all_dimer_charges, matrix_timer, bra_det=bra_det, ket_det=ket_det)
 
-        S2H2 += XR_term.dimer_matrix(St_blocks_bior, {
-                            2: [
-                                "s01t00", "s01t11",
-                                "s01t10", 
-                                "s01t01"
-                                ]
+        S2H2 += XR_term.dimer_matrix(ST_blocks_bior, {
+                            2: D.ST2[1]
                             }, (0,1), all_dimer_charges, matrix_timer)
-        S2H2 += XR_term.dimer_matrix(Su_blocks_bior, {
-                            2: [
-                                "s01u000", "s01u011",
-                                "s01u100", "s01u111",
-                                "s01u010", "s01u110", 
-                                "s01u001", "s01u101"
-                                ]
+        S2H2 += XR_term.dimer_matrix(SU_blocks_bior, {
+                            2: D.SU2[1]
                             }, (0,1), all_dimer_charges, matrix_timer, bra_det=bra_det, ket_det=ket_det)
 
         print("build S2H2 (2e)")
 
-        S2H2 += XR_term.dimer_matrix(Sv_blocks_diff, {
-                            1: [
-                                "v0000"
-                                ],
-                            2: [
-                                "v0110", "v0010", "v0100", "v0011"
-                                ]
+        S2H2 += XR_term.dimer_matrix(SV_blocks_diff, {
+                            1: D.SV1[0],
+                            2: D.SV2[0]
                             }, (0,1), all_dimer_charges, matrix_timer, bra_det=bra_det, ket_det=ket_det)
 
-        S2H2 += XR_term.dimer_matrix(Sv_blocks_bior, {
-                            2: [
-                                "s01v0000", "s01v1111",
-                                "s01v0110", "s01v1110", 
-                                "s01v0100", 
-                                "s01v1100", "s01v0010", "s01v0111"#, "s01v0011"
-                                ]
+        S2H2 += XR_term.dimer_matrix(SV_blocks_bior, {
+                            2: D.SV2[1]
                             }, (0,1), all_dimer_charges, matrix_timer, bra_det=bra_det, ket_det=ket_det)
 
 
@@ -257,21 +209,15 @@ def get_xr_H(ints, dens, xr_order, monomer_charges, bra_det=False, ket_det=False
 
         H2blocked = S2inv @ S2H2
 
-        H2blocked -= XR_term.dimer_matrix(St_blocks_symm, {
-                            1: [
-                                "t00"
-                                ]
+        H2blocked -= XR_term.dimer_matrix(ST_blocks_symm, {
+                            1: D.ST1[0]
                             }, (0,1), all_dimer_charges, matrix_timer, bra_det=bra_det, ket_det=ket_det)
-        H2blocked -= XR_term.dimer_matrix(Su_blocks_symm, {
-                            1: [
-                                "u000"
-                                ]
+        H2blocked -= XR_term.dimer_matrix(SU_blocks_symm, {
+                            1: D.SU1[0]
                             }, (0,1), all_dimer_charges, matrix_timer, bra_det=bra_det, ket_det=ket_det)
 
-        H2blocked -= XR_term.dimer_matrix(Sv_blocks_symm, {
-                            1: [
-                                "v0000"
-                                ]
+        H2blocked -= XR_term.dimer_matrix(SV_blocks_symm, {
+                            1: D.SV1[0]
                             }, (0,1), all_dimer_charges, matrix_timer, bra_det=bra_det, ket_det=ket_det)
     elif xr_order == 2:
         print("build H1")
@@ -284,21 +230,15 @@ def get_xr_H(ints, dens, xr_order, monomer_charges, bra_det=False, ket_det=False
             #                        ]
             #                    }, m, monomer_charges)
 
-            H1_m = XR_term.monomer_matrix(St_blocks_symm, {
-                                1: [
-                                    "t00"
-                                    ]
+            H1_m = XR_term.monomer_matrix(ST_blocks_symm, {
+                                1: D.ST1[0]
                                 }, m, monomer_charges[m], matrix_timer)
-            H1_m += XR_term.monomer_matrix(Su_blocks_symm, {
-                                1: [
-                                    "u000"
-                                    ]
+            H1_m += XR_term.monomer_matrix(SU_blocks_symm, {
+                                1: D.SU1[0]
                                 }, m, monomer_charges[m], matrix_timer)
 
-            H1_m += XR_term.monomer_matrix(Sv_blocks_symm, {
-                                1: [
-                                    "v0000"
-                                    ]
+            H1_m += XR_term.monomer_matrix(SV_blocks_symm, {
+                                1: D.SV1[0]
                                 }, m, monomer_charges[m], matrix_timer)
 
             H1 += [H1_m]
@@ -307,13 +247,8 @@ def get_xr_H(ints, dens, xr_order, monomer_charges, bra_det=False, ket_det=False
         print("build S2inv")
 
         S2     = XR_term.dimer_matrix(S_blocks, {
-                                0: [
-                                    "identity"
-                                ],
-                                2: [
-                                    "s01",
-                                    "s01s10", "s01s01"
-                                ]
+                                0: D.S0[0],
+                                2: D.S2[1] + D.S2[2]
                             },  (0,1), all_dimer_charges, matrix_timer)
 
         S2inv = qode.math.precise_numpy_inverse(S2)
@@ -322,65 +257,34 @@ def get_xr_H(ints, dens, xr_order, monomer_charges, bra_det=False, ket_det=False
 
         print("build S2H2 (1e)")
 
-        S2H2  = XR_term.dimer_matrix(St_blocks_symm, {
-                            1: [
-                                "t00"
-                                ],
-                            2: [
-                                "t01",
-                                "s01t00", "s01t11",
-                                "s01t10", 
-                                "s01t01"
-                                ]
+        S2H2  = XR_term.dimer_matrix(ST_blocks_symm, {
+                            1: D.ST1[0],
+                            2: D.ST2[0] + D.ST2[1]
                             }, (0,1), all_dimer_charges, matrix_timer)
-        S2H2 += XR_term.dimer_matrix(Su_blocks_symm, {
-                            1: [
-                                "u000"
-                                ],
-                            2: [
-                                "u100",
-                                "u001", "u101",
-                                "s01u000", "s01u011",
-                                "s01u100", "s01u111",
-                                "s01u010", "s01u110", 
-                                "s01u001", "s01u101"
-                                ]
+        S2H2 += XR_term.dimer_matrix(SU_blocks_symm, {
+                            1: D.SU1[0],
+                            2: D.SU2[0] + D.SU2[1]
                             }, (0,1), all_dimer_charges, matrix_timer)
 
-        S2H2 += XR_term.dimer_matrix(St_blocks_bior, {
-                            2: [
-                                "s01s01t00", "s01s01t10", "s01s01t11", "s01s10t00", "s01s10t01"
-                                ]
+        S2H2 += XR_term.dimer_matrix(ST_blocks_bior, {
+                            2: D.ST2[2]
                             }, (0,1), all_dimer_charges, matrix_timer)
-        S2H2 += XR_term.dimer_matrix(Su_blocks_bior, {
-                            2: [
-                                "s01s01u000", "s01s01u010", "s01s01u011", "s01s10u000", "s01s10u001", "s01s01u100", "s01s01u110", "s01s01u111", "s01s10u100", "s01s10u101"
-                                ]
+        S2H2 += XR_term.dimer_matrix(SU_blocks_bior, {
+                            2: D.SU2[2]
                             }, (0,1), all_dimer_charges, matrix_timer)
         
 
         print("build S2H2 (2e)")
 
-        S2H2 += XR_term.dimer_matrix(Sv_blocks_symm, {
-                            1: [
-                                "v0000"
-                                ],
-                            2: [
-                                "v0110", "v0010", "v0100", "v0011"
-                                ]
+        S2H2 += XR_term.dimer_matrix(SV_blocks_symm, {
+                            1: D.SV1[0],
+                            2: D.SV2[0]
                             }, (0,1), all_dimer_charges, matrix_timer)
-        S2H2 += XR_term.dimer_matrix(Sv_blocks_diff, {
-                            2: [
-                                "s01v0000", "s01v1111",
-                                "s01v0110", "s01v1110", 
-                                "s01v0100", 
-                                "s01v1100", "s01v0010", "s01v0111"#, "s01v0011"
-                                ]
+        S2H2 += XR_term.dimer_matrix(SV_blocks_diff, {
+                            2: D.SV2[1]
                             }, (0,1), all_dimer_charges, matrix_timer)
-        S2H2 += XR_term.dimer_matrix(Sv_blocks_bior, {
-                            2: [
-                                "s01s01v0000", "s01s01v0100", "s01s01v0110", "s01s01v1100", "s01s01v1110", "s01s01v1111", "s01s10v0000", "s01s10v0010", "s01s10v0011", "s01s10v0100", "s01s10v0110"
-                                ]
+        S2H2 += XR_term.dimer_matrix(SV_blocks_bior, {
+                            2: D.SV2[2]
                             }, (0,1), all_dimer_charges, matrix_timer)
 
 
@@ -388,21 +292,15 @@ def get_xr_H(ints, dens, xr_order, monomer_charges, bra_det=False, ket_det=False
 
         H2blocked = S2inv @ S2H2
 
-        H2blocked -= XR_term.dimer_matrix(St_blocks_symm, {
-                            1: [
-                                "t00"
-                                ]
+        H2blocked -= XR_term.dimer_matrix(ST_blocks_symm, {
+                            1: D.ST1[0]
                             }, (0,1), all_dimer_charges, matrix_timer)
-        H2blocked -= XR_term.dimer_matrix(Su_blocks_symm, {
-                            1: [
-                                "u000"
-                                ]
+        H2blocked -= XR_term.dimer_matrix(SU_blocks_symm, {
+                            1: D.SU1[0]
                             }, (0,1), all_dimer_charges, matrix_timer)
 
-        H2blocked -= XR_term.dimer_matrix(Sv_blocks_symm, {
-                            1: [
-                                "v0000"
-                                ]
+        H2blocked -= XR_term.dimer_matrix(SV_blocks_symm, {
+                            1: D.SV1[0]
                             }, (0,1), all_dimer_charges, matrix_timer)
     else:
         raise NotImplementedError(f"xr order {xr_order} is not implemented")
@@ -485,24 +383,16 @@ def get_xr_S(ints, dens, xr_order, monomer_charges):  # this is part of the orbi
         print("build S0")
 
         S2     = XR_term.dimer_matrix(S_blocks, {
-                                0: [
-                                    "identity"
-                                ],
-                                2: [
-                                    #"s01"
-                                ]
+                                0: D.S0[0],
+                                2: []
                             },  (0,1), all_dimer_charges, matrix_timer)
         H2blocked = S2
     elif xr_order == 1:
         print("build S1")
 
         S2     = XR_term.dimer_matrix(S_blocks, {
-                                0: [
-                                    #"identity"
-                                ],
-                                2: [
-                                    "s01"
-                                ]
+                                0: [],
+                                2: D.S2[1]
                             },  (0,1), all_dimer_charges, matrix_timer)
 
         #print("build S2inv")
@@ -535,7 +425,7 @@ def get_xr_S(ints, dens, xr_order, monomer_charges):  # this is part of the orbi
     print(H2blocked.shape)
     for i,i_ in enumerate(mapping):
         for j,j_ in enumerate(mapping):
-            S2[i,j] = H2blocked[i_,j_]
+            D.S2[i,j] = H2blocked[i_,j_]
 
     return S2
 

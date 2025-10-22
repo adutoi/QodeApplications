@@ -1,5 +1,0 @@
-implicit projection now removed
-excited states are not orthogonal
-solve with orthogonal projector (full resolution in krylov space)
-what is relationship to projected core calculations at XR level
-full ci vs ci

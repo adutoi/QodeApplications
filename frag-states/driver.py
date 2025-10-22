@@ -36,12 +36,13 @@ if __name__=="__main__":
     printout = indented(print, indent="    ")
 
     params = struct(    # defaults
-        n_threads = 1,
-        nstates   = None,
-        thresh    = None,
-        compress  = struct(method="SVD", divide="cc-aa"),
-        nat_orbs  = False,
-        abs_anti  = False
+        n_threads  = 1,
+        nstates    = None,
+        thresh     = None,
+        compress   = struct(method="SVD", divide="cc-aa"),
+        nat_orbs   = False,
+        abs_anti   = False,
+        op_strings = {2:["aa", "caaa"], 1:["a", "caa", "ccaaa"], 0:["ca", "ccaa"]}
     )
     params.update(read_input.from_command_line(namespace=input_env))
 
@@ -93,7 +94,7 @@ if __name__=="__main__":
 
     label += "_nth"
     printout("Reduced density tensors")
-    label += "_" + densities.build_tensors(frags, thresh=1e-30, options=params("compress nat_orbs abs_anti"), printout=indented(printout), n_threads=params.n_threads)
+    label += "_" + densities.build_tensors(frags, params.op_strings, thresh=1e-30, options=params("compress nat_orbs abs_anti"), printout=indented(printout), n_threads=params.n_threads)
 
     frags[0].states    = None    # otherwise huge files
     frags[1].states    = None    # otherwise huge files

@@ -45,8 +45,7 @@ def _compress(args):
 
 
 # private version so that we can use "with pool" on the outside
-def _build_tensors(states, n_orbs, n_elec_0, thresh, options, printout, n_threads, pool):
-    op_strings = {2:["aa", "caaa"], 1:["a", "caa", "ccaaa"], 0:["ca", "ccaa"]}
+def _build_tensors(states, n_orbs, n_elec_0, op_strings, thresh, options, printout, n_threads, pool):
     densities = {}
     conj_densities = {}
 
@@ -134,15 +133,15 @@ def _build_tensors(states, n_orbs, n_elec_0, thresh, options, printout, n_thread
     printout("Writing to hard drive ...")
     return densities
 
-def build_tensors(frags, thresh=1e-10, options=None, printout=print, n_threads=1):
+def build_tensors(frags, op_strings, thresh=1e-10, options=None, printout=print, n_threads=1):
     for m,frag in enumerate(frags):
         printout(f"Fragment {m}")
         states, n_orbs, n_elec_0 = frag.states, 2*frag.basis.n_spatial_orb, frag.n_elec_ref
         if n_threads>1:
             with multiprocessing.Pool(n_threads, maxtasksperchild=1) as pool:    # to avoid errors on exit, both maxtasksperchild=1 ...
-                densities = _build_tensors(states, n_orbs, n_elec_0, thresh, options, indented(printout), n_threads, pool)
+                densities = _build_tensors(states, n_orbs, n_elec_0, op_strings, thresh, options, indented(printout), n_threads, pool)
                 pool.close()                                                     # ... and pool.close() seem to be necessary
         else:
-            densities = _build_tensors(states, n_orbs, n_elec_0, thresh, options, indented(printout), n_threads, None)
+            densities = _build_tensors(states, n_orbs, n_elec_0, op_strings, thresh, options, indented(printout), n_threads, None)
         frag.rho = densities
     return "compress"

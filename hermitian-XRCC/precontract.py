@@ -58,10 +58,6 @@ def precontract(densities, integrals, timings):
                 else:
                     int_indices += [idx]
                     int_blocks += [indices[0]]
-                #try:
-                #    ints = integrals.T[int_blocks]
-                #except:
-                #    print(int_blocks)
             int_blocks = tuple(int_blocks)
             if int_type=="S":  ints = integrals[int_blocks]    # makes the calling signature inhomogeneous to force error otherwise
             if int_type=="T":  ints = integrals.T[int_blocks]
@@ -72,7 +68,10 @@ def precontract(densities, integrals, timings):
 
             def contract_rho_int_m(chg_i,chg_j):
                 if chg_i-chg_j==Dchg:
-                    rho = densities_m[rho_type][chg_i,chg_j]
+                    try:
+                        rho = densities_m[rho_type][chg_i,chg_j]
+                    except:
+                        raise RuntimeError(f"missing density {rho_type} for charges {(chg_i,chg_j)}")
                     timings.start()
                     result = evaluate(rho(*([0,1]+rho_indices)) @ ints(*int_indices))
                     timings.record(label)
