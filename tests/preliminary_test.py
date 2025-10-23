@@ -7,7 +7,8 @@ import numpy as np
 #export PYTHONPATH=$PYTHONPATH:/home/usr/QodeApplications/Be-states
 #export PYTHONPATH=$PYTHONPATH:/home/usr/QodeApplications/StateSpaceOptimizer
 
-# also comment out any run_xr functions at the bottom of the workflow file, since they will be executed with the standard pytest routine
+# it is recommended to generate your own testdata before applying changes
+# in order to do so, read the instructions at the bottom of the workflow.py file
 
 def test_grad_free_opt():
     test = run_xr(4.5, 0, 1, single_thresh=1/6, double_thresh=1/4, triple_thresh=1/2.5,
