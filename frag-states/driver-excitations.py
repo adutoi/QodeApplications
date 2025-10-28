@@ -22,9 +22,9 @@ from qode.util import struct, read_input, indented, no_print
 from qode.math.tensornet import np_tensor, raw
 from qode.many_body.fermion_field import combine_orb_lists, CI_methods
 import input_env
-import hamiltonian
+import abinitio
 import states
-import densities
+import densities_frags
 
 # these belong elsewhere
 n_elec_ref = {"H": 1, "Be": 4, "C": 6}
@@ -65,11 +65,11 @@ if __name__=="__main__":
 
     printout("Fragment HF")
     for frag in frags:
-        hamiltonian.fragment_HF(frag, Sz=0, printout=indented(printout))    # modifies/initializes MOcoeffs and stores HF data in frag
+        abinitio.fragment_HF(frag, Sz=0, printout=indented(printout))    # modifies/initializes MOcoeffs and stores HF data in frag
     frags[1].basis.MOcoeffs = frags[0].basis.MOcoeffs    # insist identical for this code
 
-    monomer_ints, dimer_ints = hamiltonian.dimer_integrals(frags, printout=printout)
-    monomer_ints_c, dimer_ints_c = hamiltonian.dimer_integrals(frags, printout=printout, core_hack=True)
+    monomer_ints, dimer_ints = abinitio.dimer_integrals(frags, printout=printout)
+    monomer_ints_c, dimer_ints_c = abinitio.dimer_integrals(frags, printout=printout, core_hack=True)
 
     S = dimer_ints.S
     adim = S.shape[0]//2
@@ -123,7 +123,7 @@ if __name__=="__main__":
 
     #label += "_nth"
     #printout("Reduced density tensors")
-    #label += "_" + densities.build_tensors(frags, thresh=1e-30, options=params("compress nat_orbs abs_anti"), printout=indented(printout), n_threads=params.n_threads)
+    #label += "_" + densities_frags.build_tensors(frags, thresh=1e-30, options=params("compress nat_orbs abs_anti"), printout=indented(printout), n_threads=params.n_threads)
 
     #frags[0].states    = None    # otherwise huge files
     #frags[1].states    = None    # otherwise huge files

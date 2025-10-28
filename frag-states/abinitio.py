@@ -20,7 +20,7 @@ from qode.util import struct, logger, indented, no_print
 from qode.atoms.integrals.fragments import unblock_2, unblock_last2, unblock_4
 from qode.many_body.self_consistent_field.fermionic import RHF_RoothanHall_Nonorthogonal
 from qode.many_body.fermion_field import combine_orb_lists
-from get_ints import get_ints
+from get_ints_frags import get_ints
 
 def fragment_HF(frag, Sz=0, printout=print, archive=None):
     if archive is None:  archive = struct()

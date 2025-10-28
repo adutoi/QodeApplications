@@ -15,6 +15,13 @@
 #    You should have received a copy of the GNU General Public License
 #    along with QodeApplications.  If not, see <http://www.gnu.org/licenses/>.
 #
+# Usage:  python workflow.py
+#
+# All options are set by adjusting the arguments of the function call in the last line.
+# The following must be added to the PYTHONPATH (.../ is the path to QodeApplications/):
+#   .../hermitian-XRCC (if not run from that directory)
+#   .../Be-states
+#   .../StateSpaceOptimizer
 
 from get_ints import get_ints
 from get_xr_result import get_xr_states#, get_xr_H
@@ -241,21 +248,21 @@ def run_xr(displacement, max_iter, xr_order_final, xr_order_solver=0, dens_filte
 if __name__ == "__main__":
     print(run_xr(4.5, 0, 1, single_thresh=1/8, double_thresh=1/6, triple_thresh=1/4,  # single_thresh=1/6, double_thresh=1/4, triple_thresh=1/2.5,# sp_thresh=1/1.005,
                  grad_level="herm", state_prep=True, target_state=[0, 1], dens_filter_thresh_solver=1e-7, backend="psi4 in_house"))#"vlx_mtp"))
+    """
+    # if you want to generate local test data set, comment out the normal run above, uncomment this section, and adjust
+    # the dump_location; then use the printed result and substitute the other results in preliminary_test.py accordingly
+    dump_location = "../../tests/ref_data"
+    a = run_xr(4.5, 0, 1, single_thresh=1/6, double_thresh=1/4, triple_thresh=1/2.5,
+               grad_level="herm", state_prep=True, target_state=[0, 1], dens_filter_thresh_solver=1e-6, backend="psi4 in_house",
+               dump_ref=dump_location)
+    b = run_xr(4.5, 50, 1, single_thresh=1/6, double_thresh=1/4, triple_thresh=1/2.5,
+               grad_level="herm", state_prep=False, target_state=[0], dens_filter_thresh_solver=1e-6, backend="psi4 in_house",
+               dump_ref=dump_location)
+    print(a)
+    print(b)
+    """
 
 
-# if you want to generate local test data use the following and adjust the dump_location
-#dump_location = "../../tests/ref_data"
-# then use the printed result (print(a, b)) and substitute the other results in preliminary_test.py accordingly
-
-#a = run_xr(4.5, 0, 1, single_thresh=1/6, double_thresh=1/4, triple_thresh=1/2.5,
-#                  grad_level="herm", state_prep=True, target_state=[0, 1], dens_filter_thresh_solver=1e-6, backend="psi4 in_house",
-#                  dump_ref=dump_location)
-
-#b = run_xr(4.5, 50, 1, single_thresh=1/6, double_thresh=1/4, triple_thresh=1/2.5,
-#                  grad_level="herm", state_prep=False, target_state=[0], dens_filter_thresh_solver=1e-6, backend="psi4 in_house",
-#                  dump_ref="dump_location)
-
-#print(a, b)
 
 """
 # the following error catching is useful for scans along a reaction coordinate.

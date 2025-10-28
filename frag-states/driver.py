@@ -20,9 +20,9 @@ import pickle
 from qode.util import struct, read_input, indented, no_print
 from qode.many_body.fermion_field import combine_orb_lists, CI_methods
 import input_env
-import hamiltonian
+import abinitio
 import states
-import densities
+import densities_frags
 
 # these belong elsewhere
 n_elec_ref = {"H": 1, "Be": 4, "C": 6}
@@ -31,20 +31,8 @@ n_spatial_orb = {
 }
 
 
-
-if __name__=="__main__":
+def main(params, test_only=False):
     printout = indented(print, indent="    ")
-
-    params = struct(    # defaults
-        n_threads  = 1,
-        nstates    = None,
-        thresh     = None,
-        compress   = struct(method="SVD", divide="cc-aa"),
-        nat_orbs   = False,
-        abs_anti   = False,
-        op_strings = {2:["aa", "caaa"], 1:["a", "caa", "ccaaa"], 0:["ca", "ccaa"]}
-    )
-    params.update(read_input.from_command_line(namespace=input_env))
 
     frags = [
         struct(
@@ -63,10 +51,10 @@ if __name__=="__main__":
 
     printout("Fragment HF")
     for frag in frags:
-        hamiltonian.fragment_HF(frag, Sz=0, printout=indented(printout))    # modifies/initializes MOcoeffs and stores HF data in frag
+        abinitio.fragment_HF(frag, Sz=0, printout=indented(printout))    # modifies/initializes MOcoeffs and stores HF data in frag
     frags[1].basis.MOcoeffs = frags[0].basis.MOcoeffs    # insist identical for this code
 
-    monomer_ints, dimer_ints = hamiltonian.dimer_integrals(frags, printout=printout)
+    monomer_ints, dimer_ints = abinitio.dimer_integrals(frags, printout=printout)
 
     printout("Monomer FCIs (just for fun/illustration)")
     occupied = range(frags[0].n_elec_ref // 2), range(frags[1].n_elec_ref // 2)
@@ -94,9 +82,31 @@ if __name__=="__main__":
 
     label += "_nth"
     printout("Reduced density tensors")
-    label += "_" + densities.build_tensors(frags, params.op_strings, thresh=1e-30, options=params("compress nat_orbs abs_anti"), printout=indented(printout), n_threads=params.n_threads)
+    label += "_" + densities_frags.build_tensors(frags, params.op_strings, thresh=1e-30, options=params("compress nat_orbs abs_anti"), printout=indented(printout), n_threads=params.n_threads)
 
-    frags[0].states    = None    # otherwise huge files
-    frags[1].states    = None    # otherwise huge files
-    pickle.dump(frags[0], open(f"rho/{label}.pkl".format(0), "wb"))    # users responsibility to softlink rho/ to different volume if desired
-    pickle.dump(frags[1], open(f"rho/{label}.pkl".format(1), "wb"))    # users responsibility to softlink rho/ to different volume if desired
+    if not test_only:
+        printout("Writing to hard drive ...")
+        frags[0].states    = None    # otherwise huge files
+        frags[1].states    = None    # otherwise huge files
+        pickle.dump(frags[0], open(f"rho/{label}.pkl".format(0), "wb"))    # users responsibility to softlink rho/ to different volume if desired
+        pickle.dump(frags[1], open(f"rho/{label}.pkl".format(1), "wb"))    # users responsibility to softlink rho/ to different volume if desired
+
+    return frags    # return value only used for tests
+
+
+if __name__=="__main__":
+
+    params = struct(    # defaults
+        n_threads  = 1,
+        nstates    = None,
+        thresh     = None,
+        compress   = struct(method="SVD", divide="cc-aa"),
+        nat_orbs   = False,
+        abs_anti   = False,
+        op_strings = {2:["aa", "caaa"], 1:["a", "caa", "ccaaa"], 0:["ca", "ccaa"]}
+    )
+    params.update(read_input.from_command_line(namespace=input_env))
+
+    main(params)
+
+

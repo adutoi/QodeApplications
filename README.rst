@@ -45,7 +45,7 @@ Testing and Development
 testing
 ^^^^^^^
 
-The preliminary test suite is located in tests and can be executed using pytest.
+The preliminary test suite is located in tests and can be executed using pytest.  See README.txt in that directory.
 
 contributing
 ^^^^^^^^^^^^

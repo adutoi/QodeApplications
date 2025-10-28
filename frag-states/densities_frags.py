@@ -23,7 +23,7 @@ from qode.util           import sort_eigen, indented
 from qode.util.PyC       import Double
 from qode.math.tensornet import tl_tensor, tensor_sum, raw
 from qode.many_body.fermion_field import field_op
-import compress
+import compress_frags
 
 # states[n].coeffs  = [numpy.array, numpy.array, . . .]   One (effectively 1D) array of coefficients per n-electron state
 # states[n].configs = [int, int, . . . ]                  Each int represents a configuration (has the same length as arrays in list above)
@@ -40,7 +40,7 @@ def _vec(i, length):
 
 def _compress(args):
     rho_ij, op_string, bra_chg, ket_chg, i, j, n_bras, n_kets, compress_args, natural_orbs, antisymm_abstract = args
-    return i, n_bras, j, n_kets, compress.compress(rho_ij, op_string, bra_chg, ket_chg, i, j, compress_args, natural_orbs, antisymm_abstract, _tens_wrap)
+    return i, n_bras, j, n_kets, compress_frags.compress(rho_ij, op_string, bra_chg, ket_chg, i, j, compress_args, natural_orbs, antisymm_abstract, _tens_wrap)
 
 
 
@@ -101,7 +101,7 @@ def _build_tensors(states, n_orbs, n_elec_0, op_strings, thresh, options, printo
                 n_kets = len(rho_i)
                 for j,rho_ij in enumerate(rho_i):
                     if bra_chg!=ket_chg or i>=j:
-                        #rho_ij = compress.compress(rho_ij, op_string, bra_chg, ket_chg, i, j, options.compress, natural_orbs, antisymm_abstract, _tens_wrap)
+                        #rho_ij = compress_frags.compress(rho_ij, op_string, bra_chg, ket_chg, i, j, options.compress, natural_orbs, antisymm_abstract, _tens_wrap)
                         arguments += [(rho_ij, op_string, bra_chg, ket_chg, i, j, n_bras, n_kets, options.compress, natural_orbs, antisymm_abstract)]
             if pool is None:
                 values = [_compress(args) for args in arguments]
@@ -130,7 +130,7 @@ def _build_tensors(states, n_orbs, n_elec_0, op_strings, thresh, options, printo
     densities["n_elec"]   = {chg:(n_elec_0-chg)          for chg in states}
     densities["n_states"] = {chg:len(states[chg].coeffs) for chg in states}
 
-    printout("Writing to hard drive ...")
+    printout("Done building densities ...")
     return densities
 
 def build_tensors(frags, op_strings, thresh=1e-10, options=None, printout=print, n_threads=1):
