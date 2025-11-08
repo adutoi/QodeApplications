@@ -9,7 +9,7 @@ from qode.math.tensornet import raw, tl_tensor, tensor_sum
 frag = sys.argv[1]
 
 def tens_wrap(tensor):
-    return tl_tensor(tensorly.tensor(tensor, dtype=Double.tensorly))
+    return tl_tensor.init(tensorly.tensor(tensor, dtype=Double.tensorly))
 
 
 Be = pickle.load(open(f"rho/Be-Be_{frag}_6-31G_nth_compress.pkl", "rb"))

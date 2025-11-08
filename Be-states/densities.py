@@ -68,7 +68,7 @@ def _token_parser(options):
     return value
 
 def _tens_wrap(tensor):
-    return tl_tensor(tensorly.tensor(tensor, dtype=Double.tensorly))
+    return tl_tensor.init(tensorly.tensor(tensor, dtype=Double.tensorly))
 
 def _vec(i, length):
     v = numpy.zeros((length,), dtype=Double.numpy, order="C")

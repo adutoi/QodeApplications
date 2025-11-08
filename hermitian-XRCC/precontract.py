@@ -17,7 +17,7 @@
 #
 import tensorly
 from qode.util.dynamic_array import dynamic_array, cached
-from qode.math.tensornet     import evaluate, raw, tl_tensor
+from qode.math.tensornet     import evaluate, raw
 
 
 
