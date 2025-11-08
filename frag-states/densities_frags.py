@@ -21,7 +21,8 @@ import tensorly
 import multiprocessing
 from qode.util           import sort_eigen, indented
 from qode.util.PyC       import Double
-from qode.math.tensornet import tl_tensor, tensor_sum, raw
+from qode.math.tensornet import tl_tensor, tensor_sum, raw, evaluate
+from qode.math.permute   import permutations_by_parity
 from qode.many_body.fermion_field import field_op
 import compress_frags
 
@@ -31,7 +32,7 @@ import compress_frags
 
 
 def _tens_wrap(tensor):
-    return tl_tensor(tensorly.tensor(tensor, dtype=Double.tensorly))
+    return tl_tensor.init(tensorly.tensor(tensor, dtype=Double.tensorly))
 
 def _vec(i, length):
     v = numpy.zeros((length,), dtype=Double.numpy, order="C")
@@ -41,6 +42,29 @@ def _vec(i, length):
 def _compress(args):
     rho_ij, op_string, bra_chg, ket_chg, i, j, n_bras, n_kets, compress_args, natural_orbs, antisymm_abstract = args
     return i, n_bras, j, n_kets, compress_frags.compress(rho_ij, op_string, bra_chg, ket_chg, i, j, compress_args, natural_orbs, antisymm_abstract, _tens_wrap)
+
+# The antisymmetrize flag to field_op.build_densities takes forever, so set it to False and run this instead.
+def _antisymmetrize(antisymmetrize, tensor, op_string):
+    if antisymmetrize:    # burying the "if" in here cleans up the calling code
+        c_count = op_string.count("c")
+        a_count = op_string.count("a")
+        c_indices = list(range(0,       c_count        ))
+        a_indices = list(range(c_count, c_count+a_count))
+        c_perms = permutations_by_parity(c_indices)
+        a_perms = permutations_by_parity(a_indices)
+        result = tensor_sum()
+        for perm in c_perms[0]:    # all the + permutations of c indices
+            result += tensor(*(perm+a_indices))
+        for perm in c_perms[1]:    # all the - permutations of c indices
+            result -= tensor(*(perm+a_indices))
+        tensor = evaluate(result)      # this "layering/nesting" of the c and a permutations is ...
+        result = tensor_sum()          # ... more efficient than doing one big sum for both at the same time
+        for perm in a_perms[0]:    # all the + permutations of a indices
+            result += tensor(*(c_indices+perm))
+        for perm in a_perms[1]:    # all the - permutations of a indices
+            result -= tensor(*(c_indices+perm))
+        tensor = evaluate(result)
+    return tensor
 
 
 
@@ -70,8 +94,8 @@ def _build_tensors(states, n_orbs, n_elec_0, op_strings, thresh, options, printo
                     if op_string not in densities:  densities[op_string] = {}
                     #printout("  ", bra_chg, ket_chg, op_string)
                     # bit of a waste here ... computes i<j and i>j for chg_diff=0
-                    rho = field_op.build_densities(op_string, n_orbs, bra_coeffs, ket_coeffs, bra_configs, ket_configs, thresh, wisdom=None, antisymmetrize=antisymm_numerical, printout=indented(printdent), n_threads=n_threads)
-                    densities[op_string][bra_chg,ket_chg] = [[_tens_wrap(rho_ij) for rho_ij in rho_i] for rho_i in rho]
+                    rho = field_op.build_densities(op_string, n_orbs, bra_coeffs, ket_coeffs, bra_configs, ket_configs, thresh, wisdom=None, antisymmetrize=False, printout=indented(printdent), n_threads=n_threads)
+                    densities[op_string][bra_chg,ket_chg] = [[_antisymmetrize(antisymm_numerical, _tens_wrap(rho_ij), op_string) for rho_ij in rho_i] for rho_i in rho]
 
     printout("Postprocessing/compressing ...")
 

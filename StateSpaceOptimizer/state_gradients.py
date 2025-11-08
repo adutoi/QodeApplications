@@ -43,8 +43,8 @@ def contract_dens_with_d(dens, dl, dr, frag_map, d_slices, state_dict):  # updat
             continue
         for bra_chg,ket_chg in dens[op_string]:
             dens_inds = [num for num in range(2, len(dens[op_string][(bra_chg,ket_chg)].shape))]
-            d_left  = tl_tensor(tl.tensor(dl[d_slices[frag_map[0]][bra_chg * (-1)], d_slices[frag_map[1]][bra_chg]], dtype=tl.float64))
-            d_right = tl_tensor(tl.tensor(dr[d_slices[frag_map[0]][ket_chg * (-1)], d_slices[frag_map[1]][ket_chg]], dtype=tl.float64))
+            d_left  = tl_tensor.init(tl.tensor(dl[d_slices[frag_map[0]][bra_chg * (-1)], d_slices[frag_map[1]][bra_chg]], dtype=tl.float64))
+            d_right = tl_tensor.init(tl.tensor(dr[d_slices[frag_map[0]][ket_chg * (-1)], d_slices[frag_map[1]][ket_chg]], dtype=tl.float64))
             dens[op_string][(bra_chg,ket_chg)] = d_left(0,"i") @ dens[op_string][(bra_chg,ket_chg)]("i","j",*dens_inds) @ d_right(1,"j")
     for chg in d_slices[frag_map[0]]:
         dens["n_states"][chg] = state_dict[frag_map[0]][chg * (-1)]

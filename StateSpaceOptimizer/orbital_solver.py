@@ -383,18 +383,18 @@ def optimize_orbs(max_iter, xr_order, BeN, ints, dens, dens_builder_stuff, monom
         def tensornet_wrap(dyn_arr, ind_num):
             ret = {}
             #for key, ten in dict_.items():
-            #    ret[key] = tl_tensor(tl.tensor(ten, dtype=tl.float64))
+            #    ret[key] = tl_tensor.init(tl.tensor(ten, dtype=tl.float64))
             for i in range(2):
                 for j in range(2):
                     if ind_num == 2:
-                        ret[i,j] = tl_tensor(tl.tensor(dyn_arr[i,j], dtype=tl.float64))
+                        ret[i,j] = tl_tensor.init(tl.tensor(dyn_arr[i,j], dtype=tl.float64))
                     elif ind_num == 3:
                         for k in range(2):
-                            ret[i,j,k] = tl_tensor(tl.tensor(dyn_arr[i,j,k], dtype=tl.float64))
+                            ret[i,j,k] = tl_tensor.init(tl.tensor(dyn_arr[i,j,k], dtype=tl.float64))
                     elif ind_num == 4:
                         for k in range(2):
                             for l in range(2):
-                                ret[i,j,k,l] = tl_tensor(tl.tensor(dyn_arr[i,j,k,l], dtype=tl.float64))
+                                ret[i,j,k,l] = tl_tensor.init(tl.tensor(dyn_arr[i,j,k,l], dtype=tl.float64))
                     else:
                         raise ValueError(f"ind_num {ind_num} unknown")
             return ret

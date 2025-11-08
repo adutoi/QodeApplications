@@ -17,7 +17,7 @@
 #
 
 from qode.util import struct
-from permute import are_permutations
+from qode.math.permute import are_permutations
 
 
 

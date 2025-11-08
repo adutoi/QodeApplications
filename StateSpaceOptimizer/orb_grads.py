@@ -489,12 +489,12 @@ def v_diagram_without_2p_dens(ret, dl_, dr_, dens, ints_bior, ints_symm, s_inv_2
         for target_frag in range(2):
             perm = target_frag  # this is only true if targets are normalized to 0 and 1
             if perm:
-                dl = tl_tensor(tl.tensor(dl_.T, dtype=tl.float64))
-                dr = tl_tensor(tl.tensor(dr_.T, dtype=tl.float64))
+                dl = tl_tensor.init(tl.tensor(dl_.T, dtype=tl.float64))
+                dr = tl_tensor.init(tl.tensor(dr_.T, dtype=tl.float64))
                 int_frags = [1 - int(i) for i in int_diag[1:]]
             else:
-                dl = tl_tensor(tl.tensor(dl_, dtype=tl.float64))
-                dr = tl_tensor(tl.tensor(dr_, dtype=tl.float64))
+                dl = tl_tensor.init(tl.tensor(dl_, dtype=tl.float64))
+                dr = tl_tensor.init(tl.tensor(dr_, dtype=tl.float64))
                 int_frags = [int(i) for i in int_diag[1:]]
             def get_int(id):
                 z0, z1, z2, z3 = int_frags
@@ -515,7 +515,7 @@ def v_diagram_without_2p_dens(ret, dl_, dr_, dens, ints_bior, ints_symm, s_inv_2
                 for chg in d_slices[i]:
                     #for frag, op in enumerate(field_ops):
                         #if op == "delta":
-                        #    delta = tl_tensor(tl.eye(n_occ[frag] + n_virt[frag], dtype=tl.float64))
+                        #    delta = tl_tensor.init(tl.eye(n_occ[frag] + n_virt[frag], dtype=tl.float64))
                         #else:
                     dens0 = dens[i][field_ops[0]][(chg, chg)]
                     #if i == 0:
@@ -555,7 +555,7 @@ def v_diagram_without_2p_dens(ret, dl_, dr_, dens, ints_bior, ints_symm, s_inv_2
                                                 comb[0] * diagram(dl[d_slices[i][bra_chgi], d_slices[j][bra_chgj]], dr[d_slices[i][ket_chgi], d_slices[j][ket_chgj]],
                                                                 get_int("V"), get_int("V_half1"), get_int("V_half2"), get_int("s_inv_2"),
                                                                 densi, densj, n_i1, perm, n_occ, ov_slice[(i, pl, s1)], ov_slice[(i, ql, s2)])
-    #return tl_tensor(tl.tensor(mat, dtype=tl.float64))
+    #return tl_tensor.init(tl.tensor(mat, dtype=tl.float64))
 
 def v_diagram_hess_without_2p_dens(ret, dl_, dr_, dens, ints_bior, ints_symm, s_inv_2_, d_slices, n_occ, mat_ov_slice, ov_slice):
     # TODO: check the convention for v_halfbior, because the convention used here is symm bior symm symm
@@ -570,12 +570,12 @@ def v_diagram_hess_without_2p_dens(ret, dl_, dr_, dens, ints_bior, ints_symm, s_
         for target_frag in range(2):
             perm = target_frag  # this is only true if targets are normalized to 0 and 1
             if perm:
-                dl = tl_tensor(tl.tensor(dl_.T, dtype=tl.float64))
-                dr = tl_tensor(tl.tensor(dr_.T, dtype=tl.float64))
+                dl = tl_tensor.init(tl.tensor(dl_.T, dtype=tl.float64))
+                dr = tl_tensor.init(tl.tensor(dr_.T, dtype=tl.float64))
                 int_frags = [1 - int(i) for i in int_diag[1:]]
             else:
-                dl = tl_tensor(tl.tensor(dl_, dtype=tl.float64))
-                dr = tl_tensor(tl.tensor(dr_, dtype=tl.float64))
+                dl = tl_tensor.init(tl.tensor(dl_, dtype=tl.float64))
+                dr = tl_tensor.init(tl.tensor(dr_, dtype=tl.float64))
                 int_frags = [int(i) for i in int_diag[1:]]
             def get_int(id):
                 z0, z1, z2, z3 = int_frags
@@ -874,21 +874,21 @@ class grads_and_hessian(object):
             for perm in range(2):
                 i, j = key
                 if perm:
-                    dl = tl_tensor(tl.tensor(dl_.T, dtype=tl.float64))
-                    dr = tl_tensor(tl.tensor(dr_.T, dtype=tl.float64))
+                    dl = tl_tensor.init(tl.tensor(dl_.T, dtype=tl.float64))
+                    dr = tl_tensor.init(tl.tensor(dr_.T, dtype=tl.float64))
                     #field_ops = tuple(reversed(field_ops))
                     #Dchgs = tuple(reversed(Dchgs))
                     i = 1 - i
                     j = 1 - j
                 else:
-                    dl = tl_tensor(tl.tensor(dl_, dtype=tl.float64))
-                    dr = tl_tensor(tl.tensor(dr_, dtype=tl.float64))
+                    dl = tl_tensor.init(tl.tensor(dl_, dtype=tl.float64))
+                    dr = tl_tensor.init(tl.tensor(dr_, dtype=tl.float64))
                 if i == j:
                     # do monomer stuff
                     for chg in self.d_slices[i]:
                         #for frag, op in enumerate(field_ops):
                             #if op == "delta":
-                            #    delta = tl_tensor(tl.eye(n_occ[frag] + n_virt[frag], dtype=tl.float64))
+                            #    delta = tl_tensor.init(tl.eye(n_occ[frag] + n_virt[frag], dtype=tl.float64))
                             #else:
                         dens0 = dens[i][field_ops[0]][(chg, chg)]
                         #if i == 0:
@@ -917,7 +917,7 @@ class grads_and_hessian(object):
                                 mat[self.mat_slice[i], self.mat_slice[j]] += diagram(dl[self.d_slices[i][bra_chgi], self.d_slices[j][bra_chgj]],
                                                                         dr[self.d_slices[i][ket_chgi], self.d_slices[j][ket_chgj]],
                                                                         densi, densj, n_i1, perm)
-        return tl_tensor(tl.tensor(mat, dtype=tl.float64))
+        return tl_tensor.init(tl.tensor(mat, dtype=tl.float64))
     
     def two_p_dens(self, mat, dl_, dr_, dens):
         #mat = np.zeros(tuple(sum(n_occ) + sum(n_virt), sum(n_occ) + sum(n_virt)))
@@ -932,14 +932,14 @@ class grads_and_hessian(object):
             for perm in range(2):
                 i, j, k, l = key
                 if perm:
-                    dl = tl_tensor(tl.tensor(dl_.T, dtype=tl.float64))
-                    dr = tl_tensor(tl.tensor(dr_.T, dtype=tl.float64))
+                    dl = tl_tensor.init(tl.tensor(dl_.T, dtype=tl.float64))
+                    dr = tl_tensor.init(tl.tensor(dr_.T, dtype=tl.float64))
                     #field_ops = tuple(reversed(field_ops))
                     #Dchgs = tuple(reversed(Dchgs))
                     i, j, k, l = 1-i, 1-j, 1-k, 1-l
                 else:
-                    dl = tl_tensor(tl.tensor(dl_, dtype=tl.float64))
-                    dr = tl_tensor(tl.tensor(dr_, dtype=tl.float64))
+                    dl = tl_tensor.init(tl.tensor(dl_, dtype=tl.float64))
+                    dr = tl_tensor.init(tl.tensor(dr_, dtype=tl.float64))
                 if len(field_ops) == 1:
                     # do monomer stuff
                     for chg in self.d_slices[i]:
@@ -964,7 +964,7 @@ class grads_and_hessian(object):
                                                                         dl[self.d_slices[0 + perm][bra_chg0], self.d_slices[1 - perm][bra_chg1]],
                                                                         dr[self.d_slices[0 + perm][ket_chg0], self.d_slices[1 - perm][ket_chg1]],
                                                                         dens0, dens1, n_i1, perm), transpose)
-        return tl_tensor(tl.tensor(mat, dtype=tl.float64))
+        return tl_tensor.init(tl.tensor(mat, dtype=tl.float64))
     
     def build_s_inv_2(self, zero, S):  # build ints_symm.S ** (-2)
         for i in range(2):
@@ -972,7 +972,7 @@ class grads_and_hessian(object):
                 zero[self.mat_slice[i], self.mat_slice[j]] = raw(S[i, j])
         s_inv = precise_numpy_inverse(zero)  # this only works if s is actually close to the identity
         s_inv_2_raw = s_inv @ s_inv
-        return {(i, j): tl_tensor(tl.tensor(s_inv_2_raw[self.mat_slice[i], self.mat_slice[j]], dtype=tl.float64)) for i in range(2) for j in range(2)}
+        return {(i, j): tl_tensor.init(tl.tensor(s_inv_2_raw[self.mat_slice[i], self.mat_slice[j]], dtype=tl.float64)) for i in range(2) for j in range(2)}
 
     def orb_grads(self, dl, dr, dens, ints, off_diag=True):
         print("start orb_grad routine")
