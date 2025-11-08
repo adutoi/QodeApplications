@@ -19,7 +19,7 @@
 import copy
 import itertools
 from qode.util import struct
-from permute import permutation_subs
+from qode.math.permute import permutation_subs
 from primitives import index, h_int, v_int, s_int, r_int, delta, c_op, a_op, scalar_sum
 
 # this syntax because operations performed by classes, but not in place
