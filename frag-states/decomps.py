@@ -2,14 +2,11 @@ import sys
 import pickle
 import itertools
 import numpy
-import tensorly
-from qode.util.PyC       import Double
-from qode.math.tensornet import raw, tl_tensor, tensor_sum
+from qode.math.tensornet import evaluate, tensor_sum
+import XR_tensor
 
 frag = sys.argv[1]
 
-def tens_wrap(tensor):
-    return tl_tensor.init(tensorly.tensor(tensor, dtype=Double.tensorly))
 
 
 Be = pickle.load(open(f"rho/Be-Be_{frag}_6-31G_nth_compress.pkl", "rb"))
@@ -20,8 +17,8 @@ projC[0], projC[9] = 1, 1
 for p in range(18):
     if projC[p]!=1:
         projV[p] = 1
-projC = tens_wrap(numpy.diag(projC))
-projV = tens_wrap(numpy.diag(projV))
+projC = XR_tensor.init(numpy.diag(projC))
+projV = XR_tensor.init(numpy.diag(projV))
 
 op_loop = list(Be.rho.keys())    # because we add to the ...
 for op_string in op_loop:        # ... dict while looping
@@ -47,8 +44,8 @@ for op_string in op_loop:        # ... dict while looping
             Be.rho[op_string+"V"][charges] = tmp
 #Be.rho["caC"]   = Be.rho["caC"  ][(0,0)][0,0,:,:]        # ok, but makes ...
 #Be.rho["ccaaC"] = Be.rho["ccaaC"][(0,0)][0,0,:,:,:,:]    # ... tests slower
-Be.rho["caC"]   = tens_wrap(raw(Be.rho["caC"  ][(0,0)][0,0,:,:]))
-Be.rho["ccaaC"] = tens_wrap(raw(Be.rho["ccaaC"][(0,0)][0,0,:,:,:,:]))
+Be.rho["caC"]   = evaluate(Be.rho["caC"  ][(0,0)][0,0,:,:])
+Be.rho["ccaaC"] = evaluate(Be.rho["ccaaC"][(0,0)][0,0,:,:,:,:])
 
 def test_formulas(reference, formulas, *, description=None, verbose=False):
     if description:  print(description)
@@ -58,10 +55,10 @@ def test_formulas(reference, formulas, *, description=None, verbose=False):
         for j in range(reference.shape[1]):
             extra = ""
             print(f"{i:2d}, {j:2d}:", end="")
-            ref_val = raw(reference[i,j,...])
+            ref_val = XR_tensor.raw(reference[i,j,...])
             ref_norm  = numpy.linalg.norm(ref_val)
             for header,formula in formulas:
-                test_val  = raw(formula[i,j,...])
+                test_val  = XR_tensor.raw(formula[i,j,...])
                 test_norm = numpy.linalg.norm(test_val)
                 diff_norm = numpy.linalg.norm(test_val - ref_val)
                 error = 100 * diff_norm/ref_norm    

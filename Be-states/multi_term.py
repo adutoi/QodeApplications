@@ -20,8 +20,9 @@
 # If the idea is every resurrected, look in .../Qode/Calculations/2024-Jun-422172c150ab-multi_term
 
 import numpy
-from qode.math.tensornet import raw, evaluate
+from qode.math.tensornet import evaluate
 from qode.math import space, numpy_space, vector_set, gram_schmidt
+import XR_tensor
 
 def _SVD(M, big, print_info):
     A = M
@@ -61,7 +62,7 @@ def _SVD(M, big, print_info):
     return U, s, Vh
 
 def svd(tensor, indices_A, indices_B=None, normalized=False, big=10**5, print_info=False, tens_wrap=None):
-    nparray_Nd = raw(tensor)
+    nparray_Nd = XR_tensor.raw(tensor)
     if indices_B is None:  indices_B = []
     all_free_indices = list(indices_A) + list(indices_B)
     if list(sorted(all_free_indices))!=list(range(len(nparray_Nd.shape))):
@@ -126,13 +127,13 @@ def multi_term(tensor, num_c, num_a, thresh, tens_wrap):
     value = single_term(tensor, num_c, num_a, tens_wrap)
     test = evaluate(value)
     difference = evaluate(tensor - test)
-    error = numpy.linalg.norm(numpy.array(raw(difference)))
+    error = numpy.linalg.norm(numpy.array(XR_tensor.raw(difference)))
     while error>thresh:
         print(error)
         delta = single_term(difference, num_c, num_a, tens_wrap)
         value += delta
         test = evaluate(test + delta)
         difference = evaluate(tensor - test)
-        error = numpy.linalg.norm(numpy.array(raw(difference)))
+        error = numpy.linalg.norm(numpy.array(XR_tensor.raw(difference)))
     print(error)
     return value

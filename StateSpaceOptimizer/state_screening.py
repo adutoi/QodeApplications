@@ -16,11 +16,10 @@
 #    along with QodeApplications.  If not, see <http://www.gnu.org/licenses/>.
 #
  
-from qode.math.tensornet import raw#, tl_tensor
+from XR_tensor import raw
 
 #import torch
 import numpy as np
-#import tensorly as tl
 from itertools import combinations
 
 #import pickle

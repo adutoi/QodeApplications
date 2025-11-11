@@ -18,7 +18,7 @@
 
 import numpy
 from qode.util.PyC       import Double
-from qode.math.tensornet import tensor_sum, raw
+from qode.math.tensornet import tensor_sum
 from qode.math           import svd_decomposition
 from qode.many_body.fermion_field import field_op
 
@@ -50,10 +50,10 @@ def compress(rho_ij, op_string, bra_chg, ket_chg, i, j, options, natural_orbs, a
             indices_p[p] = "p"
             rho_ij = rho_ij(*indices_p) @ natural_orbs[ket_chg][j]("p",p)
             p += 1
-        rho_ij = numpy.array(raw(rho_ij), dtype=Double.numpy, order="C")
+        rho_ij = numpy.array(tens_wrap.raw(rho_ij), dtype=Double.numpy, order="C")
         if antisymm_abstract:
             field_op.asymmetrize(op_string, rho_ij)
-        rho_ij = tens_wrap(rho_ij)
+        rho_ij = tens_wrap.init(rho_ij)
     if c_count>0 and a_count>0 and options.method=="SVD":
         try:
             thresh = options.thresh
@@ -77,7 +77,7 @@ def compress(rho_ij, op_string, bra_chg, ket_chg, i, j, options, natural_orbs, a
         if options.divide=="ca-ca-L":    # SVD-compress the densities, separating one c an a index from the others
             left_indices = [c_count-1, len(indices)-1]
         right_indices = [i for i in indices if i not in left_indices]
-        rho_ij = svd_decomposition(numpy.array(raw(rho_ij), dtype=Double.numpy, order="C"), left_indices, right_indices, thresh=thresh, wrapper=tens_wrap)
+        rho_ij = svd_decomposition(numpy.array(tens_wrap.raw(rho_ij), dtype=Double.numpy, order="C"), left_indices, right_indices, thresh=thresh, wrapper=tens_wrap.init)
     if natural_orbs is not None:
         p = 0
         for _ in range(c_count):

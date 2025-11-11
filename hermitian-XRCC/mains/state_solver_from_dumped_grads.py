@@ -18,7 +18,6 @@
 
 from   get_ints import get_ints
 from   get_xr_result import get_xr_states, get_xr_H, get_xr_states_from_H
-from qode.math.tensornet import raw, tl_tensor
 import qode.util
 
 #import torch

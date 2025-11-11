@@ -17,13 +17,13 @@
 #
 
 import numpy
-import tensorly
 import multiprocessing
 from qode.util           import sort_eigen
 from qode.util.PyC       import Double
-from qode.math.tensornet import tl_tensor, tensor_sum, raw
+from qode.math.tensornet import tensor_sum
 from qode.many_body.fermion_field import field_op
 import compress
+import XR_tensor
 
 # states[n].coeffs  = [numpy.array, numpy.array, . . .]   One (effectively 1D) array of coefficients per n-electron state
 # states[n].configs = [int, int, . . . ]                  Each int represents a configuration (has the same length as arrays in list above)
@@ -67,17 +67,14 @@ def _token_parser(options):
         return answer
     return value
 
-def _tens_wrap(tensor):
-    return tl_tensor.init(tensorly.tensor(tensor, dtype=Double.tensorly))
-
 def _vec(i, length):
     v = numpy.zeros((length,), dtype=Double.numpy, order="C")
     v[i] = 1
-    return _tens_wrap(v)
+    return XR_tensor.init(v)
 
 def _compress(args):
     rho_ij, op_string, bra_chg, ket_chg, i, j, n_bras, n_kets, compress_args, natural_orbs, antisymm_abstract = args
-    return i, n_bras, j, n_kets, compress.compress(rho_ij, op_string, bra_chg, ket_chg, i, j, compress_args, natural_orbs, antisymm_abstract, _tens_wrap)
+    return i, n_bras, j, n_kets, compress.compress(rho_ij, op_string, bra_chg, ket_chg, i, j, compress_args, natural_orbs, antisymm_abstract, XR_tensor.init)
 
 
 
@@ -140,14 +137,14 @@ def _build_tensors(states, n_orbs, n_elec_0, thresh, options, xr_order, dets, n_
                     if ((options("bra_det") or options("ket_det")) and op_string == "ccaa") and (bra_chg == -1 and ket_chg == -1):
                         #print("bra det -1 -1 ccaa")
                         # only do this for ccaa -1 -1
-                        tmp = _tens_wrap(numpy.ones(n_orbs) * 1e-10)  # choosing this as actual zeros leads to numerical inconsistencies in the gradients
+                        tmp = XR_tensor.init(numpy.ones(n_orbs) * 1e-10)  # choosing this as actual zeros leads to numerical inconsistencies in the gradients
                         print("this density was taken as an almost zero tensor. Beware, that this is an approximation!")
                         rho = [[tmp(0) @ tmp(1) @ tmp(2) @ tmp(3) for dummy in range(len(ket_coeffs))] for dummy2 in range(len(bra_coeffs))]
                         densities[op_string][bra_chg,ket_chg] = rho
                     else:
                         # bit of a waste here ... computes i<j and i>j for chg_diff=0
                         rho = field_op.build_densities(op_string, n_orbs, bra_coeffs, ket_coeffs, bra_configs, ket_configs, thresh, wisdom=None, antisymmetrize=antisymm_numerical, n_threads=n_threads)
-                        densities[op_string][bra_chg,ket_chg] = [[_tens_wrap(rho_ij) for rho_ij in rho_i] for rho_i in rho]
+                        densities[op_string][bra_chg,ket_chg] = [[XR_tensor.init(rho_ij) for rho_ij in rho_i] for rho_i in rho]
 
     print("Postprocessing ...")
 
@@ -161,10 +158,10 @@ def _build_tensors(states, n_orbs, n_elec_0, thresh, options, xr_order, dets, n_
             rho = densities["ca"][chg,chg]              # bra/ket charges must be the same for this string ...
             natural_orbs_chg = []
             for i in range(len(rho)):                   # ... which means the number of bras and kets are the same
-                rho_ii = numpy.array(raw(rho[i][i]), dtype=Double.numpy, order="C")
+                rho_ii = numpy.array(XR_tensor.raw(rho[i][i]), dtype=Double.numpy, order="C")
                 #print(chg, i, "deviation from symmetric:", numpy.linalg.norm(rho_ii - rho_ii.T))
                 evals, evecs = sort_eigen(numpy.linalg.eigh(rho_ii), order="descending")
-                natural_orbs_chg += [_tens_wrap(evecs)]
+                natural_orbs_chg += [XR_tensor.init(evecs)]
             natural_orbs[chg] = natural_orbs_chg
 
     #if not options("bra_det"):
@@ -181,7 +178,7 @@ def _build_tensors(states, n_orbs, n_elec_0, thresh, options, xr_order, dets, n_
                 n_kets = len(rho_i)
                 for j,rho_ij in enumerate(rho_i):
                     if bra_chg!=ket_chg or i>=j:
-                        #rho_ij = compress.compress(rho_ij, op_string, bra_chg, ket_chg, i, j, compress_args, natural_orbs, antisymm_abstract, _tens_wrap)
+                        #rho_ij = compress.compress(rho_ij, op_string, bra_chg, ket_chg, i, j, compress_args, natural_orbs, antisymm_abstract, XR_tensor.init)
                         arguments += [(rho_ij, op_string, bra_chg, ket_chg, i, j, n_bras, n_kets, compress_args, natural_orbs, antisymm_abstract)]
             #if n_bras > 200 and op_string == "ccaa":
             if (options("bra_det") or options("ket_det")) or compress_args == None:  # better also decompose for equal charges, but with bras different from kets the accumulator needs to be populated differently
@@ -230,9 +227,9 @@ def _build_tensors(states, n_orbs, n_elec_0, thresh, options, xr_order, dets, n_
     densities["KetCoeffs"] = {}  # this name is misleading ... rename to Coeffs or StateCoeffs in next iteration
     for chg in states:
         if dets:
-            densities["KetCoeffs"][(chg,chg)] = _tens_wrap(numpy.einsum("kp,ip->ik", dets[chg], states[chg].coeffs))
+            densities["KetCoeffs"][(chg,chg)] = XR_tensor.init(numpy.einsum("kp,ip->ik", dets[chg], states[chg].coeffs))
         else:
-            densities["KetCoeffs"][(chg,chg)] = _tens_wrap(states[chg].coeffs)
+            densities["KetCoeffs"][(chg,chg)] = XR_tensor.init(states[chg].coeffs)
 
     print("Writing to hard drive ...")
     return densities

@@ -17,8 +17,8 @@
 #
 import numpy
 from qode.util import struct
-from qode.math.tensornet import raw
 from driver import main
+import XR_tensor
 
 
 
@@ -83,7 +83,7 @@ def test_it():
         for op_string in frag.rho:
             if op_string not in ("n_elec", "n_states"):
                 for chgs in frag.rho[op_string]:
-                    test_rho += [(chgs, numpy.linalg.norm(raw(frag.rho[op_string][chgs])))]
+                    test_rho += [(chgs, numpy.linalg.norm(XR_tensor.raw(frag.rho[op_string][chgs])))]
         test_frag += [test_rho]
         test += [test_frag]
 

@@ -17,13 +17,13 @@
 #
 
 import numpy
-import tensorly
 import multiprocessing
 from qode.util           import sort_eigen, indented
 from qode.util.PyC       import Double
-from qode.math.tensornet import tl_tensor, tensor_sum, raw, evaluate
+from qode.math.tensornet import tensor_sum, evaluate
 from qode.math.permute   import permutations_by_parity
 from qode.many_body.fermion_field import field_op
+import XR_tensor
 import compress_frags
 
 # states[n].coeffs  = [numpy.array, numpy.array, . . .]   One (effectively 1D) array of coefficients per n-electron state
@@ -31,17 +31,14 @@ import compress_frags
 
 
 
-def _tens_wrap(tensor):
-    return tl_tensor.init(tensorly.tensor(tensor, dtype=Double.tensorly))
-
 def _vec(i, length):
     v = numpy.zeros((length,), dtype=Double.numpy, order="C")
     v[i] = 1
-    return _tens_wrap(v)
+    return XR_tensor.init(v)
 
 def _compress(args):
     rho_ij, op_string, bra_chg, ket_chg, i, j, n_bras, n_kets, compress_args, natural_orbs, antisymm_abstract = args
-    return i, n_bras, j, n_kets, compress_frags.compress(rho_ij, op_string, bra_chg, ket_chg, i, j, compress_args, natural_orbs, antisymm_abstract, _tens_wrap)
+    return i, n_bras, j, n_kets, compress_frags.compress(rho_ij, op_string, bra_chg, ket_chg, i, j, compress_args, natural_orbs, antisymm_abstract, XR_tensor)
 
 # The antisymmetrize flag to field_op.build_densities takes forever, so set it to False and run this instead.
 def _antisymmetrize(antisymmetrize, tensor, op_string):
@@ -95,7 +92,7 @@ def _build_tensors(states, n_orbs, n_elec_0, op_strings, thresh, options, printo
                     #printout("  ", bra_chg, ket_chg, op_string)
                     # bit of a waste here ... computes i<j and i>j for chg_diff=0
                     rho = field_op.build_densities(op_string, n_orbs, bra_coeffs, ket_coeffs, bra_configs, ket_configs, thresh, wisdom=None, antisymmetrize=False, printout=indented(printdent), n_threads=n_threads)
-                    densities[op_string][bra_chg,ket_chg] = [[_antisymmetrize(antisymm_numerical, _tens_wrap(rho_ij), op_string) for rho_ij in rho_i] for rho_i in rho]
+                    densities[op_string][bra_chg,ket_chg] = [[_antisymmetrize(antisymm_numerical, XR_tensor.init(rho_ij), op_string) for rho_ij in rho_i] for rho_i in rho]
 
     printout("Postprocessing/compressing ...")
 
@@ -106,10 +103,10 @@ def _build_tensors(states, n_orbs, n_elec_0, op_strings, thresh, options, printo
             rho = densities["ca"][chg,chg]              # bra/ket charges must be the same for this string ...
             natural_orbs_chg = []
             for i in range(len(rho)):                   # ... which means the number of bras and kets are the same
-                rho_ii = numpy.array(raw(rho[i][i]), dtype=Double.numpy, order="C")
+                rho_ii = numpy.array(XR_tensor.raw(rho[i][i]), dtype=Double.numpy, order="C")
                 #printout(chg, i, "deviation from symmetric:", numpy.linalg.norm(rho_ii - rho_ii.T))
                 evals, evecs = sort_eigen(numpy.linalg.eigh(rho_ii), order="descending")
-                natural_orbs_chg += [_tens_wrap(evecs)]
+                natural_orbs_chg += [XR_tensor.init(evecs)]
             natural_orbs[chg] = natural_orbs_chg
 
     for op_string in densities:
@@ -125,7 +122,7 @@ def _build_tensors(states, n_orbs, n_elec_0, op_strings, thresh, options, printo
                 n_kets = len(rho_i)
                 for j,rho_ij in enumerate(rho_i):
                     if bra_chg!=ket_chg or i>=j:
-                        #rho_ij = compress_frags.compress(rho_ij, op_string, bra_chg, ket_chg, i, j, options.compress, natural_orbs, antisymm_abstract, _tens_wrap)
+                        #rho_ij = compress_frags.compress(rho_ij, op_string, bra_chg, ket_chg, i, j, options.compress, natural_orbs, antisymm_abstract, XR_tensor)
                         arguments += [(rho_ij, op_string, bra_chg, ket_chg, i, j, n_bras, n_kets, options.compress, natural_orbs, antisymm_abstract)]
             if pool is None:
                 values = [_compress(args) for args in arguments]

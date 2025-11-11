@@ -16,7 +16,7 @@
 #    along with QodeApplications.  If not, see <http://www.gnu.org/licenses/>.
 #
 import numpy    # needs to go when u100 finally cleaned up
-from qode.math.tensornet import raw
+from XR_tensor import raw
 from .diagram_hack import state_indices, no_result
 
 p, q, r, s, t, u, v, w = "pqrstuvw"    # some contraction indices for easier reading

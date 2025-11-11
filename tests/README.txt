@@ -1,5 +1,6 @@
 
 In order to run the tests, the following QodeApplications directories must be in the PYTHONPATH
+    XRbase
     hermitian-XRCC
     Be-states
     frag-states

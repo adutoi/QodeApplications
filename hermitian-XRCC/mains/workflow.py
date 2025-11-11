@@ -27,7 +27,6 @@ from get_ints import get_ints
 from get_xr_result import get_xr_states#, get_xr_H
 from state_solver import optimize_states
 from orbital_solver import optimize_orbs
-#from qode.math.tensornet import backend_contract_path#, raw, tl_tensor
 import qode.math.tensornet as tensornet
 #import qode.util
 from qode.util import timer, sort_eigen

@@ -15,7 +15,7 @@
 #    You should have received a copy of the GNU General Public License
 #    along with QodeApplications.  If not, see <http://www.gnu.org/licenses/>.
 #
-from qode.math.tensornet import raw
+from XR_tensor import raw
 from .diagram_hack import state_indices, no_result
 
 p, q, r, s, t, u, v, w = "pqrstuvw"    # some contraction indices for easier reading

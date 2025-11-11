@@ -15,9 +15,8 @@
 #    You should have received a copy of the GNU General Public License
 #    along with QodeApplications.  If not, see <http://www.gnu.org/licenses/>.
 #
-import tensorly
 from qode.util.dynamic_array import dynamic_array, cached
-from qode.math.tensornet     import evaluate, raw
+from qode.math.tensornet import evaluate
 
 
 

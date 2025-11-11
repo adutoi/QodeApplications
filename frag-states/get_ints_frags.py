@@ -16,7 +16,6 @@
 #    along with QodeApplications.  If not, see <http://www.gnu.org/licenses/>.
 #
 import numpy
-#import tensorly
 from qode.math import precise_numpy_inverse, linear_inner_product_space, iterative_biorthog, biorthog_iteration
 from qode.util import indented, no_print
 from qode.util.PyC import Double
@@ -25,7 +24,6 @@ from qode.atoms.integrals.fragments import AO_integrals, fragMO_integrals, bra_t
 
 def tensor_wrapper(rule):
     def wrap_it(*indices):
-        #return tensorly.tensor(rule(*indices), dtype=tensorly.float64)
         return rule(*indices)
     return wrap_it
 

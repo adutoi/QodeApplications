@@ -31,9 +31,9 @@
 
 
 
-from   get_ints import get_ints, tensorly_wrapper2, tens_diff
+from   get_ints import get_ints, tensor_wrapper2, tens_diff
 from   get_xr_result import get_xr_states, get_xr_H, get_xr_S
-from qode.math.tensornet import raw, tl_tensor, backend_contract_path
+from qode.math.tensornet import backend_contract_path
 #import qode.util
 from qode.util import timer, sort_eigen
 from qode.util.dynamic_array import dynamic_array, wrap, cached
@@ -45,6 +45,7 @@ from orb_grads import grads_and_hessian
 from get_ints_Be import direct_Sinv
 from state_solver import optimize_states
 #from .state_solver import optimize_states
+import XR_tensor
 
 #import torch
 import numpy as np
@@ -127,7 +128,7 @@ def optimize_orbs(max_iter, xr_order, BeN, ints, dens, dens_builder_stuff, monom
             state_coeffs_og.append({chg: state_obj[chg].coeffs for chg in state_obj})
             #print(Be.basis.MOcoeffs)
             #raise ValueError("stop here")
-        #print(type(raw(dens[0]["a"][(+1,0)])), raw(dens[0]["a"][(+1,0)]).shape)
+        #print(type(XR_tensor.raw(dens[0]["a"][(+1,0)])), XR_tensor.raw(dens[0]["a"][(+1,0)]).shape)
 
         ints = get_ints(BeN, project_core, int_timer)
         dens = [densities.build_tensors(*dens_builder_stuff[frag][:-1], options=density_options, n_threads=n_threads) for frag in range(2)]
@@ -354,12 +355,12 @@ def optimize_orbs(max_iter, xr_order, BeN, ints, dens, dens_builder_stuff, monom
             tmp_ints = {"S":{}, "T":{}, "U":{}, "V":{}}
             for i in range(2):
                 for j in range(2):
-                    tmp_ints["S"][i,j] = raw(ints_[0].S[i,j])
-                    tmp_ints["T"][i,j] = raw(ints_[0].T[i,j])
+                    tmp_ints["S"][i,j] = XR_tensor.raw(ints_[0].S[i,j])
+                    tmp_ints["T"][i,j] = XR_tensor.raw(ints_[0].T[i,j])
                     for k in range(2):
-                        tmp_ints["U"][i,j,k] = raw(ints_[0].U[i,j,k])
+                        tmp_ints["U"][i,j,k] = XR_tensor.raw(ints_[0].U[i,j,k])
                         for l in range(2):
-                            tmp_ints["V"][i,j,k,l] = raw(ints_[0].V[i,j,k,l])
+                            tmp_ints["V"][i,j,k,l] = XR_tensor.raw(ints_[0].V[i,j,k,l])
             #ints[0].S = as_frag_blocked_mat(as_raw_mat(tmp_ints["S"], BeN), BeN)
             ints_[0].S = tmp_ints["S"]
             ints_[0].T = tmp_ints["T"]
@@ -380,40 +381,40 @@ def optimize_orbs(max_iter, xr_order, BeN, ints, dens, dens_builder_stuff, monom
         # now the new integrals need to be wrapped as tensornet tensors again ...
         # if that works, uncomment the evaluation of the v terms in the gradient and hessian
 
-        def tensornet_wrap(dyn_arr, ind_num):
+        def XR_tensor_wrap(dyn_arr, ind_num):
             ret = {}
             #for key, ten in dict_.items():
-            #    ret[key] = tl_tensor.init(tl.tensor(ten, dtype=tl.float64))
+            #    ret[key] = XR_tensor.init(ten)
             for i in range(2):
                 for j in range(2):
                     if ind_num == 2:
-                        ret[i,j] = tl_tensor.init(tl.tensor(dyn_arr[i,j], dtype=tl.float64))
+                        ret[i,j] = XR_tensor.init(dyn_arr[i,j])
                     elif ind_num == 3:
                         for k in range(2):
-                            ret[i,j,k] = tl_tensor.init(tl.tensor(dyn_arr[i,j,k], dtype=tl.float64))
+                            ret[i,j,k] = XR_tensor.init(dyn_arr[i,j,k])
                     elif ind_num == 4:
                         for k in range(2):
                             for l in range(2):
-                                ret[i,j,k,l] = tl_tensor.init(tl.tensor(dyn_arr[i,j,k,l], dtype=tl.float64))
+                                ret[i,j,k,l] = XR_tensor.init(dyn_arr[i,j,k,l])
                     else:
                         raise ValueError(f"ind_num {ind_num} unknown")
             return ret
-            #return dynamic_array([cached, tensorly_wrapper2(int_timer), ret], int_ranges[ind_num])
+            #return dynamic_array([cached, tensor_wrapper2(int_timer), ret], int_ranges[ind_num])
         
-        new_ints_symm.S = tensornet_wrap(new_ints_symm.S, 2)
-        new_ints_symm.T = tensornet_wrap(new_ints_symm.T, 2)
-        new_ints_symm.U = tensornet_wrap(new_ints_symm.U, 3)
-        new_ints_symm.V = tensornet_wrap(new_ints_symm.V, 4)
-        new_ints_bior.S = tensornet_wrap(new_ints_bior.S, 2)
-        new_ints_bior.T = tensornet_wrap(new_ints_bior.T, 2)
-        new_ints_bior.U = tensornet_wrap(new_ints_bior.U, 3)
-        new_ints_bior.V = tensornet_wrap(new_ints_bior.V, 4)
-        new_ints_bior.V_half = tensornet_wrap(new_ints_bior.V_half, 4)
-        #new_ints_bior.V_half1 = tensornet_wrap(new_ints_bior.V_half1, 4)
-        #new_ints_bior.V_half2 = tensornet_wrap(new_ints_bior.V_half2, 4)
+        new_ints_symm.S = XR_tensor_wrap(new_ints_symm.S, 2)
+        new_ints_symm.T = XR_tensor_wrap(new_ints_symm.T, 2)
+        new_ints_symm.U = XR_tensor_wrap(new_ints_symm.U, 3)
+        new_ints_symm.V = XR_tensor_wrap(new_ints_symm.V, 4)
+        new_ints_bior.S = XR_tensor_wrap(new_ints_bior.S, 2)
+        new_ints_bior.T = XR_tensor_wrap(new_ints_bior.T, 2)
+        new_ints_bior.U = XR_tensor_wrap(new_ints_bior.U, 3)
+        new_ints_bior.V = XR_tensor_wrap(new_ints_bior.V, 4)
+        new_ints_bior.V_half = XR_tensor_wrap(new_ints_bior.V_half, 4)
+        #new_ints_bior.V_half1 = XR_tensor_wrap(new_ints_bior.V_half1, 4)
+        #new_ints_bior.V_half2 = XR_tensor_wrap(new_ints_bior.V_half2, 4)
 
-        #new_ints_bior.V_diff = dynamic_array([cached, tensorly_wrapper2(int_timer), tens_diff(new_ints_bior.V_half, new_ints_bior.V)], new_ints_bior.V.ranges)
-        new_ints_bior.V_diff = dynamic_array([cached, tensorly_wrapper2(int_timer), tens_diff(new_ints_bior.V_half, new_ints_bior.V)], int_ranges[4])
+        #new_ints_bior.V_diff = dynamic_array([cached, tensor_wrapper2(int_timer), tens_diff(new_ints_bior.V_half, new_ints_bior.V)], new_ints_bior.V.ranges)
+        new_ints_bior.V_diff = dynamic_array([cached, tensor_wrapper2(int_timer), tens_diff(new_ints_bior.V_half, new_ints_bior.V)], int_ranges[4])
         return new_ints_symm, new_ints_bior, ints_[2]
 
     #new_ints = transform_ints(U, ints)
@@ -470,7 +471,7 @@ def optimize_orbs(max_iter, xr_order, BeN, ints, dens, dens_builder_stuff, monom
             if isinstance(ten, np.ndarray):
                 return ten
             else:
-                return raw(ten)
+                return XR_tensor.raw(ten)
         s[:n[0], :n[0]] = eval(s_[0,0])
         s[:n[0], n[0]:] = eval(s_[0,1])
         s[n[0]:, :n[0]] = eval(s_[1,0])
@@ -672,7 +673,7 @@ def optimize_orbs(max_iter, xr_order, BeN, ints, dens, dens_builder_stuff, monom
     
     scale = 1 #/ 2
     """
-    #x_try, new_ints_try_t01 = x_new.copy(), raw(new_ints[0].T[0,1]).copy()
+    #x_try, new_ints_try_t01 = x_new.copy(), XR_tensor.raw(new_ints[0].T[0,1]).copy()
     dl_tmp, dr_tmp, ints_tmp = apply_x(x_prev, ints, scale)
     #print("diff x, diff t01", np.linalg.norm(x_try - x_new), np.linalg.norm(new_ints_try_t01 - new_ints[0].T[0,1]))
     while XR_energies[-1] > XR_energies[-2]:
@@ -756,7 +757,7 @@ def optimize_orbs(max_iter, xr_order, BeN, ints, dens, dens_builder_stuff, monom
         #print("x + x.T, norm(x) and norm(grad) from diis", np.linalg.norm(x_new + x_new.T), np.linalg.norm(x_new), grad_norm)
 
         scale = 1 #/ 2
-        #x_try, new_ints_try_t01 = x_new.copy(), raw(new_ints[0].T[0,1]).copy()
+        #x_try, new_ints_try_t01 = x_new.copy(), XR_tensor.raw(new_ints[0].T[0,1]).copy()
         dl_tmp, dr_tmp, ints_tmp = apply_x(x_new, new_ints, scale)
         #print("diff x, diff t01", np.linalg.norm(x_try - x_new), np.linalg.norm(new_ints_try_t01 - new_ints[0].T[0,1]))
         while XR_energies[-1] > XR_energies[-2]:

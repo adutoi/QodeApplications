@@ -18,7 +18,7 @@
 
 #from   get_ints import get_ints
 from   get_xr_result import get_xr_H#, get_xr_states
-from qode.math.tensornet import backend_contract_path#, raw, tl_tensor
+from qode.math.tensornet import backend_contract_path
 #import qode.util
 from qode.util import timer, sort_eigen
 from state_gradients import state_gradients, get_slices#, get_adapted_overlaps
@@ -505,7 +505,6 @@ def optimize_states(max_iter, xr_order, dens_builder_stuff, ints, n_occ, n_orbs,
             state_coeffs_optimized[frag][chg] = dens_builder_stuff[frag][0][chg].coeffs.copy()
             state_tracker[frag][chg] += max_add
         dens[frag] = densities.build_tensors(*dens_builder_stuff[frag][:-1], options=density_options, n_threads=n_threads)
-        #from qode.math.tensornet import raw
         #print(raw(dens[0]["ca"][(0,0)])[0, 0, :, :])
         #raise ValueError("stop here")
         return state_coeffs_optimized, dens_builder_stuff, dens
