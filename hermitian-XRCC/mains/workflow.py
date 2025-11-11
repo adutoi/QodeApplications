@@ -28,20 +28,14 @@ from get_xr_result import get_xr_states#, get_xr_H
 from state_solver import optimize_states
 from orbital_solver import optimize_orbs
 import qode.math.tensornet as tensornet
-#import qode.util
+from qode.util import struct
 from qode.util import timer, sort_eigen
 #from state_gradients import state_gradients, get_slices, get_adapted_overlaps
 from state_screening import state_screening, orthogonalize
 
-#import torch
 import numpy as np
-import tensorly as tl
 import pickle
 #import scipy as sp
-
-#torch.set_num_threads(4)
-#tl.set_backend("pytorch")
-#tl.set_backend("numpy")
 
 from   build_fci_states import get_fci_states
 #from build_Be_rho import build_Be_rho
@@ -51,12 +45,7 @@ import os
 
 os.environ["OMP_NUM_THREADS"] = "4"
 
-tl.plugins.use_opt_einsum()
-tensornet.backend_contract_path(True)
-
 np.set_printoptions(legacy="1.21")  # this gets rid of the print update in numpy 2
-
-class empty(object):  pass  # for pickle load initialization without get_fci_states
 
 def run_xr(displacement, max_iter, xr_order_final, xr_order_solver=0, dens_filter_thresh_solver=1e-7, orb_max_iter=0, target_state=0,
            single_thresh=1/5, double_thresh=1/3.5, triple_thresh=1/2.5, sp_thresh=1/1.1, grad_level="herm", state_prep=False, backend="psi4",
@@ -91,7 +80,7 @@ def run_xr(displacement, max_iter, xr_order_final, xr_order_solver=0, dens_filte
         if len(load_ref) > 0:
             Be.basis.MOcoeffs = pickle.load(open(f"{load_ref}/check_mos_{m}.pkl", mode="rb"))
             for chg in monomer_charges[m]:
-                state_obj[chg] = empty()
+                state_obj[chg] = struct()
                 state_obj[chg].coeffs = pickle.load(open(f"{load_ref}/check_states_{m}_{chg}.pkl", mode="rb"))
                 state_obj[chg].configs = pickle.load(open(f"{load_ref}/check_configs_{m}_{chg}.pkl", mode="rb"))
         if len(dump_ref) > 0:
@@ -100,10 +89,10 @@ def run_xr(displacement, max_iter, xr_order_final, xr_order_solver=0, dens_filte
                 pickle.dump(state_obj[chg].coeffs, open(f"{dump_ref}/check_states_{m}_{chg}.pkl", mode="wb"))
                 pickle.dump(state_obj[chg].configs, open(f"{dump_ref}/check_configs_{m}_{chg}.pkl", mode="wb"))
         """
-        frag0 = empty()
+        frag0 = struct()
         frag0.atoms = [("Be",[0,0,0])]
         frag0.n_elec_ref = 4	# The number of electrons in the reference state of the monomer ("cation (+1)" and "anion (-1)" and technically interpreted relative to the reference, not zero, as would be the chemical definition)
-        frag0.basis = empty()
+        frag0.basis = struct()
         frag0.basis.AOcode = "6-31g"#basis_label
         frag0.basis.n_spatial_orb = 9#n_spatial_orb
         frag0.basis.MOcoeffs = np.identity(frag0.basis.n_spatial_orb)    # rest of code assumes spin-restricted orbitals
@@ -116,7 +105,7 @@ def run_xr(displacement, max_iter, xr_order_final, xr_order_solver=0, dens_filte
         state_obj = {}
         for chg in monomer_charges[m]:
             #pickle.dump(state_obj[chg].coeffs, open(f"check_states_{m}_{chg}.pkl", mode="wb"))
-            state_obj[chg] = empty()
+            state_obj[chg] = struct()
             state_obj[chg].coeffs = pickle.load(open(f"check_states_0_{chg}.pkl", mode="rb")).copy()
             #pickle.dump(state_obj[chg].configs, open(f"check_configs_{m}_{chg}.pkl", mode="wb"))
             state_obj[chg].configs = pickle.load(open(f"check_configs_0_{chg}.pkl", mode="rb")).copy()

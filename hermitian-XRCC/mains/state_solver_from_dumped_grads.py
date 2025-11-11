@@ -15,19 +15,12 @@
 #    You should have received a copy of the GNU General Public License
 #    along with QodeApplications.  If not, see <http://www.gnu.org/licenses/>.
 #
-
 from   get_ints import get_ints
 from   get_xr_result import get_xr_states, get_xr_H, get_xr_states_from_H
 import qode.util
 
-#import torch
 import numpy as np
-import tensorly as tl
 import pickle
-
-#torch.set_num_threads(4)
-#tl.set_backend("pytorch")
-#tl.set_backend("numpy")
 
 # choose which density routine to use in the following
 # old and fast

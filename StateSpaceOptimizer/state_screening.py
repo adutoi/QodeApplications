@@ -18,7 +18,6 @@
  
 from XR_tensor import raw
 
-#import torch
 import numpy as np
 from itertools import combinations
 

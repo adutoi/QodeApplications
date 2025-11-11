@@ -23,8 +23,6 @@
 #import sys
 #import pickle
 import numpy
-#import torch
-#import tensorly
 import qode.util
 import qode.math
 import excitonic
@@ -42,11 +40,7 @@ from qode.util import struct, timer
 from precontract import precontract
 import diagram_lists as D   # sorry this is so ugly ... just making it run - fix with some find and replace
 
-# needed for unpickling?!
-#class empty(object):  pass     # Basically just a dictionary class
 
-#torch.set_num_threads(4)
-#tensorly.set_backend("pytorch")
 
 def get_xr_H(ints, dens, xr_order, monomer_charges, bra_det=False, ket_det=False):
     diag_timer = timer()
@@ -57,8 +51,6 @@ def get_xr_H(ints, dens, xr_order, monomer_charges, bra_det=False, ket_det=False
     #integral_timings = timer()
     #diagram_timings = timer()
     #precontract_timings = timer()
-    #qode.math.tensornet.initialize_timer()
-    #qode.math.tensornet.tensorly_backend.initialize_timer()
 
     #global_timings.start()
     

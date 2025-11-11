@@ -27,12 +27,12 @@ from get_ints_Be import get_ints
 from qode.atoms.integrals.fragments import unblock_2, unblock_last2, unblock_4
 from qode.many_body.fermion_field import CI_space_traits, field_op_ham, configurations
 import qode.util
+from qode.util import struct
 from qode.util.PyC import Double
 import densities
 import pickle
 
 def get_fci_states(dist, n_state_list=[(+1, 4), (0, 11), (-1, 8)], backend="psi4", monomer_charges=[[0, +1, -1], [0, +1, -1]]):
-    class empty(object):  pass
 
 
     #basis_label = "cc-pvtz"  # according to alavi paper aug-cc-pvtz should be slightly better
@@ -46,10 +46,10 @@ def get_fci_states(dist, n_state_list=[(+1, 4), (0, 11), (-1, 8)], backend="psi4
 
 
 
-    frag0 = empty()
+    frag0 = struct()
     frag0.atoms = [("Be",[0,0,0])]
     frag0.n_elec_ref = 4	# The number of electrons in the reference state of the monomer ("cation (+1)" and "anion (-1)" and technically interpreted relative to the reference, not zero, as would be the chemical definition)
-    frag0.basis = empty()
+    frag0.basis = struct()
     frag0.basis.AOcode = basis_label
     frag0.basis.n_spatial_orb = n_spatial_orb
     frag0.basis.MOcoeffs = numpy.identity(frag0.basis.n_spatial_orb)    # rest of code assumes spin-restricted orbitals
@@ -78,7 +78,7 @@ def get_fci_states(dist, n_state_list=[(+1, 4), (0, 11), (-1, 8)], backend="psi4
 
         states = {}
         for charge, n_states in n_state_list:
-            states[charge] = empty()
+            states[charge] = struct()
             states[charge].coeffs = []
             states[charge].configs = []
             # charges under consideration
@@ -232,13 +232,13 @@ def get_fci_states(dist, n_state_list=[(+1, 4), (0, 11), (-1, 8)], backend="psi4
                 print(evals)
                 #print(evecs)
 
-                states[charge] = empty()
+                states[charge] = struct()
                 states[charge].configs = configs
                 states[charge].coeffs = [i.v for i in evecs]
             else:  # the cation matrix cannot be diagonalized with lanczos for Be with frozen core
                 evals, evecs = qode.util.sort_eigen(numpy.linalg.eigh(Hmat))
                 print(evals[:n_subset])
-                states[charge] = empty()
+                states[charge] = struct()
                 states[charge].configs = configs
                 states[charge].coeffs = [evecs[:,i] for i in range(n_subset)]
 

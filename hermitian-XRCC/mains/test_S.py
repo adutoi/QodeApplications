@@ -24,8 +24,6 @@ import time
 import sys
 import pickle
 import numpy
-#import torch
-import tensorly
 import qode.util
 from qode.util import struct, timer
 import qode.math
@@ -35,12 +33,6 @@ import XR_term                  # knows how to use ^this information to pack a m
 import S_diagrams               # contains definitions of actual diagrams needed for S operator in BO rep
 from   get_ints import get_ints
 from precontract import precontract
-
-# needed for unpickling?!
-class empty(object):  pass     # Basically just a dictionary class
-
-#torch.set_num_threads(4)
-#tensorly.set_backend("pytorch")
 
 #########
 # Load data

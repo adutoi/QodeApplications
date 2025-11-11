@@ -38,7 +38,7 @@ def _vec(i, length):
 
 def _compress(args):
     rho_ij, op_string, bra_chg, ket_chg, i, j, n_bras, n_kets, compress_args, natural_orbs, antisymm_abstract = args
-    return i, n_bras, j, n_kets, compress_frags.compress(rho_ij, op_string, bra_chg, ket_chg, i, j, compress_args, natural_orbs, antisymm_abstract, XR_tensor)
+    return i, n_bras, j, n_kets, compress_frags.compress(rho_ij, op_string, bra_chg, ket_chg, i, j, compress_args, natural_orbs, antisymm_abstract)
 
 # The antisymmetrize flag to field_op.build_densities takes forever, so set it to False and run this instead.
 def _antisymmetrize(antisymmetrize, tensor, op_string):
@@ -122,7 +122,7 @@ def _build_tensors(states, n_orbs, n_elec_0, op_strings, thresh, options, printo
                 n_kets = len(rho_i)
                 for j,rho_ij in enumerate(rho_i):
                     if bra_chg!=ket_chg or i>=j:
-                        #rho_ij = compress_frags.compress(rho_ij, op_string, bra_chg, ket_chg, i, j, options.compress, natural_orbs, antisymm_abstract, XR_tensor)
+                        #rho_ij = compress_frags.compress(rho_ij, op_string, bra_chg, ket_chg, i, j, options.compress, natural_orbs, antisymm_abstract)
                         arguments += [(rho_ij, op_string, bra_chg, ket_chg, i, j, n_bras, n_kets, options.compress, natural_orbs, antisymm_abstract)]
             if pool is None:
                 values = [_compress(args) for args in arguments]

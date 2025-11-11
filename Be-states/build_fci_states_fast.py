@@ -30,13 +30,13 @@ from CI_space_traits import CI_space_traits
 import field_op_ham
 import configurations
 import qode.util
+from qode.util import struct
 from qode.util.PyC import Double
 import densities_old
 import pickle
 
 
 def get_fci_states(dist):
-    class empty(object):  pass
 
     basis_label = "6-31G"
     n_spatial_orb = 9
@@ -46,10 +46,10 @@ def get_fci_states(dist):
 
 
 
-    frag0 = empty()
+    frag0 = struct()
     frag0.atoms = [("Be",[0,0,0])]
     frag0.n_elec_ref = 4	# The number of electrons in the reference state of the monomer ("cation (+1)" and "anion (-1)" and technically interpreted relative to the reference, not zero, as would be the chemical definition)
-    frag0.basis = empty()
+    frag0.basis = struct()
     frag0.basis.AOcode = basis_label
     frag0.basis.n_spatial_orb = n_spatial_orb
     frag0.basis.MOcoeffs = numpy.identity(frag0.basis.n_spatial_orb)    # rest of code assumes spin-restricted orbitals
@@ -107,7 +107,7 @@ def get_fci_states(dist):
         print(evals)
         print(evals[0])
 
-        states[charge] = empty()
+        states[charge] = struct()
         states[charge].configs = configs
         states[charge].coeffs = [evecs[:,i] for i in range(n_subset)]
 

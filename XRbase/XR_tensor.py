@@ -42,6 +42,13 @@ import qode.math.tensornet as tensornet
 # For future notes, maybe we should speak of abstact (tensornet), concrete (tensorly), and
 # backend (numpy, pytorch).
 
+#import torch
+#torch.set_num_threads(4)
+#tensorly.set_backend("pytorch")
+tensorly.set_backend("numpy")
+tensorly.plugins.use_opt_einsum()
+tensornet.backend_contract_path(True)
+
 def init(raw_tensor):
     return tensornet.tl_tensor.init(tensorly.tensor(raw_tensor, dtype=Double.tensorly))
 

@@ -33,7 +33,6 @@
 
 from   get_ints import get_ints, tensor_wrapper2, tens_diff
 from   get_xr_result import get_xr_states, get_xr_H, get_xr_S
-from qode.math.tensornet import backend_contract_path
 #import qode.util
 from qode.util import timer, sort_eigen
 from qode.util.dynamic_array import dynamic_array, wrap, cached
@@ -47,24 +46,13 @@ from state_solver import optimize_states
 #from .state_solver import optimize_states
 import XR_tensor
 
-#import torch
 import numpy as np
 import scipy as sp
-import tensorly as tl
 import pickle
-#import scipy as sp
-
-#torch.set_num_threads(4)
-#tl.set_backend("pytorch")
-#tl.set_backend("numpy")
 
 #from   build_fci_states import get_fci_states
 import densities
 
-tl.plugins.use_opt_einsum()
-backend_contract_path(True)
-
-#class empty(object):  pass
 
 
 def optimize_orbs(max_iter, xr_order, BeN, ints, dens, dens_builder_stuff, monomer_charges=[[0, +1, -1], [0, +1, -1]]):#, pen_start=10):

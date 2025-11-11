@@ -61,14 +61,14 @@ def _SVD(M, big, print_info):
 
     return U, s, Vh
 
-def svd(tensor, indices_A, indices_B=None, normalized=False, big=10**5, print_info=False, tens_wrap=None):
+def svd(tensor, indices_A, indices_B=None, normalized=False, big=10**5, print_info=False):
     nparray_Nd = XR_tensor.raw(tensor)
     if indices_B is None:  indices_B = []
     all_free_indices = list(indices_A) + list(indices_B)
     if list(sorted(all_free_indices))!=list(range(len(nparray_Nd.shape))):
         raise RuntimeError("dimension mismatch")
     if len(indices_A)==0 or len(indices_B)==0:
-        return tens_wrap(nparray_Nd)
+        return XR_tensor.init(nparray_Nd)
     #
     nparray_Nd = nparray_Nd.transpose(all_free_indices)
     shape_A = nparray_Nd.shape[:len(indices_A)]
@@ -85,28 +85,28 @@ def svd(tensor, indices_A, indices_B=None, normalized=False, big=10**5, print_in
     A = (   U[:,:d] * Shalf).T
     B = (Vh.T[:,:d] * Shalf).T
     #
-    A = tens_wrap(A.reshape([d] + list(shape_A)))
-    B = tens_wrap(B.reshape([d] + list(shape_B)))
+    A = XR_tensor.init(A.reshape([d] + list(shape_A)))
+    B = XR_tensor.init(B.reshape([d] + list(shape_B)))
     #
     return A, B, s
 
-def _single_term_recur(tensor, n_axes, tens_wrap):
-    A, B, w = svd(tensor, [0], list(range(1,n_axes)), tens_wrap=tens_wrap)
+def _single_term_recur(tensor, n_axes):
+    A, B, w = svd(tensor, [0], list(range(1,n_axes)))
     n_axes -= 1
     if n_axes>1:
         indices = [0] + [slice(None)]*n_axes
-        return A[0,:], *_single_term_recur(B[tuple(indices)], n_axes, tens_wrap)
+        return A[0,:], *_single_term_recur(B[tuple(indices)], n_axes)
     else:
         return A[0,:], B[0,:]
 
-def single_term(tensor, num_c, num_a, tens_wrap):
+def single_term(tensor, num_c, num_a):
     permute = {
         0:  None,
         1:  {(0,): +1},
         2:  {(0,1): +1, (1,0): -1},
         3:  {(0,1,2): +1, (0,2,1): -1,  (1,0,2): -1, (1,2,0): +1, (2,1,0): -1, (2,0,1): +1},
     }
-    primitives = list(enumerate(_single_term_recur(tensor, num_c+num_a, tens_wrap)))
+    primitives = list(enumerate(_single_term_recur(tensor, num_c+num_a)))
     i,P = primitives[0]
     value0 = P(i)
     for i,P in primitives[1:]:
@@ -123,14 +123,14 @@ def single_term(tensor, num_c, num_a, tens_wrap):
         value += p * value0(*perm)
     return value
 
-def multi_term(tensor, num_c, num_a, thresh, tens_wrap):
-    value = single_term(tensor, num_c, num_a, tens_wrap)
+def multi_term(tensor, num_c, num_a, thresh):
+    value = single_term(tensor, num_c, num_a)
     test = evaluate(value)
     difference = evaluate(tensor - test)
     error = numpy.linalg.norm(numpy.array(XR_tensor.raw(difference)))
     while error>thresh:
         print(error)
-        delta = single_term(difference, num_c, num_a, tens_wrap)
+        delta = single_term(difference, num_c, num_a)
         value += delta
         test = evaluate(test + delta)
         difference = evaluate(tensor - test)

@@ -74,7 +74,7 @@ def _vec(i, length):
 
 def _compress(args):
     rho_ij, op_string, bra_chg, ket_chg, i, j, n_bras, n_kets, compress_args, natural_orbs, antisymm_abstract = args
-    return i, n_bras, j, n_kets, compress.compress(rho_ij, op_string, bra_chg, ket_chg, i, j, compress_args, natural_orbs, antisymm_abstract, XR_tensor.init)
+    return i, n_bras, j, n_kets, compress.compress(rho_ij, op_string, bra_chg, ket_chg, i, j, compress_args, natural_orbs, antisymm_abstract)
 
 
 
@@ -178,7 +178,7 @@ def _build_tensors(states, n_orbs, n_elec_0, thresh, options, xr_order, dets, n_
                 n_kets = len(rho_i)
                 for j,rho_ij in enumerate(rho_i):
                     if bra_chg!=ket_chg or i>=j:
-                        #rho_ij = compress.compress(rho_ij, op_string, bra_chg, ket_chg, i, j, compress_args, natural_orbs, antisymm_abstract, XR_tensor.init)
+                        #rho_ij = compress.compress(rho_ij, op_string, bra_chg, ket_chg, i, j, compress_args, natural_orbs, antisymm_abstract)
                         arguments += [(rho_ij, op_string, bra_chg, ket_chg, i, j, n_bras, n_kets, compress_args, natural_orbs, antisymm_abstract)]
             #if n_bras > 200 and op_string == "ccaa":
             if (options("bra_det") or options("ket_det")) or compress_args == None:  # better also decompose for equal charges, but with bras different from kets the accumulator needs to be populated differently

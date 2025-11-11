@@ -19,14 +19,12 @@
 p, q, r, s, i0, i1, j0, j1 = "p", "q", "r", "s", "i", "j", "k", "l"
 
 import numpy as np
-from qode.math.tensornet import evaluate, backend_contract_path
+from qode.math.tensornet import evaluate
 from qode.math import precise_numpy_inverse
-import tensorly as tl
 import time
 import XR_tensor
 
-tl.plugins.use_opt_einsum()
-backend_contract_path(True)
+
 
 def get_prefactor_exponent(n_occ, subsys_chgs):
     return (n_occ[1] - subsys_chgs[1][0])%2

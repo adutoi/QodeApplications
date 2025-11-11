@@ -18,29 +18,19 @@
 
 #from   get_ints import get_ints
 from   get_xr_result import get_xr_H#, get_xr_states
-from qode.math.tensornet import backend_contract_path
 #import qode.util
 from qode.util import timer, sort_eigen
 from state_gradients import state_gradients, get_slices#, get_adapted_overlaps
 from state_screening import state_screening, orthogonalize, conf_decoder, is_singlet
 
-#import torch
 import numpy as np
-import tensorly as tl
 #import pickle
 import scipy as sp
-
-#torch.set_num_threads(4)
-#tl.set_backend("pytorch")
-#tl.set_backend("numpy")
 
 #from   build_fci_states import get_fci_states
 import densities
 
-tl.plugins.use_opt_einsum()
-backend_contract_path(True)
 
-#class empty(object):  pass
 
 def optimize_states(max_iter, xr_order, dens_builder_stuff, ints, n_occ, n_orbs, frozen_orbs, additional_states,
                     conv_thresh=1e-6, dens_filter_thresh=1e-7, begin_from_state_prep=False, grad_level="herm", target_state=0,

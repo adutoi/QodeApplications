@@ -25,9 +25,6 @@ import time
 import sys
 import pickle
 import numpy
-#import torch
-import tensorly
-from tensorly import plugins as tensorly_plugins
 import qode.util
 from qode.util import struct, timer
 import qode.math
@@ -39,17 +36,10 @@ from   get_ints import get_ints
 from precontract import precontract
 import diagram_lists as D   # well, this is ugly ... fix later with some find and replace
 
-class empty(object):  pass     # needed for unpickling - remove when all Be-states drivers updated to use struct instead
-
 
 
 # This function is called at the end of the file
 def main(order, frags, displacement, project_core):
-
-    #torch.set_num_threads(4)
-    #tensorly.set_backend("pytorch")
-    tensorly_plugins.use_opt_einsum()
-    qode.math.tensornet.backend_contract_path(False)
 
     global_timings = timer()
     matrix_timings = timer()
