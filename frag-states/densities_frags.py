@@ -21,7 +21,7 @@ import tensorly
 import multiprocessing
 from qode.util           import sort_eigen, indented
 from qode.util.PyC       import Double
-from qode.math.tensornet import tl_tensor, tensor_sum, raw, evaluate
+from qode.math.tensornet import tl_tensor, raw, evaluate
 from qode.math.permute   import permutations_by_parity
 from qode.many_body.fermion_field import field_op
 import compress_frags
@@ -52,13 +52,13 @@ def _antisymmetrize(antisymmetrize, tensor, op_string):
         a_indices = list(range(c_count, c_count+a_count))
         c_perms = permutations_by_parity(c_indices)
         a_perms = permutations_by_parity(a_indices)
-        result = tensor_sum()
+        result = tl_tensor.zeros()    # takes its shape from summed terms
         for perm in c_perms[0]:    # all the + permutations of c indices
             result += tensor(*(perm+a_indices))
         for perm in c_perms[1]:    # all the - permutations of c indices
             result -= tensor(*(perm+a_indices))
         tensor = evaluate(result)      # this "layering/nesting" of the c and a permutations is ...
-        result = tensor_sum()          # ... more efficient than doing one big sum for both at the same time
+        result = tl_tensor.zeros()     # ... more efficient than doing one big sum for both at the same time
         for perm in a_perms[0]:    # all the + permutations of a indices
             result += tensor(*(c_indices+perm))
         for perm in a_perms[1]:    # all the - permutations of a indices
@@ -116,8 +116,8 @@ def _build_tensors(states, n_orbs, n_elec_0, op_strings, thresh, options, printo
         for bra_chg,ket_chg in densities[op_string]:
             printdent(op_string, bra_chg, ket_chg)
             rho = densities[op_string][bra_chg,ket_chg]
-            temp_ij = tensor_sum()
-            temp_ji = tensor_sum()
+            temp_ij = tl_tensor.zeros()    # takes its shape from summed terms
+            temp_ji = tl_tensor.zeros()    # takes its shape from summed terms
             #
             arguments = []
             n_bras = len(rho)

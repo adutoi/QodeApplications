@@ -21,7 +21,7 @@ import densities
 from get_xr_result import get_xr_states, get_xr_H
 from qode.util import sort_eigen
 import tensorly as tl
-from qode.math.tensornet import tl_tensor
+from qode.math.tensornet import tl_tensor, ContractionError
 import scipy as sp
 
 def get_adapted_overlaps(frag_map, dl, dr, d_slices):
@@ -45,7 +45,26 @@ def contract_dens_with_d(dens, dl, dr, frag_map, d_slices, state_dict):  # updat
             dens_inds = [num for num in range(2, len(dens[op_string][(bra_chg,ket_chg)].shape))]
             d_left  = tl_tensor.init(tl.tensor(dl[d_slices[frag_map[0]][bra_chg * (-1)], d_slices[frag_map[1]][bra_chg]], dtype=tl.float64))
             d_right = tl_tensor.init(tl.tensor(dr[d_slices[frag_map[0]][ket_chg * (-1)], d_slices[frag_map[1]][ket_chg]], dtype=tl.float64))
-            dens[op_string][(bra_chg,ket_chg)] = d_left(0,"i") @ dens[op_string][(bra_chg,ket_chg)]("i","j",*dens_inds) @ d_right(1,"j")
+            try:
+                dens[op_string][(bra_chg,ket_chg)] = d_left(0,"i") @ dens[op_string][(bra_chg,ket_chg)]("i","j",*dens_inds) @ d_right(1,"j")
+            except ContractionError as err:
+                spaces = " "*80
+                warning = "\n".join([
+                                     f"{spaces}W A R N I N G:  A contraction was discarded at",
+                                     f"{spaces}line 49 of StateSpaceOptimizer/state_gradients.py.",
+                                     f"{spaces}The contraction is malformed, but earlier versions",
+                                     f"{spaces}of tensornet did not notice because dimension",
+                                     f"{spaces}checking was only done at evaluation time, and this",
+                                     f"{spaces}one is never evaluated.  It has now been set to",
+                                     f"{spaces}\'None\', and the code still runs and gets the",
+                                     f"{spaces}right answer.  The dimensions of the three tensors",
+                                     f"{spaces}being contracted were:",
+                                     f"{spaces}{d_left.shape}, {dens[op_string][(bra_chg,ket_chg)].shape}, {d_right.shape}.",
+                                     f"{spaces}The original (ignored) error message is below.",
+                                     str(err)
+                                    ])
+                dens[op_string][(bra_chg,ket_chg)] = None
+                print(warning)
     for chg in d_slices[frag_map[0]]:
         dens["n_states"][chg] = state_dict[frag_map[0]][chg * (-1)]
 

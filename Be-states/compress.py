@@ -18,7 +18,7 @@
 
 import numpy
 from qode.util.PyC       import Double
-from qode.math.tensornet import tensor_sum, raw
+from qode.math.tensornet import tl_tensor, raw
 from qode.math           import svd_decomposition
 from qode.many_body.fermion_field import field_op
 from multi_term import multi_term
@@ -93,7 +93,7 @@ def compress(rho_ij, op_string, bra_chg, ket_chg, i, j, compress, natural_orbs, 
             p += 1
     if antisymm_abstract:
         if op_string in _permutations:
-            temp = tensor_sum()
+            temp = tl_tensor.zeros()    # takes its shape from summed terms
             for permutation in _permutations[op_string][+1]:
                 temp += rho_ij(*permutation)
             for permutation in _permutations[op_string][-1]:
