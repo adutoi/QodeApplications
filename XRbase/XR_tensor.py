@@ -18,6 +18,7 @@
 import tensorly
 from qode.util.PyC import Double
 import qode.math.tensornet as tensornet
+from meta_backend import meta_wrapper, meta_tensor
 
 # The problem we are trying to solve here is as follows:
 # 1. Very often we need to deal with "primitive" tensor data from elsewhere (integrals from other 
@@ -51,6 +52,12 @@ tensornet.backend_contract_path(True)
 
 def init(raw_tensor):
     return tensornet.tl_tensor.init(tensorly.tensor(raw_tensor, dtype=Double.tensorly))
-
 def raw(tensor):
     return tensornet.raw(tensor)
+
+"""
+def init(raw_tensor):
+    return meta_tensor.init(meta_wrapper(tensornet.tl_tensor.init(tensorly.tensor(raw_tensor, dtype=Double.tensorly))))
+def raw(tensor):
+    return tensornet.raw(tensornet.raw(tensor).internal)
+"""
