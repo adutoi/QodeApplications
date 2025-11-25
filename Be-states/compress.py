@@ -18,7 +18,6 @@
 
 import numpy
 from qode.util.PyC       import Double
-from qode.math.tensornet import tensor_sum
 from qode.math           import svd_decomposition
 from qode.many_body.fermion_field import field_op
 import XR_tensor
@@ -55,7 +54,7 @@ def compress(rho_ij, op_string, bra_chg, ket_chg, i, j, compress, natural_orbs, 
         rho_ij = numpy.array(XR_tensor.raw(rho_ij), dtype=Double.numpy, order="C")
         if antisymm_abstract:
             field_op.asymmetrize(op_string, rho_ij)
-        rho_ij = XR_tensor.raw(rho_ij)
+        rho_ij = XR_tensor.init(rho_ij)
     if c_count>0 and a_count>0 and compress[0]=="SVD":
         thresh = 1e-6
         if len(compress)>2:
@@ -94,7 +93,7 @@ def compress(rho_ij, op_string, bra_chg, ket_chg, i, j, compress, natural_orbs, 
             p += 1
     if antisymm_abstract:
         if op_string in _permutations:
-            temp = tensor_sum()
+            temp = XR_tensor.zeros()    # takes its shape from summed terms
             for permutation in _permutations[op_string][+1]:
                 temp += rho_ij(*permutation)
             for permutation in _permutations[op_string][-1]:

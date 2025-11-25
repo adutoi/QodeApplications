@@ -2,7 +2,7 @@ import sys
 import pickle
 import itertools
 import numpy
-from qode.math.tensornet import evaluate, tensor_sum
+from qode.math.tensornet import evaluate
 import XR_tensor
 
 frag = sys.argv[1]
@@ -99,7 +99,7 @@ def anti(tensor, groups):
                 permutations += [((-1)**perm_len, permutation)]
     #for sign,permutation in permutations:
     #    print(f"{sign:+d}  {permutation}")
-    result = tensor_sum()
+    result = XR_tensor.zeros()    # takes its shape from summed terms
     for sign,permutation in permutations:
         result += sign * tensor(*permutation)
     return result

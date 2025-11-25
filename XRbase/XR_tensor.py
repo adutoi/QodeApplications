@@ -52,6 +52,8 @@ tensornet.backend_contract_path(True)
 
 def init(raw_tensor):
     return tensornet.tl_tensor.init(tensorly.tensor(raw_tensor, dtype=Double.tensorly))
+def zeros():
+    return tensornet.tl_tensor.zeros()
 def raw(tensor):
     return tensornet.raw(tensor)
 

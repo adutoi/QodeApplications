@@ -20,7 +20,6 @@ import numpy
 import multiprocessing
 from qode.util           import sort_eigen
 from qode.util.PyC       import Double
-from qode.math.tensornet import tensor_sum
 from qode.many_body.fermion_field import field_op
 import compress
 import XR_tensor
@@ -169,8 +168,8 @@ def _build_tensors(states, n_orbs, n_elec_0, thresh, options, xr_order, dets, n_
         for bra_chg,ket_chg in densities[op_string]:
             print("<>", op_string, bra_chg, ket_chg)
             rho = densities[op_string][bra_chg,ket_chg]
-            temp_ij = tensor_sum()
-            temp_ji = tensor_sum()
+            temp_ij = XR_tensor.zeros()    # takes its shape from summed terms
+            temp_ji = XR_tensor.zeros()    # takes its shape from summed terms
             #
             arguments = []
             n_bras = len(rho)
