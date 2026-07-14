@@ -173,6 +173,14 @@ def get_fci_states(dist, n_state_list=[(+1, 4), (0, 11), (-1, 8)], backend="psi4
         if "vlx" in backend:
             frag0.basis.MOcoeffs = hf_result['C_alpha']
 
+        print("take MOs from hummr reference!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+        from dens_from_hummr import load_mos_from_hummr
+        frag0.basis.MOcoeffs = load_mos_from_hummr("/home/marco/hummr_tests/Be_fcore_mos.C0")
+        frag0.basis.MOcoeffs = frag0.basis.MOcoeffs[[0,1,3,4,5,2,6,7,8], :]  # row 2 to 5
+        frag0.basis.MOcoeffs = frag0.basis.MOcoeffs[:, [0,1,2,3,4,8,5,6,7]]  # col 8 to 5
+        #print(frag0.basis.MOcoeffs)
+        #raise ValueError("stop here")
+
         symm_ints, bior_ints, nuc_rep = get_ints([frag0], spin_ints=False, backend=backend)
         N, S, T, U, V = nuc_rep[0,0], symm_ints.S[0,0], symm_ints.T[0,0], symm_ints.U[0,0,0], symm_ints.V[0,0,0,0]
         E, e, _ = RHF_RoothanHall_Orthonormal(frag0.n_elec_ref, (T+U, V), thresh=1e-12)

@@ -33,6 +33,7 @@ catalog[1] = {
 
 catalog[2] = {
     "v0101":         build_diagram(v0101,        Dchgs=(0,0),   permutations=[(+1,(0,1))]),
+    #"v0110":         build_diagram(v0110,        Dchgs=(0,0),   permutations=[(+1,(0,1))]),  # this is for hummr densities
     "v0001":         build_diagram(v0001,        Dchgs=(-1,+1), permutations=[(+1,(0,1)),(-1,(1,0))]),
     "v0100":         build_diagram(v0100,        Dchgs=(+1,-1), permutations=[(+1,(0,1)),(-1,(1,0))]),
     "v0011":         build_diagram(v0011,        Dchgs=(-2,+2), permutations=[(+1,(0,1)),(+1,(1,0))]),

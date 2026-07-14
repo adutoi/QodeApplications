@@ -288,6 +288,9 @@ def state_screening(dens_builder_stuff, ints, monomer_charges, n_orbs, frozen, n
                     continue
                 if comb[0] in conf_decoder(total_gs_config_neutral, n_orbs):
                     continue
+                # the following condition filters out spin-flip excitations
+                #if (comb[0] < n_orbs and comb[1] >= n_orbs) or (comb[1] < n_orbs and comb[0] >= n_orbs):
+                #    continue
                 ex = total_gs_config_neutral + 2**comb[0] - 2**comb[1]
                 missing_states[frag][0][ex] = dens_builder_stuff[frag][0][0].configs.index(ex)
 
@@ -424,6 +427,8 @@ def state_screening(dens_builder_stuff, ints, monomer_charges, n_orbs, frozen, n
             missing_states[frag][-1][ex2] = dens_builder_stuff[frag][0][-1].configs.index(ex2)
 
     # neutral spin flip contributions (only for chg 0) from two el ints for single excitations (seems like these are only necessary for 1e-6 Hartree precision)
+    # they are already captured in the single excitation contributions from v0101
+    """
     gs = total_gs_config_neutral
     for frag in range(2):
         #for chg in range(min(monomer_charges[frag]), max(monomer_charges[frag])):  # loops over -1 and 0
@@ -444,6 +449,7 @@ def state_screening(dens_builder_stuff, ints, monomer_charges, n_orbs, frozen, n
             ex = ion + 2**elem
             if ex not in missing_states[frag][chg].keys():
                 missing_states[frag][chg][ex] = dens_builder_stuff[frag][0][chg].configs.index(ex)
+    """
 
     """
     for frag in range(2):

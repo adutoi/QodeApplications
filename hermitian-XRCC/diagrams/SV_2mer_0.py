@@ -21,7 +21,7 @@ from .diagram_hack import state_indices, no_result
 p, q, r, s, t, u, v, w = "pqrstuvw"    # some contraction indices for easier reading
 
 
-
+"""
 def v0101(X, contract_last=False):
     if no_result(X, contract_last):  return []
     i0, i1, j0, j1 = state_indices(contract_last)    # = 0, 1, 2, 3
@@ -55,6 +55,7 @@ def v0100(X, contract_last=False):
         @ X.c1(i1,j1,q)
         )
 
+
 def v0011(X, contract_last=False):
     if no_result(X, contract_last):  return []
     i0, i1, j0, j1 = state_indices(contract_last)    # = 0, 1, 2, 3
@@ -65,3 +66,73 @@ def v0011(X, contract_last=False):
           X.cc0pq_Vpq11(i0,j0,r,s)
         @ X.aa1(i1,j1,s,r)
         )
+"""
+import numpy as np
+
+def v0101(X, contract_last=False):
+    if no_result(X, contract_last):  return []
+    i0, i1, j0, j1 = state_indices(contract_last)    # = 0, 1, 2, 3
+    return 2 * raw(
+        #  X.ca0(i0,j0,p,r)
+        #@ X.ca1(i1,j1,q,s)
+        #@ X.v0101(p,q,r,s)
+          X.ca0pr_Vp1r1(i0,j0,q,s)
+        @ X.ca1(i1,j1,q,s)
+        - X.ca0ps_Vp11s(i0,j0,q,r)  # for RI decomp hummr dens antisymm doesn't hold
+        @ X.ca1(i1,j1,q,r)
+        )
+    #return np.zeros_like(ret)
+
+"""
+def v0110(X, contract_last=False):
+    if no_result(X, contract_last):  return []
+    i0, i1, j0, j1 = state_indices(contract_last)    # = 0, 1, 2, 3
+    return -2 * raw(
+        #  X.ca0(i0,j0,p,s)
+        #@ X.ca1(i1,j1,q,r)
+        #@ X.v0101(p,q,r,s)
+          X.ca0ps_Vp11s(i0,j0,q,r)
+        @ X.ca1(i1,j1,q,r)
+        )
+    #return np.zeros_like(ret)
+"""
+
+def v0001(X, contract_last=False):
+    if no_result(X, contract_last):  return []
+    i0, i1, j0, j1 = state_indices(contract_last)    # = 0, 1, 2, 3
+    return 1 * (-1)**(X.n_j0 + 1) * raw(
+        #  X.cca0(i0,j0,p,q,r)
+        #@ X.a1(i1,j1,s)
+        #@ X.v0001(p,q,r,s)
+          X.cca0pqr_Vpqr1(i0,j0,s)
+        @ X.a1(i1,j1,s)
+        - X.cca0pqs_Vpq1s(i0,j0,r)  # for RI decomp hummr dens antisymm doesn't hold
+        @ X.a1(i1,j1,r)
+        )
+    #return np.zeros_like(ret)
+
+def v0100(X, contract_last=False):
+    if no_result(X, contract_last):  return []
+    i0, i1, j0, j1 = state_indices(contract_last)    # = 0, 1, 2, 3
+    return 1 * (-1)**(X.n_j0) * raw(
+        #  X.caa0(i0,j0,p,s,r)
+        #@ X.c1(i1,j1,q)
+        #@ X.v0100(p,q,r,s)
+          X.caa0psr_Vp1rs(i0,j0,q)
+        @ X.c1(i1,j1,q)
+        - X.caa0qsr_V1qrs(i0,j0,p)  # for RI decomp hummr dens antisymm doesn't hold
+        @ X.c1(i1,j1,p)
+        )
+    #return np.zeros_like(ret)
+
+def v0011(X, contract_last=False):
+    if no_result(X, contract_last):  return []
+    i0, i1, j0, j1 = state_indices(contract_last)    # = 0, 1, 2, 3
+    return 1 * raw(
+        #  X.cc0(i0,j0,p,q)
+        #@ X.aa1(i1,j1,s,r)
+        #@ X.v0011(p,q,r,s)
+          X.cc0pq_Vpq11(i0,j0,r,s)
+        @ X.aa1(i1,j1,s,r)
+        )
+    #return np.zeros_like(ret)

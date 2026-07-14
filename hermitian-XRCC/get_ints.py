@@ -27,7 +27,7 @@ from qode.atoms.integrals.fragments import AO_integrals, fragMO_integrals, bra_t
 
 
 def tens_wrap(tensor):
-    return tl_tensor(tensorly.tensor(tensor, dtype=Double.tensorly))
+    return tl_tensor.init(tensorly.tensor(tensor, dtype=Double.tensorly))
 
 def tensorly_wrapper(timings):
     def wrapper(rule):
@@ -61,7 +61,22 @@ def tens_diff(A, B):
         return A[indices] - B[indices]
     return rule
 
+# TODO: move the antisymmetrization somewhere else
+def _spinAnti4_rule(V):
+    def spinAnti4(m1,m2,m3,m4):
+        tmp1 = V[m1,m2,m3,m4]
+        tmp2 = V[m1,m2,m4,m3]
+        return (1/4.) * (tmp1 - numpy.swapaxes(tmp2,2,3))
+    return spinAnti4
 
+def _spinAnti4half_rule(V):
+    def spinAnti4half(m1,m2,m3,m4):
+        tmp1 = V[m1,m2,m3,m4]
+        tmp2 = V[m1,m2,m4,m3]
+        tmp3 = V[m2,m1,m3,m4]
+        tmp4 = V[m2,m1,m4,m3]
+        return (1/4.) * ((tmp1-numpy.swapaxes(tmp2,2,3)) - numpy.swapaxes(tmp3-numpy.swapaxes(tmp4,2,3),0,1))
+    return spinAnti4half
 
 def direct_Sinv(fragments, S):
     S = as_raw_mat(S, fragments)
@@ -156,4 +171,21 @@ def get_ints(fragments, project_core=True, timings=None, spin_ints=True, backend
 
         return FragMO_spin_ints, BiFragMO_spin_ints, Nuc_repulsion(fragments).matrix
     else:
-        return FragMO_ints, BiFragMO_ints, Nuc_repulsion(fragments).matrix
+        FragMO_ints_wrapped = struct(
+            S = wrap(FragMO_ints.S,   [cached, tensorly_wrapper(timings)]),
+            T = wrap(FragMO_ints.T,   [cached, tensorly_wrapper(timings)]),
+            U = wrap(FragMO_ints.U,   [cached, tensorly_wrapper(timings)]),
+            V = wrap(FragMO_ints.V,   [cached, tensorly_wrapper2(timings)])
+        )
+        BiFragMO_ints_wrapped = struct(
+            S      = wrap(BiFragMO_ints.S, [cached, tensorly_wrapper(timings)]),
+            T      = wrap(BiFragMO_ints.T, [cached, tensorly_wrapper(timings)]),
+            U      = wrap(BiFragMO_ints.U, [cached, tensorly_wrapper(timings)]),
+            V      = wrap(BiFragMO_ints.V, [cached, tensorly_wrapper2(timings)]),  # eri without antisymmetry
+            #V = dynamic_array([cached, tensorly_wrapper2(timings), _spinAnti4_rule(BiFragMO_ints.V)], ranges=BiFragMO_ints.V.ranges),  # antisymmetrized eri
+            V_half = wrap(BiFragMO_ints.V_half, [cached, tensorly_wrapper2(timings)]),  # without antisymmetry
+            #V_half = dynamic_array([cached, tensorly_wrapper2(timings), _spinAnti4half_rule(BiFragMO_ints.V_half)], ranges=BiFragMO_ints.V.ranges),  # antisymmetrized
+            V_diff = dynamic_array([cached, tensorly_wrapper2(timings), tens_diff(BiFragMO_ints.V_half, BiFragMO_ints.V)], BiFragMO_ints.V.ranges)  # without antisymmetry
+            #V_diff = dynamic_array([cached, tensorly_wrapper2(timings), tens_diff(_spinAnti4half_rule(BiFragMO_ints.V_half), _spinAnti4_rule(BiFragMO_ints.V))], BiFragMO_ints.V.ranges)  # antisymmetrized
+        )
+        return FragMO_ints_wrapped, BiFragMO_ints_wrapped, Nuc_repulsion(fragments).matrix

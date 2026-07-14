@@ -21,7 +21,7 @@ from .diagram_hack import state_indices, no_result
 p, q, r, s, t, u, v, w = "pqrstuvw"    # some contraction indices for easier reading
 
 
-
+import numpy as np
 def t01(X, contract_last=False):
     if no_result(X, contract_last):  return []
     i0, i1, j0, j1 = state_indices(contract_last)    # = 0, 1, 2, 3
@@ -32,3 +32,4 @@ def t01(X, contract_last=False):
           X.c0p_Tp1(i0,j0,q)
         @ X.a1(i1,j1,q)
         )
+    #return np.zeros_like(ret)

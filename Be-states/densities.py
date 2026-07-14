@@ -21,7 +21,7 @@ import tensorly
 import multiprocessing
 from qode.util           import sort_eigen
 from qode.util.PyC       import Double
-from qode.math.tensornet import tl_tensor, tensor_sum, raw
+from qode.math.tensornet import tl_tensor, _tensor_sum, raw
 from qode.many_body.fermion_field import field_op
 import compress
 
@@ -68,7 +68,7 @@ def _token_parser(options):
     return value
 
 def _tens_wrap(tensor):
-    return tl_tensor(tensorly.tensor(tensor, dtype=Double.tensorly))
+    return tl_tensor.init(tensorly.tensor(tensor, dtype=Double.tensorly))
 
 def _vec(i, length):
     v = numpy.zeros((length,), dtype=Double.numpy, order="C")
@@ -172,8 +172,8 @@ def _build_tensors(states, n_orbs, n_elec_0, thresh, options, xr_order, dets, n_
         for bra_chg,ket_chg in densities[op_string]:
             print("<>", op_string, bra_chg, ket_chg)
             rho = densities[op_string][bra_chg,ket_chg]
-            temp_ij = tensor_sum()
-            temp_ji = tensor_sum()
+            temp_ij = _tensor_sum()
+            temp_ji = _tensor_sum()
             #
             arguments = []
             n_bras = len(rho)

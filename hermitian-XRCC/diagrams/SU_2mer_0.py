@@ -94,6 +94,7 @@ def u100(X, special_processing=None):
     else:
         raise ValueError(f"special processing {special_processing} can not be handled")
     return result
+    #return numpy.zeros_like(result)
 
 def u001(X, contract_last=False):
     if no_result(X, contract_last):  return []
@@ -105,6 +106,7 @@ def u001(X, contract_last=False):
           X.c0p_U0p1(i0,j0,q)
         @ X.a1(i1,j1,q)
         )
+    #return numpy.zeros_like(ret)
 
 def u101(X, contract_last=False):
     if no_result(X, contract_last):  return []
@@ -116,3 +118,4 @@ def u101(X, contract_last=False):
           X.c0p_U1p1(i0,j0,q)
         @ X.a1(i1,j1,q)
         )
+    #return numpy.zeros_like(ret)

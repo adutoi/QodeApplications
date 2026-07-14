@@ -505,9 +505,30 @@ def optimize_states(max_iter, xr_order, dens_builder_stuff, ints, n_occ, n_orbs,
             state_coeffs_optimized[frag][chg] = dens_builder_stuff[frag][0][chg].coeffs.copy()
             state_tracker[frag][chg] += max_add
         dens[frag] = densities.build_tensors(*dens_builder_stuff[frag][:-1], options=density_options, n_threads=n_threads)
-        #from qode.math.tensornet import raw
-        #print(raw(dens[0]["ca"][(0,0)])[0, 0, :, :])
-        #raise ValueError("stop here")
+        from qode.math.tensornet import raw
+        #print(raw(dens[0]["ca"][(0,0)])[0, 0, 1:9, 1:9])
+        print(raw(dens[0]["a"][(1,0)])[0, 0, :])
+        print(raw(dens[0]["a"][(1,0)])[1, 0, :])
+        print(raw(dens[0]["a"][(1,0)])[2, 0, :])
+        #print(np.linalg.norm(raw(dens[0]["ca"][(0,0)])[0, 0, :, :]))
+        #caa_00 = raw(dens[0]["caa"][(1,0)])[0, 0, :, :, :]
+        #print(np.linalg.norm(ccaa_00))
+        #print(np.linalg.norm(ccaa_00[[0,9], [0,9], [0,9], [0,9]]))
+        #print(np.linalg.norm(ccaa_00[1:9, 1:9, 1:9, 1:9]))
+        #print(np.linalg.norm(ccaa_00[10:18, 1:9, 10:18, 1:9]))
+        #print(np.linalg.norm(ccaa_00[1:9, 10:18, 10:18, 1:9]))
+        #sh = caa_00.shape
+        #for i in range(sh[0]):
+        #    for j in range(sh[1]):
+        #        for k in range(sh[2]):
+        #            val = caa_00[i,j,k]
+        #            if abs(val) > 0.1:
+        #                print(i,j,k,val)
+        #print(raw(dens[0]["ccaa"][(0,0)])[0, 0, 0:2, 0:2, 0:2, 0:2])
+        #tmp_ccaa = raw(dens[0]["ccaa"][(0,0)])[0, 0]
+        #idx = [0, 9]
+        #print(tmp_ccaa[np.ix_(idx, idx, idx, idx)])
+        raise ValueError("stop here")
         return state_coeffs_optimized, dens_builder_stuff, dens
     
 

@@ -15,7 +15,7 @@
 
 
 
-n_threads = 1
+n_threads = 8
 
 basis = "6-31G"
 frags = [
@@ -31,8 +31,8 @@ frags = [
     )
 ]
 
-op_strings = {2:["aa", "caaa"], 1:["a", "caa", "ccaaa"], 0:["ca", "ccaa", "cccaaa"]}
+op_strings = {2:["aa"], 1:["a", "caa"], 0:["ca", "ccaa"]}
 
-thresh    = 1e-6
+thresh    = 1e-5
 #nstates   = 30
 

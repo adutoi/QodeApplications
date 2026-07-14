@@ -33,7 +33,7 @@ if __name__=="__main__":
     dist         = float(sys.argv[2])
     statesthresh =       sys.argv[3]
     options      =       sys.argv[4:]
-    xr_order     = 1
+    xr_order     = 0
 
     label = "_".join(_abbrev(arg) for arg in sys.argv[2:])
     rho = build_Be_rho(basis, dist, statesthresh, options, xr_order, n_threads)

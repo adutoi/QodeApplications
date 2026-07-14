@@ -20,11 +20,12 @@ from qode.math.tensornet import raw
 p, q, r, s, t, u, v, w = "pqrstuvw"    # some contraction indices for easier reading
 
 
-
+#import numpy as np
 def v0000(X):
     i0, j0 = 0, 1
-    return 1 * raw(
+    return -1 * raw(
         #  X.ccaa0(i0,j0,p,q,s,r)
         #@ X.v0000(p,q,r,s)
-          X.ccaa0pqsr_Vpqrs(i0,j0)
+          X.ccaa0pqrs_Vpqrs(i0,j0)
         )
+    #return np.zeros_like(ret)

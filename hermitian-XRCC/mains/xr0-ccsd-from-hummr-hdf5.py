@@ -17,7 +17,7 @@
 #
 
 # Usage:
-#     python [-u] <this-file.py> <displacement> <rhos> [no-proj]
+#     python [-u] <this-file.py> <displacement> <rhos1> <rhos2> [no-proj]
 # where <rhos> can be the filestem of any one of the .pkl files in atomic_states/ prepared by Be631g.py.
 
 import time
@@ -31,22 +31,14 @@ import qode.util
 from qode.util import struct, timer
 import qode.math
 import excitonic
-#print(excitonic)
-#print(excitonic.ccsd)
-#print(excitonic.ccsd.__code__)
-#print(excitonic.ccsd.__module__)
 import diagrammatic_expansion   # defines information structure for housing results of diagram evaluations
 import XR_term                  # knows how to use ^this information to pack a matrix for use in XR model
-#import S_diagrams               # contains definitions of actual diagrams needed for S operator in BO rep
-#import St_diagrams              # contains definitions of actual diagrams needed for SH operator in BO rep
-#import Su_diagrams              # contains definitions of actual diagrams needed for SH operator in BO rep
-#import Sv_diagrams              # contains definitions of actual diagrams needed for SH operator in BO rep
-#import combo_diagram
-from diagrams import S_diagrams, ST_diagrams, SU_diagrams, SV_diagrams
+from diagrams import S_diagrams, ST_diagrams, SU_diagrams, SV_diagrams    # definitions of diagrams needed for S and SH
 from   get_ints import get_ints
 from precontract import precontract
 from diagram_lists import *
 
+from dens_from_hummr import load_densities_json, load_mos_from_hummr
 
 class empty(object):  pass     # needed for unpickling - remove when all Be-states drivers updated to use struct instead
 
@@ -72,60 +64,84 @@ global_timings.start()
 # Information about the Be2 supersystem
 n_frag       = 2
 displacement = float(sys.argv[1])
-states       = "../../frag-states/rho/Be-Be_0_6-31G_nth_compress.pkl"
+#states       = ["rho/{}.pkl".format(sys.argv[2]), "rho/{}.pkl".format(sys.argv[3])]
 project_core = True
-if len(sys.argv)==4:
-    if sys.argv[3]=="no-proj":
+if len(sys.argv)==5:
+    if sys.argv[4]=="no-proj":
         project_core = False
 
 # "Assemble" the supersystem for the displaced fragments and get integrals
 BeN = []
 print("load states ...")
 for m in range(int(n_frag)):
-    Be = pickle.load(open(states,"rb"))
+    #Be = pickle.load(open(states[m],"rb"))
+    Be = empty()
+    Be.atoms = [["Be", [0, 0, 0]]]
+    Be.core = [0]
+    Be.charge = 0
+    Be.n_elec_ref = 4
+    Be.basis = empty
+    Be.basis.n_spatial_orb = 9
+    Be.basis.AOcode = "6-31G"
+    print("no core and therefore no core projection, as long as core is not provided as frozen core")
+    Be.basis.core = []#[0]
+    #Be.basis.MOcoeffs = pickle.load(open(f"/home/marco/QodeApplications/tests/ref_data/check_mos_{m}.pkl", "rb"))
+    Be.basis.MOcoeffs = load_mos_from_hummr("/home/marco/hummr_tests/Be_mos.C0")
+    #print(Be.basis.MOcoeffs)
+    #print("hackish reshuffling of basis functions")
+    # Mapping the AOs is essential
+    #Be.basis.MOcoeffs = Be.basis.MOcoeffs[[0,1,3,4,5,2,6,7,8], :]  # row 2 to 5
+    # The map below would yield the same ordering as for psi4, but this
+    # would also require adapting the densities, so we simply use the
+    # convention from the lible package here.
+    #Be.basis.MOcoeffs = Be.basis.MOcoeffs[:, [0,1,2,3,4,8,5,6,7]]  # col 8 to 5
+    #Be.rho = load_densities_hdf5(str(sys.argv[2 + m]))
+    Be.rho = load_densities_json("/home/marco/hummr_tests/hummr_dens_for_xr.json")
+    #for key, val in Be.rho.items():
+    #    for key2, val2 in val.items():
+    #        print(key, key2, val2.shape)
+    Be.rho['n_states'] = {chg_a: chg_dens.shape[m] for (chg_a, chg_b), chg_dens in Be.rho["ca"].items()}
+    Be.rho['n_elec'] = {chgs[m]: Be.n_elec_ref - chgs[m] for chgs in Be.rho["ca"]}
+    #print(Be.rho["n_states"])
+    #print("shapes of MOs and rhos ", Be.basis.MOcoeffs.shape, [(keys, vals.shape) for keys, vals in Be.rho["ca"].items()])
+    #print(Be.basis.MOcoeffs)
     if m == 0:
         from qode.math.tensornet import raw
         print(raw(Be.rho["ca"][(0,0)])[0, 0, :9, :9])
         print(raw(Be.rho["ccaa"][(0,0)])[0, 0, :3, :3, :3, :3])
-    #print(Be.keys())
-    #print(Be.states)
-    #print(Be.state_indices)
-    #print(Be.rho)
-    #print(Be.basis.MOcoeffs)
+    #print(raw(Be.rho["a"][(1,0)])[0, 0, 1:9])
+    #print(raw(Be.rho["a"][(1,0)])[1, 0, 1:9])
+    #print(raw(Be.rho["a"][(1,0)])[2, 0, 1:9])
+    #print(numpy.linalg.norm(raw(Be.rho["ca"][(0,0)])[0, 0, 1:9, 1:9]))
+    #print(numpy.linalg.norm(raw(Be.rho["ca"][(0,0)])[0, 0, 10:18, 10:18]))
+    #print(numpy.linalg.norm(raw(Be.rho["ca"][(0,0)])[0, 0, 1:9, 10:18]))
+    #print(numpy.linalg.norm(raw(Be.rho["ca"][(0,0)])[0, 0, 10:18, 1:9]))
+    #print(numpy.linalg.norm(raw(Be.rho["ca"][(0,0)])[0, 0, [0,9], [0,9]]))
+    #print(numpy.linalg.norm(raw(Be.rho["ca"][(0,0)])[0, 0, :, :]))
+    #print(numpy.linalg.norm(raw(Be.rho["ccaa"][(0,0)])[0, 0, :, :, :, :]))
+    #print(numpy.linalg.norm(raw(Be.rho["ccaa"][(0,0)])[0, 0, 10:18, 1:9, 10:18, 1:9]))
     for elem,coords in Be.atoms:  coords[2] += m * displacement    # displace along z
     BeN += [Be]
 print("get_ints ...")
-symm_ints, bior_ints, nuc_rep = get_ints(BeN, project_core, integral_timings, spin_ints=True, backend="psi4")
+symm_ints, bior_ints, nuc_rep = get_ints(BeN, project_core, integral_timings, spin_ints=False, backend="lible")#"hdf5")
 print("done")
 
-"""
-ccaa00 = raw(bior_ints.V[0,0,0,0])
-lten = ccaa00.shape[0]
-for i in range(lten):
-    for j in range(lten):
-        for k in range(lten):
-            for l in range(lten):
-                if abs(ccaa00[i,j,k,l]) > 1e-1:
-                    print([i,j,k,l], ccaa00[i,j,k,l])
-"""
-
-#numpy.save(open("V_antisym_psi4.npy", mode="wb"), raw(bior_ints.V[0,0,0,0]))
+#eri_final_hummr_pre = numpy.loadtxt("eri.dat")
+#eri_final_hummr = eri_final_hummr_pre.reshape((9, 9, 9, 9))
 
 print("U @ ca ", raw(bior_ints.U[0,0,0]("p", "q") @ BeN[0].rho["ca"][(0,0)][0,0,:,:]("p", "q")))
 print("T @ ca ", raw(bior_ints.T[0,0]("p", "q") @ BeN[0].rho["ca"][(0,0)][0,0,:,:]("p", "q")))
+#print("V(prrs) @ ca ", numpy.einsum("prrq,pq->", eri_final_hummr, raw(BeN[0].rho["ca"][(0,0)][0,0,:,:])))
 #print("norm ca 00 ", numpy.linalg.norm(raw(Be.rho["ca"][(0,0)][0,0,:,:])))
 print("V @ ccaa ", raw(bior_ints.V[0,0,0,0]("p", "q", "r", "s") @ BeN[0].rho["ccaa"][(0,0)][0,0,:,:,:,:]("p", "q", "s", "r")))
-print("ca_pr @ V_pqrs @ ca_qs ", raw(BeN[0].rho["ca"][(0,0)][0,0,:,:,:,:]("p", "r") @ bior_ints.V[0,0,0,0]("p", "q", "r", "s") @ BeN[1].rho["ca"][(0,0)][0,0,:,:,:,:]("q", "s")))
-print("ca_ps @ V_pqrs @ ca_qr ", raw(BeN[0].rho["ca"][(0,0)][0,0,:,:,:,:]("p", "s") @ bior_ints.V[0,0,0,0]("p", "q", "r", "s") @ BeN[1].rho["ca"][(0,0)][0,0,:,:,:,:]("q", "r")))
-#print("V aaaa block ", numpy.linalg.norm(raw(bior_ints.V[0,0,0,0][:9,:9,:9,:9])))
-#print("V full ", numpy.linalg.norm(raw(bior_ints.V[0,0,0,0])))
+print("V @ ccaa ", raw(bior_ints.V[0,0,0,0]("p", "q", "r", "s") @ BeN[0].rho["ccaa"][(0,0)][0,0,:,:,:,:]("p", "q", "r", "s")))
+#print("V ", numpy.linalg.norm(raw(bior_ints.V[0,0,0,0])))
 #print("norm ccaa 00 ", numpy.linalg.norm(raw(Be.rho["ccaa"][(0,0)][0,0,:,:,:,:])))
-#print("norm ccaa 00 aaaa block ", numpy.linalg.norm(raw(Be.rho["ccaa"][(0,0)][0,0,:9,:9,:9,:9])))
 #print("T ", numpy.linalg.norm(raw(bior_ints.T[0,0])))
 #print("U ", numpy.linalg.norm(raw(bior_ints.U[0,0,0])))
 #ccaa00 = raw(Be.rho["ccaa"][(0,0)][0,0,:,:,:,:])
 #ccaa00 = raw(bior_ints.V[0,0,0,0])
-#lten = ccaa00.shape[0] // 2
+#lten = ccaa00.shape[0]
 #for i in range(lten):
 #    for j in range(lten):
 #        for k in range(lten):
@@ -133,7 +149,18 @@ print("ca_ps @ V_pqrs @ ca_qr ", raw(BeN[0].rho["ca"][(0,0)][0,0,:,:,:,:]("p", "
 #                if abs(ccaa00[i,j,k,l]) > 1e-2:
 #                    print([i,j,k,l], ccaa00[i,j,k,l])
 
-#numpy.save(open("ccaa00_psi4.npy", mode="wb"), ccaa00)
+print("test two elec ints antisymm")
+print("V0101 + V1001 ", numpy.linalg.norm(raw(bior_ints.V[0,1,0,1]) + numpy.swapaxes(raw(bior_ints.V[1,0,0,1]), 2, 3)))
+print("V0101 + V0110 ", numpy.linalg.norm(raw(bior_ints.V[0,1,0,1]) + numpy.swapaxes(raw(bior_ints.V[0,1,1,0]), 0, 1)))
+print("V0101 + V1010 ", numpy.linalg.norm(raw(bior_ints.V[0,1,0,1]) - numpy.swapaxes(numpy.swapaxes(raw(bior_ints.V[1,0,1,0]), 0, 1), 2, 3)))
+print("test two part tRDM antisymm")
+print("ccaa_pqrs + ccaa_pqsr ", numpy.linalg.norm(raw(BeN[0].rho["ccaa"][(0,0)][0,0,:,:,:,:]) + numpy.swapaxes(raw(BeN[0].rho["ccaa"][(0,0)][0,0,:,:,:,:]), 2, 3)))
+print("ccaa_pqrs + ccaa_qprs ", numpy.linalg.norm(raw(BeN[0].rho["ccaa"][(0,0)][0,0,:,:,:,:]) + numpy.swapaxes(raw(BeN[0].rho["ccaa"][(0,0)][0,0,:,:,:,:]), 0, 1)))
+print("ccaa_pqrs + ccaa_qpsr ", numpy.linalg.norm(raw(BeN[0].rho["ccaa"][(0,0)][0,0,:,:,:,:]) - numpy.swapaxes(numpy.swapaxes(raw(BeN[0].rho["ccaa"][(0,0)][0,0,:,:,:,:]), 0, 1), 2, 3)))
+
+#numpy.save(open("ccaa00_hummr.npy", mode="wb"), ccaa00)
+#numpy.save(open("V_antisym_hummr.npy", mode="wb"), raw(bior_ints.V[0,0,0,0]))
+#numpy.save(open("ca00_hummr.npy", mode="wb"), raw(Be.rho["ca"][(0,0)][0,0,:,:]))
 
 # The engines that build the terms
 BeN_rho = [frag.rho for frag in BeN]   # diagrammatic_expansion.blocks should take BeN directly? (n_states and n_elec one level higher)
@@ -147,7 +174,7 @@ SV_blocks_symm = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=stru
 ST_blocks_bior = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, T=bior_ints.T),      diagrams=ST_diagrams, contract_cache=contract_cache, timings=diagram_timings, precon_timings=precontract_timings)
 SU_blocks_bior = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, U=bior_ints.U),      diagrams=SU_diagrams, contract_cache=contract_cache, timings=diagram_timings, precon_timings=precontract_timings)
 SV_blocks_bior = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, V=bior_ints.V),      diagrams=SV_diagrams, contract_cache=contract_cache, timings=diagram_timings, precon_timings=precontract_timings)
-#SV_blocks_half = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, V=bior_ints.V_half), diagrams=SV_diagrams, contract_cache=contract_cache, timings=diagram_timings, precon_timings=precontract_timings)
+#SV_blocks_half = diagrammatic_expansiegrals=struct(S=symm_ints.S, V=bior_ints.V_half), diagrams=SV_diagrams, contract_cache=contract_cache, timings=diagram_timings, precon_timings=precontract_timings)
 #SV_blocks_diff = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, V=bior_ints.V_diff), diagrams=SV_diagrams, contract_cache=contract_cache, timings=diagram_timings, precon_timings=precontract_timings)
 
 # charges under consideration
@@ -195,8 +222,8 @@ print("build H2 (2e)")
 
 H2 +=  XR_term.dimer_matrix(SV_blocks_bior, {1: SV1[0], 2: SV2[0]}, (0,1), all_dimer_charges, matrix_timings)
 #print(numpy.linalg.norm(H2))
+#print(H2)
 print("finish H2 (subtract monomers)")
-#H2 = numpy.zeros_like(H2)
 
 H2blocked = H2
 H2blocked -=  XR_term.dimer_matrix(ST_blocks_symm, {1: ST1[0]}, (0,1), all_dimer_charges, matrix_timings) \
@@ -208,22 +235,12 @@ H2blocked -=  XR_term.dimer_matrix(ST_blocks_symm, {1: ST1[0]}, (0,1), all_dimer
 #        if abs(elem) > 1e-2:
 #            print((i,j), elem)
 #print(numpy.linalg.norm(H2))
-#from qode.util import sort_eigen
-#import scipy as sp
-#full_eigvals_raw, full_eigvec_l_unsorted, full_eigvec_r_unsorted = sp.linalg.eig(-H2blocked, left=True, right=True)
-#full_eigvals_check, full_eigvec_r = sort_eigen((full_eigvals_raw, full_eigvec_r_unsorted))
-#print(full_eigvals_check)
-#H2blocked = numpy.zeros_like(H2)
+#H2 = numpy.zeros_like(H2)
 global_timings.record("build")
 global_timings.start()
-
 """
 from qode.util import sort_eigen
 import scipy as sp
-for i in range(2):
-    H1[i] = H1[i][[0,1,4,5,6,7], :]
-    H1[i] = H1[i][:, [0,1,4,5,6,7]]
-print(H1[0].shape)
 nn = 2
 #sl = [slice(0, nn)]
 sl = [slice(0, 2), slice(2, 4), slice(4, 6)]
@@ -237,7 +254,7 @@ for chg0 in chgs:
             numpy.einsum("ij,kl->ikjl", H1[0][d_slices[0][chg0], d_slices[0][chg0]], numpy.eye(nn)) +\
             numpy.einsum("ij,kl->ikjl", numpy.eye(nn), H1[1][d_slices[1][chg1], d_slices[1][chg1]])
 full = full.reshape(9 * nn * nn, 9 * nn * nn)
-print(full)
+#print(full)
 full_eigvals_raw, full_eigvec_l_unsorted, full_eigvec_r_unsorted = sp.linalg.eig(full, left=True, right=True)
 full_eigvals_check, full_eigvec_r = sort_eigen((full_eigvals_raw, full_eigvec_r_unsorted))
 print(full_eigvals_check)
@@ -274,9 +291,9 @@ E, T = excitonic.fci((H1,[[None,H2],[None,None]]), out, target_state=slice(0, 20
 E += sum(nuc_rep[m1,m2] for m1 in range(n_frag) for m2 in range(m1+1))
 out.log("\nTotal Excitonic Energy = ", E)
 
+print("ref from HCI without frozen core = ", -29.22740841 -0.00004272)  # selected casscf + hci pt correction
+
 global_timings.record("apply")
-
-
 
 global_timings.print("GLOBAL")
 matrix_timings.print("MATRIX")

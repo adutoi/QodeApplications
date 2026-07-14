@@ -95,6 +95,7 @@ if __name__=="__main__":
     label += "_nth"
     printout("Reduced density tensors")
     label += "_" + densities.build_tensors(frags, params.op_strings, thresh=1e-30, options=params("compress nat_orbs abs_anti"), printout=indented(printout), n_threads=params.n_threads)
+    #label += "_" + densities.build_tensors(frags, params.op_strings, thresh=1e-30, options=None, printout=indented(printout), n_threads=params.n_threads)
 
     frags[0].states    = None    # otherwise huge files
     frags[1].states    = None    # otherwise huge files

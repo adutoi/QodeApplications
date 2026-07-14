@@ -68,6 +68,11 @@ def fci(H, out, target_state=0):
 	out.log("Diagonalizing ...")
 	dim = Hmat.shape[0]
 	if True:	# Because Lanczos does not yet handle non-hermitian matrices
+		#for i, row in enumerate(Hmat):
+		#	for j, elem in enumerate(row):
+		#		if abs(elem) > 1e-2:
+		#			print((i,j), elem)
+		print(Hmat[:7, :7])
 		vals, vecs = sort_eigen(numpy.linalg.eig(Hmat))
 		E = vals[target_state]
 	else:
