@@ -64,6 +64,123 @@ def _build_block(diagram_term, permutation, bra_det, ket_det, label):
 #  but it is agnostic to the integrals and diagram implementation.  So should work for S, SH, etc.
 ##########
 
+class _multiplicities(object):
+    def __init__(self,
+                 supersys_info,
+                 subsystem,
+                 charges,
+                 multiplicities,
+                 diagrams,
+                 bra_det,
+                 ket_det):
+
+        self._supersys_info = supersys_info
+        self._subsystem = subsystem
+        self._charges = charges
+        self._multiplicities = multiplicities
+        self._diagrams = diagrams
+        self._bra_det = bra_det
+        self._ket_det = ket_det
+
+        self._results = {}
+
+    def __getitem__(self, label):
+
+        if label not in self._results:
+
+            frag_order = len(self._subsystem)
+
+            try:
+                terms = self._diagrams.catalog[frag_order][label](
+                    self._supersys_info,
+                    tuple(
+                        zip(
+                            self._subsystem,
+                            self._charges,
+                            self._multiplicities,
+                        )
+                    ),
+                )
+
+            except:
+                raise NotImplementedError(
+                    "diagram '{}' not implemented for {} bodies".format(
+                        label,
+                        frag_order,
+                    )
+                )
+
+            else:
+
+                self._results[label] = None
+
+                for term_permutation in terms:
+
+                    if term_permutation is None:
+                        continue
+
+                    term, permutation = term_permutation
+
+                    result = _build_block(
+                        term,
+                        permutation,
+                        self._bra_det,
+                        self._ket_det,
+                        label,
+                    )
+
+                    if (self._bra_det or self._ket_det) and len(result) == 0:
+                        continue
+
+                    if self._results[label] is None:
+                        self._results[label] = result
+                    else:
+                        self._results[label] += result
+
+        return self._results[label]
+    
+class _charges(object):
+
+    def __init__(self,
+                 supersys_info,
+                 subsystem,
+                 charges,
+                 diagrams,
+                 bra_det,
+                 ket_det):
+
+        self._supersys_info = supersys_info
+        self._subsystem = subsystem
+        self._charges = charges
+        self._diagrams = diagrams
+        self._bra_det = bra_det
+        self._ket_det = ket_det
+
+        self._items = {}
+
+    def __getitem__(self, multiplicities):
+
+        if multiplicities is None:
+            multiplicities = tuple()
+
+        multiplicities = tuple(multiplicities)
+
+        if multiplicities not in self._items:
+
+            self._items[multiplicities] = _multiplicities(
+                self._supersys_info,
+                self._subsystem,
+                self._charges,
+                multiplicities,
+                self._diagrams,
+                self._bra_det,
+                self._ket_det,
+            )
+
+        return self._items[multiplicities]
+
+# original charges class
+"""
 class _charges(object):
     def __init__(self, supersys_info, subsystem, charges, diagrams, bra_det, ket_det):
         self._supersys_info = supersys_info
@@ -91,6 +208,7 @@ class _charges(object):
                         if self._results[label] is None:  self._results[label]  = result
                         else:                             self._results[label] += result
         return self._results[label]
+"""
 
 class _subsystem(object):
     def __init__(self, supersys_info, subsystem, diagrams, bra_det, ket_det):
@@ -108,9 +226,11 @@ class _subsystem(object):
         return self._items[charges]
 
 class blocks(object):
-    def __init__(self, densities, integrals, diagrams, contract_cache, timings, precon_timings, bra_det=False, ket_det=False):
+    def __init__(self, densities, integrals, diagrams, contract_cache, timings,
+                 precon_timings, bra_det=False, ket_det=False, target_multiplicity=None):
         contract_cache = struct(rho_S=contract_cache, general=precontract(densities, integrals, precon_timings))
-        self._supersys_info = struct(densities=densities, integrals=integrals, contract_cache=contract_cache, timings=timings)
+        self._supersys_info = struct(densities=densities, integrals=integrals, contract_cache=contract_cache,
+                                     timings=timings, target_multiplicity=target_multiplicity)
         self._diagrams = diagrams
         self._bra_det = bra_det
         self._ket_det = ket_det

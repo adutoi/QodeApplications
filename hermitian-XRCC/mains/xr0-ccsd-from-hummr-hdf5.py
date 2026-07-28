@@ -63,6 +63,7 @@ global_timings.start()
 
 # Information about the Be2 supersystem
 n_frag       = 2
+target_multiplicity = 1
 displacement = float(sys.argv[1])
 #states       = ["rho/{}.pkl".format(sys.argv[2]), "rho/{}.pkl".format(sys.argv[3])]
 project_core = True
@@ -87,39 +88,16 @@ for m in range(int(n_frag)):
     Be.basis.core = []#[0]
     #Be.basis.MOcoeffs = pickle.load(open(f"/home/marco/QodeApplications/tests/ref_data/check_mos_{m}.pkl", "rb"))
     Be.basis.MOcoeffs = load_mos_from_hummr("/home/marco/hummr_tests/Be_mos.C0")
-    #print(Be.basis.MOcoeffs)
-    #print("hackish reshuffling of basis functions")
-    # Mapping the AOs is essential
-    #Be.basis.MOcoeffs = Be.basis.MOcoeffs[[0,1,3,4,5,2,6,7,8], :]  # row 2 to 5
-    # The map below would yield the same ordering as for psi4, but this
-    # would also require adapting the densities, so we simply use the
-    # convention from the lible package here.
-    #Be.basis.MOcoeffs = Be.basis.MOcoeffs[:, [0,1,2,3,4,8,5,6,7]]  # col 8 to 5
-    #Be.rho = load_densities_hdf5(str(sys.argv[2 + m]))
-    Be.rho = load_densities_json("/home/marco/hummr_tests/hummr_dens_for_xr.json")
-    #for key, val in Be.rho.items():
-    #    for key2, val2 in val.items():
-    #        print(key, key2, val2.shape)
-    Be.rho['n_states'] = {chg_a: chg_dens.shape[m] for (chg_a, chg_b), chg_dens in Be.rho["ca"].items()}
+
+    Be.rho = load_densities_json("/home/marco/hummr_tests/hummr_dens_for_xr.json",
+                                 spin_adapted=True)
+
+    #Be.rho['n_states'] = {chg_a: chg_dens.shape[m] for (chg_a, chg_b), chg_dens in Be.rho["ca"].items()}
+    #Be.rho['n_elec'] = {chgs[m]: Be.n_elec_ref - chgs[m] for chgs in Be.rho["ca"]}
+    Be.rho['n_states'] = {chg_a: {mult_a: mult_dens.shape[m] for (mult_a, mult_n), mult_dens in chg_dens}
+                          for (chg_a, chg_b), chg_dens in Be.rho["ca"].items()}
     Be.rho['n_elec'] = {chgs[m]: Be.n_elec_ref - chgs[m] for chgs in Be.rho["ca"]}
-    #print(Be.rho["n_states"])
-    #print("shapes of MOs and rhos ", Be.basis.MOcoeffs.shape, [(keys, vals.shape) for keys, vals in Be.rho["ca"].items()])
-    #print(Be.basis.MOcoeffs)
-    #if m == 0:
-    #    from qode.math.tensornet import raw
-    #    print(raw(Be.rho["ca"][(0,0)])[0, 0, :9, :9])
-    #    print(raw(Be.rho["ccaa"][(0,0)])[0, 0, :3, :3, :3, :3])
-    #print(raw(Be.rho["a"][(1,0)])[0, 0, 1:9])
-    #print(raw(Be.rho["a"][(1,0)])[1, 0, 1:9])
-    #print(raw(Be.rho["a"][(1,0)])[2, 0, 1:9])
-    #print(numpy.linalg.norm(raw(Be.rho["ca"][(0,0)])[0, 0, 1:9, 1:9]))
-    #print(numpy.linalg.norm(raw(Be.rho["ca"][(0,0)])[0, 0, 10:18, 10:18]))
-    #print(numpy.linalg.norm(raw(Be.rho["ca"][(0,0)])[0, 0, 1:9, 10:18]))
-    #print(numpy.linalg.norm(raw(Be.rho["ca"][(0,0)])[0, 0, 10:18, 1:9]))
-    #print(numpy.linalg.norm(raw(Be.rho["ca"][(0,0)])[0, 0, [0,9], [0,9]]))
-    #print(numpy.linalg.norm(raw(Be.rho["ca"][(0,0)])[0, 0, :, :]))
-    #print(numpy.linalg.norm(raw(Be.rho["ccaa"][(0,0)])[0, 0, :, :, :, :]))
-    #print(numpy.linalg.norm(raw(Be.rho["ccaa"][(0,0)])[0, 0, 10:18, 1:9, 10:18, 1:9]))
+
     for elem,coords in Be.atoms:  coords[2] += m * displacement    # displace along z
     BeN += [Be]
 print("get_ints ...")
@@ -167,25 +145,25 @@ BeN_rho = [frag.rho for frag in BeN]   # diagrammatic_expansion.blocks should ta
 for BeN_rho_m in BeN_rho:                                # These lines to be removed when synced ...
     BeN_rho_m['n_states_bra'] = BeN_rho_m['n_states']    # ... up with Be states code again (now works with Be-states from main branch).
 contract_cache = precontract(BeN_rho, symm_ints.S, precontract_timings)
-S_blocks       = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=symm_ints.S,                               diagrams=S_diagrams,  contract_cache=contract_cache, timings=diagram_timings, precon_timings=precontract_timings)
-ST_blocks_symm = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, T=symm_ints.T),      diagrams=ST_diagrams, contract_cache=contract_cache, timings=diagram_timings, precon_timings=precontract_timings)
-SU_blocks_symm = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, U=symm_ints.U),      diagrams=SU_diagrams, contract_cache=contract_cache, timings=diagram_timings, precon_timings=precontract_timings)
-SV_blocks_symm = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, V=symm_ints.V),      diagrams=SV_diagrams, contract_cache=contract_cache, timings=diagram_timings, precon_timings=precontract_timings)
-ST_blocks_bior = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, T=bior_ints.T),      diagrams=ST_diagrams, contract_cache=contract_cache, timings=diagram_timings, precon_timings=precontract_timings)
-SU_blocks_bior = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, U=bior_ints.U),      diagrams=SU_diagrams, contract_cache=contract_cache, timings=diagram_timings, precon_timings=precontract_timings)
-SV_blocks_bior = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, V=bior_ints.V),      diagrams=SV_diagrams, contract_cache=contract_cache, timings=diagram_timings, precon_timings=precontract_timings)
+S_blocks       = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=symm_ints.S,                               diagrams=S_diagrams,  contract_cache=contract_cache, timings=diagram_timings, precon_timings=precontract_timings, target_multiplicity=target_multiplicity)
+ST_blocks_symm = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, T=symm_ints.T),      diagrams=ST_diagrams, contract_cache=contract_cache, timings=diagram_timings, precon_timings=precontract_timings, target_multiplicity=target_multiplicity)
+SU_blocks_symm = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, U=symm_ints.U),      diagrams=SU_diagrams, contract_cache=contract_cache, timings=diagram_timings, precon_timings=precontract_timings, target_multiplicity=target_multiplicity)
+SV_blocks_symm = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, V=symm_ints.V),      diagrams=SV_diagrams, contract_cache=contract_cache, timings=diagram_timings, precon_timings=precontract_timings, target_multiplicity=target_multiplicity)
+ST_blocks_bior = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, T=bior_ints.T),      diagrams=ST_diagrams, contract_cache=contract_cache, timings=diagram_timings, precon_timings=precontract_timings, target_multiplicity=target_multiplicity)
+SU_blocks_bior = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, U=bior_ints.U),      diagrams=SU_diagrams, contract_cache=contract_cache, timings=diagram_timings, precon_timings=precontract_timings, target_multiplicity=target_multiplicity)
+SV_blocks_bior = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, V=bior_ints.V),      diagrams=SV_diagrams, contract_cache=contract_cache, timings=diagram_timings, precon_timings=precontract_timings, target_multiplicity=target_multiplicity)
 #SV_blocks_half = diagrammatic_expansiegrals=struct(S=symm_ints.S, V=bior_ints.V_half), diagrams=SV_diagrams, contract_cache=contract_cache, timings=diagram_timings, precon_timings=precontract_timings)
 #SV_blocks_diff = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, V=bior_ints.V_diff), diagrams=SV_diagrams, contract_cache=contract_cache, timings=diagram_timings, precon_timings=precontract_timings)
 
 # charges under consideration
 monomer_charges = [0, +1, -1]
-dimer_charges = {
-                 6:  [(+1, +1)],
-                 7:  [(0, +1), (+1, 0)],
-                 8:  [(0, 0), (+1, -1), (-1, +1)],
-                 9:  [(0, -1), (-1, 0)],
-                 10: [(-1, -1)]
-                }
+#dimer_charges = {
+#                 6:  [(+1, +1)],
+#                 7:  [(0, +1), (+1, 0)],
+#                 8:  [(0, 0), (+1, -1), (-1, +1)],
+#                 9:  [(0, -1), (-1, 0)],
+#                 10: [(-1, -1)]
+#                }
 all_dimer_charges = [(0,0), (0,+1), (0,-1), (+1,0), (+1,+1), (+1,-1), (-1,0), (-1,+1), (-1,-1)]
 
 global_timings.record("setup")

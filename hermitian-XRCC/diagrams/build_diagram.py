@@ -1,4 +1,4 @@
-#    (C) Copyright 2024, 2025 Anthony D. Dutoi and Marco Bauer
+#    (C) Copyright 2024, 2025, 2026 Anthony D. Dutoi and Marco Bauer
 # 
 #    This file is part of QodeApplications.
 # 
@@ -17,6 +17,7 @@
 #
 import re    # regular expressions
 from qode.util.dynamic_array import dynamic_array
+from .coupl_fac import diagram_couplings, tensor_multiplicities_from_label
 
 ####
 # In this file is all the book keeping stuff for getting the right arrays to the diagram contraction
@@ -40,30 +41,61 @@ def build_diagram(contraction, Dchgs, permutations):
     # The returned function further requires information about the actual fragments composing the subsystem
     # being computed, and their charges.
     def get_permuted_diagrams(supersys_info, subsys_chgs):
-        label = contraction.__name__
         # This function is used immediately below.  It feeds permuted input tensors to the contraction and
         # returns the final objective function that does the contraction once informed of the fragment states.
+        label = contraction.__name__
+        tensor_mults = tensor_multiplicities_from_label(label)
+        # Evaluate one contraction, summing over all allowed
+        # tensor multiplicities.
         def permuted_diagram(X, phase):
+            couplings = diagram_couplings(supersys_info, X, Dchgs, tensor_mults)
+            # No allowed spin coupling.
+            if len(couplings) == 0:
+                return 0.0
+
             def do_contraction(**args):
                 supersys_info.timings.start()
-                result = phase * contraction(X, **args)
+                result = 0.0
+                for prefactor, Dmult in couplings:
+                    if Dmult is None:  # no plain old unrestricted workflow without spin-adaptation
+                        Xk = X
+                    else:  # spin-adapted workflow with allowed Dmult, which is nonzero
+                        Xk = X.with_Dmult(Dmult)
+                    # accumulate all allowed combinations of multiplicities with corresponding prefactor
+                    result += (
+                        prefactor
+                        * contraction(Xk, **args)
+                    )
+                result *= phase
                 supersys_info.timings.record(label)
                 return result
+
             return do_contraction
         # build list of fully qualified diagram contraction functions for permutations where charge criteria met
-        if permutations is None:    # handles 0-mer/identity case
-            permuted_diagrams = [(permuted_diagram(None, +1), tuple())]
-        else:
-            permuted_diagrams = []
-            for phase,permutation in permutations:
-                X = frag_resolve(supersys_info, subsys_chgs, permutation)    # see below
-                if all(X.Dchg[m]==Dchg for m,Dchg in enumerate(Dchgs)):
-                    permuted_diagrams += [(permuted_diagram(X, phase), permutation)]
-                else:
-                    permuted_diagrams += [None]
+        if permutations is None:  # handles 0-mer/identity case
+            return [(permuted_diagram(None, +1), tuple())]
+        
+        permuted_diagrams = []
+        for phase, permutation in permutations:
+
+            X = frag_resolve(supersys_info, subsys_chgs, permutation)
+
+            # charge selection rule
+            if not all(
+                X.Dchg[m] == Dchg
+                for m, Dchg in enumerate(Dchgs)
+            ):
+                permuted_diagrams.append(None)
+                continue
+
+            diagram = permuted_diagram(X, phase)
+
+            if diagram is None:
+                permuted_diagrams.append(None)
+            else:
+                permuted_diagrams.append((diagram, permutation))
         return permuted_diagrams
     return get_permuted_diagrams
-
 
 
 # This class's job is to look up and return information about specific fragments, in specific charge states, in a
@@ -87,15 +119,18 @@ class frag_resolve(object):
         # Some diagrams need to know the number of e- in the ket for the combined "latter" frags of the un(!)permuted subsystem
         n_j = 0
         label = "".join(str(i) for i in range(self._n_frag))
-        for m,(frag_idx,(_,chg_j)) in enumerate(subsys_chgs):    # before permutation
+        for m,(frag_idx,((chg_i,chg_j),_)) in enumerate(subsys_chgs):    # before permutation
             n_j += self._supersys_info.densities[frag_idx]['n_elec'][chg_j]
             self._storage["n_j"+label[:m+1]] = n_j%2    # explicitly label which are included in the latter frags (to store all possibilities)
         # rearrange fragments to given permutation
         self._subsys_chgs = [subsys_chgs[m] for m in permutation]
         # dynamically allocated, cached "virtual" arrays for the target information.  Not all integrals provided (or provided differently
         # but if not provided, then it is not needed and can be skipped . . . a little dirty but works
-        self._storage["Dchg"] =   _Dchg_array(self._subsys_chgs, self._n_frag)
-        self._storage["n_states"]     = _n_states_array(self._supersys_info.densities, self._subsys_chgs, self._n_frag)
+        self._storage["Dchg"] = _Dchg_array(self._subsys_chgs, self._n_frag)
+        self._storage["Dmult"] = _Dmult_array(self._subsys_chgs, self._n_frag)
+        self._storage["mult"] = _mult_array(self._subsys_chgs, self._n_frag)
+        self._storage["n_frag"] = self._n_frag
+        self._storage["n_states"] = _n_states_array(self._supersys_info.densities, self._subsys_chgs, self._n_frag)
         try:
             self._storage["s##"]   = _subsys_array(self._supersys_info.integrals.S, self._subsys_chgs, 2, self._n_frag)    # one of these ...
         except:
@@ -113,8 +148,16 @@ class frag_resolve(object):
         except:
             pass
         self._densities        = _subsys_array(self._supersys_info.densities,   self._subsys_chgs, 1, self._n_frag)
+
     def __getattr__(self, attr):
-        if attr[:3]=="n_j" or attr=="Dchg" or attr=="n_states":
+        if (
+            attr[:3] == "n_j"
+            or attr == "Dchg"
+            or attr == "Dmult"
+            or attr == "n_states"
+            or attr == "mult"
+            or attr == "n_frag"
+        ):
             return self._storage[attr]
         #elif attr == "ket_coeffs":
         #    return _density_array(self._densities, label_template[:-1], self._subsys_chgs, self._n_frag)
@@ -132,60 +175,137 @@ class frag_resolve(object):
                 else:                                  # ... otherwise must be a single-fragment density
                     self._storage[label_template] = _density_array(self._densities, label_template[:-1], self._subsys_chgs, self._n_frag)
             return self._storage[label_template][frag_indices]
+    
+    def with_Dmult(self, Dmult):
+        """
+        Return a lightweight resolver identical to the current one,
+        except that all density lookups use the requested multiplicity
+        differences.
+
+        Parameters
+        ----------
+        Dmult : tuple[int]
+            Required multiplicity differences (bra - ket) for every
+            active fragment.
+
+        Returns
+        -------
+        frag_resolve
+            Resolver with identical subsystem, permutation and caches,
+            but different density lookup rules.
+        """
+
+        new = frag_resolve.__new__(frag_resolve)
+
+        #
+        # Everything except the density resolver can be shared.
+        #
+        new._storage = dict(self._storage)
+
+        new._supersys_info = self._supersys_info
+        new._n_frag = self._n_frag
+        new._subsys_chgs = self._subsys_chgs
+
+        #
+        # Replace only the density resolver.
+        #
+        new._densities = _subsys_array(
+            self._supersys_info.densities,
+            self._subsys_chgs,
+            1,
+            self._n_frag,
+            Dmult=Dmult,
+        )
+
+        return new
 
 
 
 # The things below are wrapper functions to make the dynamic_array objects, encapsulating the rules used as element generators.
 
-def _subsys_array(array, subsys_chgs, n_indices, n_frag):
-    subsystem, _ = zip(*subsys_chgs)    # "unzip" subsystem indices from their charges
+def _subsys_array(array, subsys_chgs, n_indices, n_frag, Dmult=None):
+    subsystem, transitions = zip(*subsys_chgs)    # "unzip" subsystem indices from their charges
     def _rule(*indices):
         absolute_indices = tuple(subsystem[index] for index in indices)
         if len(absolute_indices)==1:  absolute_indices = absolute_indices[0]
-        return array[absolute_indices]
+        obj = array[absolute_indices]
+        # Density lookup only
+        if Dmult is not None and isinstance(obj, dict):
+            chg_pair, mult_map = transitions[indices[0]]
+            chg_i, chg_j = chg_pair
+            mult_i = mult_map[0]
+            mult_j = mult_i - Dmult[indices[0]]
+            obj = obj[(chg_i, chg_j)][(mult_i, mult_j)]
+        return obj
     return dynamic_array(_rule, [range(n_frag)]*n_indices)
 
 def _Dchg_array(subsys_chgs, n_frag):
-    _, charges = zip(*subsys_chgs)    # "unzip" subsystem indices from their charges
+    _, transitions = zip(*subsys_chgs)    # "unzip" subsystem indices from their charges
+    charges = [transition[0] for transition in transitions]
     def _rule(*indices):
         index = indices[0]
         chg_i, chg_j = charges[index]
         return chg_i - chg_j
     return dynamic_array(_rule, [range(n_frag)])
 
-def _n_states_array(densities, subsys_chgs, n_frag):
-    subsystem, charges = zip(*subsys_chgs)    # "unzip" subsystem indices from their charges
+def _Dmult_array(subsys_chgs, n_frag):
+    _, transitions = zip(*subsys_chgs)    # "unzip" subsystem indices from their charges
+    mults = [transition[1] for transition in transitions]
     def _rule(*indices):
         index = indices[0]
-        n_states = densities[subsystem[index]]['n_states']
-        n_states_bra = densities[subsystem[index]]['n_states_bra']
+        mult_i, mult_j = mults[index]
+        return mult_i - mult_j
+    return dynamic_array(_rule, [range(n_frag)])
+
+def _mult_array(subsys_chgs, n_frag):
+    _, transitions = zip(*subsys_chgs)
+    mults = [transition[1] for transition in transitions]
+    def _rule(*indices):
+        return mults[indices[0]]
+    return dynamic_array(_rule, [range(n_frag)])
+
+def _n_states_array(densities, subsys_chgs, n_frag):
+    subsystem, transitions = zip(*subsys_chgs)    # "unzip" subsystem indices from their charges
+    charges = [transition[0] for transition in transitions]
+    mults = [transition[1] for transition in transitions]
+    def _rule(*indices):
+        index = indices[0]
         chg_i, chg_j = charges[index]
-        return n_states_bra[chg_i], n_states[chg_j]
+        mult_i, mult_j = mults[index]
+        frag = densities[subsystem[index]]
+        n_states = frag["n_states"]
+        n_states_bra = frag["n_states_bra"]
+        return (n_states_bra[chg_i][mult_i], n_states[chg_j][mult_j])
     return dynamic_array(_rule, [range(n_frag)])
 
 def _density_array(densities, label, subsys_chgs, n_frag):
-    _, charges = zip(*subsys_chgs)    # "unzip" subsystem indices from their charges
+    _, transitions = zip(*subsys_chgs)
+    charges = [transition[0] for transition in transitions]
+    mults   = [transition[1] for transition in transitions]
     def _rule(*indices):
         index = indices[0]
         try:
-            rho = densities[index][label][charges[index]]    # charges[index] is the bra and ket charge
+            rho = densities[index][label][charges[index]][mults[index]]    # charges/mults[index] is the bra and ket charge
         except KeyError:
             rho = None    # eventually return an object whose __getitem__ member reports exactly what is missing (in case access is attempted)
         return rho
     return dynamic_array(_rule, [range(n_frag)])
 
 def _precontract_array(contract_cache, label, subsys_chgs, n_indices, n_frag):
-    subsystem, charges = zip(*subsys_chgs)    # "unzip" subsystem indices from their charges
+    subsystem, transitions = zip(*subsys_chgs)    # "unzip" subsystem indices from their charges
     precon = contract_cache[label]
     n_densities = len(label.split("_")) - 1
     def _rule(*indices):
-        rho_charges = tuple(charges[m] for m in indices[:n_densities])
+        rho_transitions = tuple(transitions[m] for m in indices[:n_densities])
         indices = tuple(subsystem[m] for m in indices)
         if len(indices)==1:  indices = indices[0]
         contraction = precon[indices]
         try:
-            for braket_charge in rho_charges:
-                contraction = contraction[braket_charge]
+            for transition in rho_transitions:
+                charge_pair = transition[0]
+                mult_pair   = transition[1]
+                contraction = contraction[charge_pair]
+                contraction = contraction[mult_pair]
         except KeyError:
             contraction = None    # eventually return an object whose __getitem__ member reports exactly what is missing (in case access is attempted)
         except RuntimeError as err:
