@@ -17,12 +17,24 @@
 #
 import re
 from sympy import sqrt, S as Sym
-from sympy.physics.wigner import wigner_9j
+from sympy.physics.wigner import wigner_6j
 
 
 def mult_to_spin(mult):
     """Convert multiplicity (2S+1) to spin."""
     return Sym(mult - 1) / 2
+
+
+def _triangle_allowed(j1, j2, j3):
+    """
+    Return True if j1, j2, j3 satisfy the angular-momentum
+    triangle conditions.
+    """
+    return (
+        abs(j1 - j2) <= j3 <= j1 + j2
+        and
+        (j1 + j2 + j3).is_integer
+    )
 
 
 def recoupling_factor(
@@ -34,7 +46,16 @@ def recoupling_factor(
     tensor_mult,
 ):
     """
-    Spin recoupling coefficient for two spin-adapted monomer transition densities.
+    Spin recoupling coefficient for two spin-adapted monomer
+    transition densities.
+
+    The coefficient is the reduction of
+
+        { S1'  S2'  S
+          k    k    0
+          S1   S2   S }
+
+    from the corresponding 9-j symbol to a 6-j symbol.
 
     Parameters
     ----------
@@ -45,14 +66,15 @@ def recoupling_factor(
         Multiplicities of the monomer states in the ket.
 
     total_mult
-        Total multiplicity of the dimer state (identical for bra and ket).
+        Total multiplicity of the supersystem state.
 
     tensor_mult
         Multiplicity of the tensor operator:
 
-            1 : singlet pair density (k = 0)
-            2 : single creation/annihilation (k = 1/2)
-            3 : spin density (k = 1)
+            1 : k = 0
+            2 : k = 1/2
+            3 : k = 1
+            ...
 
     Returns
     -------
@@ -69,80 +91,88 @@ def recoupling_factor(
     Stot = mult_to_spin(total_mult)
     k = mult_to_spin(tensor_mult)
 
-    ninej = wigner_9j(
+    #
+    # The tensor of rank k must be able to connect the bra and ket
+    # spin on each fragment separately, otherwise sympy won't return
+    # zero, but an error instead.
+    #
+    if not _triangle_allowed(S1p, S1, k):
+        return 0.0
+
+    if not _triangle_allowed(S2p, S2, k):
+        return 0.0
+
+    #
+    # Reduction of
+    #
+    #     { S1' S2' S
+    #       k   k   0
+    #       S1  S2  S }
+    #
+    # to a 6-j symbol:
+    #
+    #     (-1)^(S2' + S + k + S1)
+    #     -------------------------------- { S1' S2' S
+    #             sqrt(2k+1)                S2  S1  k }
+    #
+    # The factor sqrt(2S+1) from the original 9-j expression
+    # cancels against the corresponding zero-entry reduction.
+    #
+    phase_exponent = S2p + Stot + k + S1
+
+    phase = (-1) ** int(phase_exponent)
+
+    sixj = wigner_6j(
         S1p, S2p, Stot,
-        k,   k,   Sym(0),
-        S1,  S2,  Stot, prec=64
+        S2,  S1,  k,
     )
-    prefactor = sqrt(2*Stot + 1)   # Delta_0(S_tot, S_tot)
-    return float(prefactor * ninej)
+
+    prefactor = phase / sqrt(2 * k + 1)
+
+    return float(prefactor * sixj)
+
 
 def tensor_multiplicities_from_label(label):
     """
-    Determine the allowed tensor multiplicities from the
-    operator topology encoded in the diagram label.
+    Determine the allowed tensor multiplicities from the operator
+    topology encoded in the diagram label.
 
-    The diagram labels encode how every field operator is
-    distributed over the fragments.
+    The returned multiplicities describe the tensor rank k:
 
-        s : ca
-        t : ca
-        u : core,c,a
-        v : ccaa
+        1 -> k = 0
+        2 -> k = 1/2
+        3 -> k = 1
+        ...
 
-    Local c-a pairs belonging to the same tensor are already
-    internally spin coupled and therefore do not contribute
-    an independent spin-1/2 object.
-
-    Returns
-    -------
-    tuple[int]
-
-        Allowed tensor multiplicities
-
-            1 -> k = 0
-            2 -> k = 1/2
-            3 -> k = 1
-            ...
+    Local c-a pairs belonging to the same operator are internally
+    rank restricted.  Their number is therefore tracked separately
+    through ``restr_ca`` and does not enter the tensor multiplicity
+    calculation.
     """
 
-    free_legs = 0
+    free_legs = [0, 0]
 
-    #
-    # parse every tensor appearing in the label
-    #
     for tensor, digits in re.findall(r"([stuv])([01]+)", label):
 
-        #
-        # assign operators to the fragment indices encoded
-        # in the label
-        #
         if tensor == "s":
-
             ops = [
                 ("c", digits[0]),
                 ("a", digits[1]),
             ]
 
         elif tensor == "t":
-
             ops = [
                 ("c", digits[0]),
                 ("a", digits[1]),
             ]
 
         elif tensor == "u":
-
-            #
-            # first digit = core
-            #
             ops = [
                 ("c", digits[1]),
                 ("a", digits[2]),
             ]
 
         elif tensor == "v":
-
             ops = [
                 ("c", digits[0]),
                 ("c", digits[1]),
@@ -151,57 +181,32 @@ def tensor_multiplicities_from_label(label):
             ]
 
         else:
-
             raise RuntimeError(f"Unknown tensor '{tensor}'")
 
-        #
-        # collect operators by fragment
-        #
         fragment_ops = {}
 
         for op, frag in ops:
-
             fragment_ops.setdefault(frag, []).append(op)
 
-        #
-        # remove local c-a pairs
-        #
-        for ops_here in fragment_ops.values():
+        for frag, ops_here in fragment_ops.items():
 
             nc = ops_here.count("c")
             na = ops_here.count("a")
 
             paired = min(nc, na)
 
-            free_legs += (nc - paired)
-            free_legs += (na - paired)
+            free_legs[int(frag)] += nc - paired
+            free_legs[int(frag)] += na - paired
 
-    #
-    # every two uncoupled spin-1/2 objects define
-    # one unit of tensor rank
-    #
-    kmax = free_legs // 2
+    # the rank for both fragments needs to be equal, when put together to the
+    # total Hamiltonian, which has rank 0, so pick the smallest maximum rank possible.
+    return tuple(range(1 + min(free_legs) % 2, min(free_legs) + 2, 2))
 
-    #
-    # convert
-    #
-    # k = 0     -> mult 1
-    # k = 1/2   -> mult 2
-    # k = 1     -> mult 3
-    #
-    return tuple(range(1, 2 * kmax + 2))
 
 def allowed_total_multiplicities(mults):
     """
-    Parameters
-    ----------
-    mults
-        Iterable of monomer multiplicities.
-
-    Returns
-    -------
-    set[int]
-        Allowed coupled multiplicities.
+    Return all multiplicities obtainable by successively coupling
+    the supplied monomer multiplicities.
     """
 
     allowed = {mults[0]}
@@ -221,104 +226,148 @@ def allowed_total_multiplicities(mults):
             S = Smin
 
             while S <= Smax:
-
-                new_allowed.add(
-                    int(2 * S + 1)
-                )
-
+                new_allowed.add(int(2 * S + 1))
                 S += 1
 
         allowed = new_allowed
 
     return allowed
 
-def tensor_Dmult(tensor_mult, Dchgs):
+
+def tensor_restr_ca_from_label(label):
     """
-    Map a tensor multiplicity onto the corresponding
-    multiplicity change.
+    Determine how many c-a pairs are locally restricted to rank k=0.
+
+    A c-a pair is restricted when the creator and annihilator belonging
+    to the same operator occur on the same fragment.
+
+    The operator labels use creator-first / annihilator-second ordering,
+    so the relevant local pairs can be identified directly from the
+    fragment indices.
+
+    Returns
+    -------
+    int
+        Number of locally rank-0-restricted c-a pairs.
     """
 
-    if tensor_mult == 1:
-        return (0, 0)
+    restr_ca = [0, 0]
 
-    if tensor_mult == 2:
-        return Dchgs
+    for tensor, digits in re.findall(r"([stuv])([01]+)", label):
 
-    step = tensor_mult - 1
+        if tensor == "s":
+            creator_frag = digits[0]
+            annihilator_frag = digits[1]
 
-    Dmult = []
+            if creator_frag == annihilator_frag:
+                restr_ca[int(digits[0])] += 1
 
-    for dchg in Dchgs:
+        elif tensor == "t":
+            creator_frag = digits[0]
+            annihilator_frag = digits[1]
 
-        if dchg > 0:
-            Dmult.append(step)
+            if creator_frag == annihilator_frag:
+                restr_ca[int(digits[0])] += 1
 
-        elif dchg < 0:
-            Dmult.append(-step)
+        elif tensor == "u":
+            creator_frag = digits[1]
+            annihilator_frag = digits[2]
+
+            if creator_frag == annihilator_frag:
+                restr_ca[int(digits[1])] += 1
+
+        elif tensor == "v":
+            #
+            # v has creators first and annihilators second:
+            #
+            #   c(d0) c(d1) a(d2) a(d3)
+            #
+            # The two operator-local ca pairings are therefore
+            #
+            #   d0 <-> d2
+            #   d1 <-> d3
+            #
+            if digits[0] == digits[2]:
+                restr_ca[int(digits[0])] += 1
+
+            if digits[1] == digits[3]:
+                restr_ca[int(digits[1])] += 1
 
         else:
-            Dmult.append(0)
+            raise RuntimeError(f"Unknown tensor '{tensor}'")
 
-    return tuple(Dmult)
+    return restr_ca
+
 
 def diagram_couplings(supersys_info, X, Dchgs, tensor_mults):
     """
     Return all spin-recoupling contributions for this diagram.
 
-    Parameters
-    ----------
-    supersys_info
-        Contains the requested total multiplicity.
+    Each returned entry contains
 
-    X
-        Fragment resolver for one particular permutation.
+        (prefactor, Dmult, rank2)
 
-    Dchgs
-        Charge changes of the active fragments.
+    where
 
-    tensor_mults
-        Tensor multiplicities allowed by the contraction topology.
+        prefactor
+            Spin recoupling coefficient.
 
-    Returns
-    -------
-    list[(prefactor, Dmult)]
+        Dmult
+            Required bra-ket multiplicity difference of each
+            fragment density.
 
-        Empty list
-            Diagram forbidden.
+        rank2
+            Twice the tensor rank k.  Thus
 
-        Otherwise
-            Each tuple contains one recoupling prefactor together with
-            the multiplicity differences required from the transition
-            densities.
+                rank2 = 0  -> k = 0
+                rank2 = 1  -> k = 1/2
+                rank2 = 2  -> k = 1
+                ...
+
+    The restriction in the number of rank-0 ca pairs is diagram
+    specific and is therefore not part of this return value.
     """
 
     #
     # Non-spin-adapted calculations.
     #
     if X.mult[0][0] is None:
-        return [(1.0, None)]
+        return [(1.0, None, None)]
 
     target_mult = supersys_info.target_multiplicity
 
     #
-    # The complete subsystem represented by X already consists only
-    # of the fragments participating in this diagram.
+    # Spin recoupling is currently implemented for dimer diagrams.
     #
-    if len(X.mult) != 2:
+    if len(X.mult) != 2 and len(X.mult) != 1:
         raise NotImplementedError(
-            "Spin recoupling currently implemented only for dimer diagrams."
+            "Spin recoupling currently implemented only for monomer and dimer diagrams."
         )
+
+    if len(X.mult) == 1:
+        bra_mult, ket_mult = X.mult[0]
+
+        if bra_mult != target_mult or ket_mult != target_mult:
+            return []
+
+        return [
+            (
+                1.0,       # prefactor
+                (0, 0),    # Dmult
+                0,       # rank2 = 2*k
+            )
+        ]
 
     #
     # Check whether the requested supersystem multiplicity can be
     # formed from the bra and ket fragment multiplicities.
     #
     bra_allowed = allowed_total_multiplicities(
-        [mult_i for mult_i, _ in X.mult]
+        [X.mult[i][0] for i in range(len(X.mult))] #[mult_i for mult_i, _ in X.mult]
     )
 
     ket_allowed = allowed_total_multiplicities(
-        [mult_j for _, mult_j in X.mult]
+        [X.mult[i][1] for i in range(len(X.mult))] #[mult_j for _, mult_j in X.mult]
     )
 
     if target_mult not in bra_allowed:
@@ -327,10 +376,17 @@ def diagram_couplings(supersys_info, X, Dchgs, tensor_mults):
     if target_mult not in ket_allowed:
         return []
 
-    (bra_mult1, ket_mult1), (bra_mult2, ket_mult2) = X.mult
+    mult1 = X.mult[0]
+    mult2 = X.mult[1]
+
+    bra_mult1, ket_mult1 = mult1
+    bra_mult2, ket_mult2 = mult2
 
     couplings = []
 
+    #
+    # tensor_mult = 2*k + 1
+    #
     for tensor_mult in tensor_mults:
 
         prefactor = recoupling_factor(
@@ -345,8 +401,22 @@ def diagram_couplings(supersys_info, X, Dchgs, tensor_mults):
         if abs(prefactor) < 1e-10:
             continue
 
-        Dmult = tensor_Dmult(Dchgs, tensor_mult)
+        # returning Dmults here is not a unique definition, but that
+        # is also not necessary, because only one specific transition of
+        # subsystem-transitions is requested.
+        Dmult = (
+            bra_mult1 - ket_mult1,
+            bra_mult2 - ket_mult2,
+        )
 
-        couplings.append((prefactor, Dmult))
+        rank2 = tensor_mult - 1
+
+        couplings.append(
+            (
+                prefactor,
+                Dmult,
+                rank2,
+            )
+        )
 
     return couplings

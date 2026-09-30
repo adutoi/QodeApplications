@@ -21,6 +21,7 @@ import numpy as np
 import struct
 from pathlib import Path
 from densities import _tens_wrap
+from ..dens_util import build_reverse_density_spin_adapt, multiplicity_iterator
 
 
 def _load_tensor(obj):
@@ -32,149 +33,6 @@ def _load_tensor(obj):
     dims = obj["dims"]
     data = np.array(obj["data"], dtype=np.float64)
     return data.reshape(dims, order="C")
-
-
-def _multiplicity_iterator(second_layer):
-    """
-    Normalize the multiplicity/channel hierarchy.
-
-    Spin-adapted input:
-        (multiplicity_bra, multiplicity_ket, k, restr_ca) -> states
-
-    Non-spin-adapted input:
-        states
-
-    Returns
-    -------
-    iterator over
-        (channel, state_group)
-
-    where channel is
-
-        (mult_bra, mult_ket, k, restr_ca)
-
-    for spin-adapted densities and
-
-        (None, None, None, None)
-
-    for non-spin-adapted densities.
-    """
-
-    #
-    # State dictionaries always contain the keys
-    #
-    #     dims
-    #     data
-    #
-    first_value = next(iter(second_layer.values()))
-
-    if isinstance(first_value, dict) and "dims" in first_value:
-        yield (None, None, None, None), second_layer
-
-    else:
-        for channel, state_group in second_layer.items():
-            channel = tuple(map(int, channel.split("_")))
-
-            if len(channel) != 4:
-                raise ValueError(
-                    "Expected density channel "
-                    "(mult_bra, mult_ket, k, restr_ca), "
-                    f"got {channel!r}"
-                )
-
-            yield channel, state_group
-
-
-def _build_reverse_density(
-    densities,
-    dens_name,
-    data,
-    charge_pair,
-    channel,
-):
-    """
-    Construct the Hermitian/anti-Hermitian partner density.
-
-    Parameters
-    ----------
-    channel
-        (mult_bra, mult_ket, rank2, restr_ca)
-    """
-
-    chg_a, chg_b = charge_pair
-
-    mult_a, mult_b, rank2, restr_ca = channel
-
-    rev_op_string = (
-        dens_name[::-1]
-        .replace("c", "x")
-        .replace("a", "c")
-        .replace("x", "a")
-    )
-
-    if rev_op_string not in densities:
-        densities[rev_op_string] = {}
-
-    #
-    # Don't regenerate self-adjoint operators.
-    #
-    if (
-        rev_op_string == dens_name
-        and mult_a == mult_b
-    ):
-        return
-
-    indices = tuple(p + 2 for p in range(len(dens_name)))
-    rev_indices = tuple(reversed(indices))
-
-    #
-    # Non-spin-adapted tensors.
-    #
-    if mult_a is None:
-        parity_factor = 1
-
-    #
-    # Spin-adapted tensors.
-    #
-    else:
-        #
-        # rank2 = 2*k.
-        #
-        k = rank2 / 2.0
-
-        #
-        # q = Delta S = S_bra - S_ket.
-        #
-        q = (mult_b - mult_a) / 2.0
-
-        exponent = k - q
-
-        if not np.isclose(exponent, round(exponent)):
-            raise ValueError(
-                "Invalid tensor-channel parity exponent: "
-                f"k={k}, q={q}, exponent={exponent}."
-            )
-
-        parity_factor = (-1) ** int(round(exponent))
-
-    reverse_channel = (
-        mult_b,
-        mult_a,
-        rank2,
-        restr_ca,
-    )
-
-    densities[rev_op_string].setdefault(
-        (chg_b, chg_a),
-        {}
-    )[reverse_channel] = _tens_wrap(
-        parity_factor
-        * np.transpose(
-            data,
-            (1, 0, *rev_indices),
-        )
-    )
-
 
 def load_densities_json(filename, spin_adapted=None):
     """
@@ -204,7 +62,9 @@ def load_densities_json(filename, spin_adapted=None):
 
     densities = {}
 
-    print("apply -2 definition on ccaa in json load")
+    print("apply -2 definition on ccaa in json load, note that this definition" \
+    "is only in line with the internal hummr definition, but not with the" \
+    "ccaa build of the density builder from the XR module.")
 
     with open(filename, "r") as f:
         root = json.load(f)
@@ -266,7 +126,7 @@ def load_densities_json(filename, spin_adapted=None):
 
             channel_map = {}
 
-            for channel, state_group in _multiplicity_iterator(
+            for channel, state_group in multiplicity_iterator(
                 second_layer
             ):
 
@@ -328,7 +188,7 @@ def load_densities_json(filename, spin_adapted=None):
                 #
                 # Generate the reversed density immediately.
                 #
-                _build_reverse_density(
+                build_reverse_density_spin_adapt(
                     densities=densities,
                     dens_name=dens_name,
                     data=data,

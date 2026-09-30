@@ -39,6 +39,7 @@ from precontract import precontract
 from diagram_lists import *
 
 from dens_from_hummr import load_densities_json, load_mos_from_hummr
+from dens_provider import DensBackend
 
 class empty(object):  pass     # needed for unpickling - remove when all Be-states drivers updated to use struct instead
 
@@ -63,6 +64,7 @@ global_timings.start()
 
 # Information about the Be2 supersystem
 n_frag       = 2
+target_charge = 0
 target_multiplicity = 1
 displacement = float(sys.argv[1])
 #states       = ["rho/{}.pkl".format(sys.argv[2]), "rho/{}.pkl".format(sys.argv[3])]
@@ -70,6 +72,18 @@ project_core = True
 if len(sys.argv)==5:
     if sys.argv[4]=="no-proj":
         project_core = False
+
+roots = {
+            0:  {1: 4},#, 3: 2},
+            +1: {2: 4},
+            -1: {2: 4, 4: 2},
+        }
+
+dens_builder = DensBackend("hummr")
+
+# compute only unique fragments
+frags = [["Be", "/home/marco/hummr_tests/scratch/be_631g_fci.inp", roots, 0]]
+(mo_coeffs, states) = dens_builder.init_backend(frags)[0]
 
 # "Assemble" the supersystem for the displaced fragments and get integrals
 BeN = []
@@ -87,14 +101,19 @@ for m in range(int(n_frag)):
     print("no core and therefore no core projection, as long as core is not provided as frozen core")
     Be.basis.core = []#[0]
     #Be.basis.MOcoeffs = pickle.load(open(f"/home/marco/QodeApplications/tests/ref_data/check_mos_{m}.pkl", "rb"))
-    Be.basis.MOcoeffs = load_mos_from_hummr("/home/marco/hummr_tests/Be_mos.C0")
 
-    Be.rho = load_densities_json("/home/marco/hummr_tests/hummr_dens_for_xr.json",
-                                 spin_adapted=True)
+
+    #Be.basis.MOcoeffs = load_mos_from_hummr("/home/marco/hummr_tests/Be_mos.C0")
+    Be.basis.MOcoeffs = mo_coeffs
+
+    #Be.rho = load_densities_json("/home/marco/hummr_tests/hummr_dens_for_xr.json",
+    #                             spin_adapted=True)
+    Be.rho = dens_builder.build_densities("Be", 0, states, states)
 
     #Be.rho['n_states'] = {chg_a: chg_dens.shape[m] for (chg_a, chg_b), chg_dens in Be.rho["ca"].items()}
     #Be.rho['n_elec'] = {chgs[m]: Be.n_elec_ref - chgs[m] for chgs in Be.rho["ca"]}
-    Be.rho['n_states'] = {chg_a: {mult_a: mult_dens.shape[m] for (mult_a, mult_n), mult_dens in chg_dens}
+    # TODO: give general build with mult = None for unrestricted
+    Be.rho['n_states'] = {chg_a: {mult_a: mult_dens.shape[m] for (mult_a, mult_b, _, _), mult_dens in chg_dens.items() if mult_a == mult_b}
                           for (chg_a, chg_b), chg_dens in Be.rho["ca"].items()}
     Be.rho['n_elec'] = {chgs[m]: Be.n_elec_ref - chgs[m] for chgs in Be.rho["ca"]}
 
@@ -103,6 +122,11 @@ for m in range(int(n_frag)):
 print("get_ints ...")
 symm_ints, bior_ints, nuc_rep = get_ints(BeN, project_core, integral_timings, spin_ints=False, backend="lible")#"hdf5")
 print("done")
+
+print(BeN[0].rho["ca"][(0,0)][(1,1,0,1)][0,0,:,:])
+#print(BeN[1].rho["a"][(0,-1)][(1,2,1,0)])
+#print(BeN[0].rho["a"][(1,0)])
+#print(BeN[0].rho["c"][(0,1)])
 
 #eri_final_hummr_pre = numpy.loadtxt("eri.dat")
 #eri_final_hummr = eri_final_hummr_pre.reshape((9, 9, 9, 9))
@@ -156,7 +180,52 @@ SV_blocks_bior = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=stru
 #SV_blocks_diff = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, V=bior_ints.V_diff), diagrams=SV_diagrams, contract_cache=contract_cache, timings=diagram_timings, precon_timings=precontract_timings)
 
 # charges under consideration
-monomer_charges = [0, +1, -1]
+monomer_charges = [0]#[0, +1, -1]
+# spin-adapted
+monomer_sectors = [
+    (chg, mult)
+    for chg in monomer_charges
+    for mult in sorted(BeN[0].rho['n_states'][chg])
+]
+# unrestricted
+#monomer_sectors = [
+#    (chg, None)
+#    for chg in monomer_charges
+#]
+
+all_dimer_charges = []
+for i in monomer_charges:
+    for j in monomer_charges:
+        #if i + j != target_charge:
+        #    continue
+        all_dimer_charges.append((i,j))
+
+def _multiplicities_couple(mult1, mult2, target_mult):
+    """
+    True if fragment multiplicities mult1 and mult2 can couple
+    to target_mult.
+    """
+
+    if mult1 != None and mult2 != None:
+        return (
+            abs(mult1 - mult2) + 1 <= target_mult <= mult1 + mult2 - 1
+            and
+            (mult1 + mult2 + target_mult) % 2 == 1
+        )
+    elif mult1 == None and mult2 == None:
+        return True
+    else:
+        raise NotImplementedError("One fragment is unrestricted and the other one is spin-adapted")
+
+dimer_sectors = []
+for chg_pair in all_dimer_charges:
+    for mult_a in sorted(BeN[0].rho['n_states'][chg_pair[0]]):
+        for mult_b in sorted(BeN[0].rho['n_states'][chg_pair[1]]):
+            #if not _multiplicities_couple(mult_a, mult_b, target_multiplicity):
+            #    print(f"mults {mult_a} and {mult_b} cannot yield {target_multiplicity} in zeroth order coupling")
+            #    continue
+            dimer_sectors.append(((chg_pair[0], mult_a), (chg_pair[1], mult_b)))
+
 #dimer_charges = {
 #                 6:  [(+1, +1)],
 #                 7:  [(0, +1), (+1, 0)],
@@ -164,7 +233,7 @@ monomer_charges = [0, +1, -1]
 #                 9:  [(0, -1), (-1, 0)],
 #                 10: [(-1, -1)]
 #                }
-all_dimer_charges = [(0,0), (0,+1), (0,-1), (+1,0), (+1,+1), (+1,-1), (-1,0), (-1,+1), (-1,-1)]
+#all_dimer_charges = [(0,0), (0,+1), (0,-1), (+1,0), (+1,+1), (+1,-1), (-1,0), (-1,+1), (-1,-1)]
 
 global_timings.record("setup")
 global_timings.start()
@@ -177,9 +246,9 @@ print("build H1")
 
 H1 = []
 for m in [0,1]:
-    H1 += [  XR_term.monomer_matrix(ST_blocks_symm, {1: ST1[0]}, m, monomer_charges, matrix_timings) \
-           + XR_term.monomer_matrix(SU_blocks_symm, {1: SU1[0]}, m, monomer_charges, matrix_timings) \
-           + XR_term.monomer_matrix(SV_blocks_symm, {1: SV1[0]}, m, monomer_charges, matrix_timings) ]
+    H1 += [  XR_term.monomer_matrix(ST_blocks_symm, {1: ST1[0]}, m, monomer_sectors, matrix_timings) \
+           + XR_term.monomer_matrix(SU_blocks_symm, {1: SU1[0]}, m, monomer_sectors, matrix_timings) \
+           + XR_term.monomer_matrix(SV_blocks_symm, {1: SV1[0]}, m, monomer_sectors, matrix_timings) ]
 #for i, row in enumerate(H1[0]):
 #    for j, elem in enumerate(row):
 #        if abs(elem) > 1e-2:
@@ -189,8 +258,8 @@ for m in [0,1]:
 #print(H1[1])
 print("build H2 (1e)")
 
-H2 =   XR_term.dimer_matrix(ST_blocks_bior, {1: ST1[0], 2: ST2[0]}, (0,1), all_dimer_charges, matrix_timings) \
-     + XR_term.dimer_matrix(SU_blocks_bior, {1: SU1[0], 2: SU2[0]}, (0,1), all_dimer_charges, matrix_timings)
+H2 =   XR_term.dimer_matrix(ST_blocks_bior, {1: ST1[0], 2: ST2[0]}, (0,1), dimer_sectors, matrix_timings) \
+     + XR_term.dimer_matrix(SU_blocks_bior, {1: SU1[0], 2: SU2[0]}, (0,1), dimer_sectors, matrix_timings)
 #for i, row in enumerate(H2):
 #    for j, elem in enumerate(row):
 #        if abs(elem) > 1e-2:
@@ -198,15 +267,15 @@ H2 =   XR_term.dimer_matrix(ST_blocks_bior, {1: ST1[0], 2: ST2[0]}, (0,1), all_d
 #print(numpy.linalg.norm(H2))
 print("build H2 (2e)")
 
-H2 +=  XR_term.dimer_matrix(SV_blocks_bior, {1: SV1[0], 2: SV2[0]}, (0,1), all_dimer_charges, matrix_timings)
+H2 +=  XR_term.dimer_matrix(SV_blocks_bior, {1: SV1[0], 2: SV2[0]}, (0,1), dimer_sectors, matrix_timings)
 #print(numpy.linalg.norm(H2))
 #print(H2)
 print("finish H2 (subtract monomers)")
 
 H2blocked = H2
-H2blocked -=  XR_term.dimer_matrix(ST_blocks_symm, {1: ST1[0]}, (0,1), all_dimer_charges, matrix_timings) \
-            + XR_term.dimer_matrix(SU_blocks_symm, {1: SU1[0]}, (0,1), all_dimer_charges, matrix_timings) \
-            + XR_term.dimer_matrix(SV_blocks_symm, {1: SV1[0]}, (0,1), all_dimer_charges, matrix_timings)
+H2blocked -=  XR_term.dimer_matrix(ST_blocks_symm, {1: ST1[0]}, (0,1), dimer_sectors, matrix_timings) \
+            + XR_term.dimer_matrix(SU_blocks_symm, {1: SU1[0]}, (0,1), dimer_sectors, matrix_timings) \
+            + XR_term.dimer_matrix(SV_blocks_symm, {1: SV1[0]}, (0,1), dimer_sectors, matrix_timings)
 #print(numpy.linalg.norm(H2))
 #for i, row in enumerate(H2):
 #    for j, elem in enumerate(row):
@@ -240,6 +309,7 @@ print(full_eigvals_check)
 print("Apply H")
 
 # well, this sucks.  reorder the states
+"""
 dims0 = [BeN[0].rho['n_states'][chg] for chg in [0,+1,-1]]
 dims1 = [BeN[1].rho['n_states'][chg] for chg in [0,+1,-1]]
 mapping2 = [[None]*sum(dims0) for _ in range(sum(dims1))]
@@ -262,10 +332,121 @@ H2 = numpy.zeros(H2blocked.shape)
 for i,i_ in enumerate(mapping):
     for j,j_ in enumerate(mapping):
         H2[i,j] = H2blocked[i_,j_]
+"""
+# -------------------------------------------------------------------------
+# Reorder the dimer Hamiltonian from dimer-sector ordering
+#
+#     dimer_sectors:
+#         ((charge_1, mult_1), (charge_2, mult_2))
+#
+# into the tensor-product ordering
+#
+#     fragment-1 basis  x  fragment-2 basis
+#
+# where each fragment's local basis is ordered as
+#
+#     charge -> multiplicity -> state.
+#
+# H2blocked is in the ordering produced by XR_term.dimer_matrix().
+# H2 will be in the ordering expected by FCI and by the state optimizer.
+# -------------------------------------------------------------------------
+
+rho0 = BeN[0].rho
+rho1 = BeN[1].rho
+
+# Local basis states of each fragment in the desired (charge, multiplicity)
+# ordering.  Each entry is
+#
+#     (charge, multiplicity, state)
+#
+# and the position in the list is the local tensor-product basis index.
+#
+# In the unrestricted case the multiplicity dictionary has only the
+# unrestricted level, so the same construction can be used with mult=None
+# if the corresponding n_states dictionaries are structured that way.
+
+frag0_states = []
+
+for chg in monomer_charges:
+    for mult in rho0['n_states'][chg]:
+        for state in range(rho0['n_states'][chg][mult]):
+            frag0_states.append((chg, mult, state))
+
+frag1_states = []
+
+for chg in monomer_charges:
+    for mult in rho1['n_states'][chg]:
+        for state in range(rho1['n_states'][chg][mult]):
+            frag1_states.append((chg, mult, state))
+
+
+# Map every dimer-sector basis state to its position in H2blocked.
+#
+# dimer_matrix() uses exactly this ordering:
+#
+#     for sector in dimer_sectors:
+#         all states of fragment 1 in that sector
+#         x
+#         all states of fragment 2 in that sector
+#
+# Therefore construct the inverse lookup explicitly.
+
+dimer_index = {}
+
+idx = 0
+
+for (chg1, mult1), (chg2, mult2) in dimer_sectors:
+
+    n0 = rho0['n_states'][chg1][mult1]
+    n1 = rho1['n_states'][chg2][mult2]
+
+    for state0 in range(n0):
+        for state1 in range(n1):
+
+            dimer_index[
+                (chg1, mult1, state0,
+                 chg2, mult2, state1)
+            ] = idx
+
+            idx += 1
+
+
+# Construct the permutation from the desired tensor-product ordering
+# to the current dimer-sector ordering.
+#
+# H2new[i,j] = H2blocked[mapping[i], mapping[j]].
+
+mapping = []
+
+for chg0, mult0, state0 in frag0_states:
+
+    for chg1, mult1, state1 in frag1_states:
+
+        key = (
+            chg0, mult0, state0,
+            chg1, mult1, state1,
+        )
+
+        mapping.append(dimer_index[key])
+
+
+# Apply the same permutation to rows and columns because the
+# supersystem Hamiltonian is square.
+
+H2 = H2blocked[numpy.ix_(mapping, mapping)]
+
+print("H1[0] diagonal")
+print(numpy.diagonal(H1[0]))
+#print("H2 diagonal")
+#print(numpy.diagonal(H2))
+#print("H2[0,:]")
+#print(H2[0, :])
+#print("H2[:,0]")
+#print(H2[:, 0])
 
 out, resources = struct(log=qode.util.textlog(echo=True)), qode.util.parallel.resources(1)
 #E, T = excitonic.ccsd((H1,[[None,H2],[None,None]]), out, resources)
-E, T = excitonic.fci((H1,[[None,H2],[None,None]]), out, target_state=slice(0, 20))
+E, T = excitonic.fci((H1,[[None,H2],[None,None]]), out, target_state=0)#target_state=slice(0, 20))
 E += sum(nuc_rep[m1,m2] for m1 in range(n_frag) for m2 in range(m1+1))
 out.log("\nTotal Excitonic Energy = ", E)
 

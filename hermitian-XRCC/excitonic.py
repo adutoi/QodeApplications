@@ -17,6 +17,8 @@
 #
 import time
 import numpy
+import scipy
+import itertools
 import qode
 from   qode.util import sort_eigen
 from   qode.many_body import CCSD
@@ -53,7 +55,7 @@ def ccsd(H, out, resources, diis_start=0):
 
 
 
-def fci(H, out, target_state=0):
+def fci_old(H, out, target_state=0):
 	#monomer_Hamiltonians, _, _ = H
 	monomer_Hamiltonians, _ = H
 	N_frag = len(monomer_Hamiltonians)
@@ -86,3 +88,132 @@ def fci(H, out, target_state=0):
 
 	out.log("FCI Energy  =", E)
 	return E, vecs[target_state]
+
+
+def _build_fci_matrix(monomer_Hamiltonians, dimer_Couplings):
+    """
+    Build the Hamiltonian in the tensor-product basis.
+
+    monomer_Hamiltonians[m]:
+        square matrix for fragment m
+
+    dimer_Couplings[m][n]:
+        square matrix in the product basis of fragments m and n
+
+    The local fragment dimensions need not be equal.
+    """
+
+    N_frag = len(monomer_Hamiltonians)
+
+    dims = [
+        H.shape[0]
+        for H in monomer_Hamiltonians
+    ]
+
+    for m, H in enumerate(monomer_Hamiltonians):
+
+        if H.shape != (dims[m], dims[m]):
+            raise ValueError(
+                f"Monomer Hamiltonian {m} is not square: {H.shape}"
+            )
+
+    dim_total = numpy.prod(dims)
+
+    Hmat = numpy.zeros(
+        (dim_total, dim_total),
+        dtype=numpy.result_type(
+            *monomer_Hamiltonians,
+            *[
+                dimer_Couplings[m][n]
+                for m in range(N_frag)
+                for n in range(m + 1, N_frag)
+                if dimer_Couplings[m][n] is not None
+            ],
+        ),
+    )
+
+    #
+    # Convert a tuple of local state indices to the corresponding
+    # flattened tensor-product index.
+    #
+    def flat_index(indices):
+        index = 0
+
+        for m, i in enumerate(indices):
+            index = index * dims[m] + i
+
+        return index
+
+    #
+    # Loop over all bra/ket tensor-product states.
+    #
+    for bra in itertools.product(*[range(dim) for dim in dims]):
+        I = flat_index(bra)
+
+        for ket in itertools.product(*[range(dim) for dim in dims]):
+            J = flat_index(ket)
+
+            value = 0.0
+
+            #
+            # Monomer terms.
+            #
+            for m in range(N_frag):
+                value += monomer_Hamiltonians[m][
+                    bra[m], ket[m]
+                ]
+
+            #
+            # Dimer terms.
+            #
+            for m in range(N_frag):
+                for n in range(m + 1, N_frag):
+
+                    coupling = dimer_Couplings[m][n]
+
+                    if coupling is None:
+                        continue
+
+                    #
+                    # Product-space index for the two local
+                    # states.
+                    #
+                    i = bra[m] * dims[n] + bra[n]
+                    j = ket[m] * dims[n] + ket[n]
+
+                    value += coupling[i, j]
+
+            Hmat[I, J] = value
+
+    return Hmat
+
+def fci(H, out, target_state=0, get_left_and_right=False):
+
+    monomer_Hamiltonians, dimer_Couplings = H
+
+    out.log("Building ...")
+
+    Hmat = _build_fci_matrix(
+        monomer_Hamiltonians,
+        dimer_Couplings,
+    )
+
+    out.log("Diagonalizing ...")
+
+    if get_left_and_right:
+        vals, vecs_l, vecs_r = sort_eigen(
+            scipy.linalg.eig(Hmat, left=True, right=True)
+		)
+    else:
+        vals, vecs = sort_eigen(
+            scipy.linalg.eig(Hmat)
+        )
+
+    E = vals[target_state]
+
+    out.log("FCI Energy  =", E)
+
+    if get_left_and_right:
+        return E, vecs_l[:, target_state], vecs_r[:, target_state]
+    else:
+        return E, vecs[:, target_state]

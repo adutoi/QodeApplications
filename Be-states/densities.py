@@ -67,6 +67,10 @@ def _token_parser(options):
         return answer
     return value
 
+# TODO: Apparently tensorly does not make a deep copy here, if the backend
+# is numpy, as desired, but if the backend is e.g. pytorch this will always
+# perform a deep copy, so it's probably best to benchmark some backends later
+# and then get rid of the tensorly wrapper entirely.
 def _tens_wrap(tensor):
     return tl_tensor.init(tensorly.tensor(tensor, dtype=Double.tensorly))
 

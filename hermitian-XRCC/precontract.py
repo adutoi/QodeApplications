@@ -66,10 +66,10 @@ def precontract(densities, integrals, timings):
             densities_m = densities[indices[0]]
             Dchg = rho_type.count("a") - rho_type.count("c")    # get rid of this and allow the exception
 
-            def contract_rho_int_m(chg_i,chg_j):
+            def contract_rho_int_m(chg_i,chg_j,mult_i,mult_j,rank2,restr_ca):
                 if chg_i-chg_j==Dchg:
                     try:
-                        rho = densities_m[rho_type][chg_i,chg_j]
+                        rho = densities_m[rho_type][chg_i,chg_j][mult_i,mult_j,rank2,restr_ca]
                     except:
                         raise RuntimeError(f"missing density {rho_type} for charges {(chg_i,chg_j)}")
                     timings.start()
@@ -77,8 +77,21 @@ def precontract(densities, integrals, timings):
                     timings.record(label)
                     return result
                 else:
+                    print("None was returned here")
                     return None
-            return dynamic_array(cached(contract_rho_int_m), [densities_m["n_states"].keys()]*2)  # no specification between bra and ket needed, because only keys are required
+            #return dynamic_array(cached(contract_rho_int_m), [densities_m["n_states"].keys()]*2)  # no specification between bra and ket needed, because only keys are required
+            # no specification between bra and ket needed, because only keys are required
+            unique_mults = tuple({
+                mult 
+                for chg_dict in densities_m["n_states"].values() 
+                for mult in chg_dict.keys()
+            })
+            possible_rank2 = (0,1,2,3,4,5,6,7,8)  # god help us, if these are not sufficient
+            # since sigma is block diagonal for hermitian subsystem Hamiltonians and we are
+            # looking at maximum at 2 particle operators, this should never be higher than 2
+            possible_restr_ca = (0,1,2)
+            ranges_with_mults = [densities_m["n_states"].keys()]*2 + [unique_mults]*2 + [possible_rank2] + [possible_restr_ca]
+            return dynamic_array(cached(contract_rho_int_m), ranges_with_mults)
 
         def contract_rho_rho_int(*indices):
             raise NotImplementedError

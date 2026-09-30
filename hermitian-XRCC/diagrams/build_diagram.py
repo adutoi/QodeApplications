@@ -17,7 +17,11 @@
 #
 import re    # regular expressions
 from qode.util.dynamic_array import dynamic_array
-from .coupl_fac import diagram_couplings, tensor_multiplicities_from_label
+from .coupl_fac import (
+    diagram_couplings,
+    tensor_multiplicities_from_label,
+    tensor_restr_ca_from_label,
+)
 
 ####
 # In this file is all the book keeping stuff for getting the right arrays to the diagram contraction
@@ -45,27 +49,42 @@ def build_diagram(contraction, Dchgs, permutations):
         # returns the final objective function that does the contraction once informed of the fragment states.
         label = contraction.__name__
         tensor_mults = tensor_multiplicities_from_label(label)
+        restr_ca = tensor_restr_ca_from_label(label)
+        # _multiplicities supplies
+        #     (frag_idx, charge_pair, multiplicity_pair)
+        #
+        # frag_resolve expects
+        #     (frag_idx, (charge_pair, multiplicity_pair))
+        #
+        # Convert to the combined transition representation here.
+        subsys_transitions = tuple(
+            (frag_idx, (chg_pair, mult_pair))
+            for frag_idx, chg_pair, mult_pair in subsys_chgs
+        )
         # Evaluate one contraction, summing over all allowed
         # tensor multiplicities.
         def permuted_diagram(X, phase):
             couplings = diagram_couplings(supersys_info, X, Dchgs, tensor_mults)
             # No allowed spin coupling.
-            if len(couplings) == 0:
-                return 0.0
+            #if len(couplings) == 0:
+            #    return 0.0
 
             def do_contraction(**args):
+                if len(couplings) == 0:
+                    return None
                 supersys_info.timings.start()
                 result = 0.0
-                for prefactor, Dmult in couplings:
-                    if Dmult is None:  # no plain old unrestricted workflow without spin-adaptation
+                for prefactor, Dmult, rank2 in couplings:
+                    if Dmult is None:  # plain old unrestricted workflow without spin-adaptation
                         Xk = X
-                    else:  # spin-adapted workflow with allowed Dmult, which is nonzero
-                        Xk = X.with_Dmult(Dmult)
-                    # accumulate all allowed combinations of multiplicities with corresponding prefactor
+                    else:  # spin-adapted workflow with allowed Dmult, rank and number of restricted rank-0 ca pairs
+                        Xk = X.with_Dmult(Dmult, rank2, restr_ca)
+                    # accumulate all allowed combinations of multiplicities and rank with corresponding prefactor
                     result += (
                         prefactor
                         * contraction(Xk, **args)
                     )
+
                 result *= phase
                 supersys_info.timings.record(label)
                 return result
@@ -78,7 +97,7 @@ def build_diagram(contraction, Dchgs, permutations):
         permuted_diagrams = []
         for phase, permutation in permutations:
 
-            X = frag_resolve(supersys_info, subsys_chgs, permutation)
+            X = frag_resolve(supersys_info, subsys_transitions, permutation)
 
             # charge selection rule
             if not all(
@@ -116,6 +135,7 @@ class frag_resolve(object):
 	#
         self._supersys_info = supersys_info
         self._n_frag = len(subsys_chgs)
+        self._permutation = permutation
         # Some diagrams need to know the number of e- in the ket for the combined "latter" frags of the un(!)permuted subsystem
         n_j = 0
         label = "".join(str(i) for i in range(self._n_frag))
@@ -176,17 +196,22 @@ class frag_resolve(object):
                     self._storage[label_template] = _density_array(self._densities, label_template[:-1], self._subsys_chgs, self._n_frag)
             return self._storage[label_template][frag_indices]
     
-    def with_Dmult(self, Dmult):
+    def with_Dmult(self, Dmult, rank2, restr_ca):
         """
         Return a lightweight resolver identical to the current one,
-        except that all density lookups use the requested multiplicity
-        differences.
+        except that density lookups use the requested multiplicity
+        differences, tensor rank, and rank-0 ca-pair restriction.
 
         Parameters
         ----------
         Dmult : tuple[int]
-            Required multiplicity differences (bra - ket) for every
-            active fragment.
+            Required multiplicity differences (bra - ket).
+
+        rank2 : int
+            Twice the tensor rank k.
+
+        restr_ca : int or None
+            Number of ca-pairs restricted to rank 0 for this diagram.
 
         Returns
         -------
@@ -204,17 +229,20 @@ class frag_resolve(object):
 
         new._supersys_info = self._supersys_info
         new._n_frag = self._n_frag
-        new._subsys_chgs = self._subsys_chgs
+
+        new._subsys_chgs = tuple(
+            (frag_idx, (chg_pair, (mult_i, mult_j, rank2, restr_ca[i])))
+            for i, (frag_idx, (chg_pair, (mult_i, mult_j))) in enumerate(self._subsys_chgs)
+        )
 
         #
         # Replace only the density resolver.
         #
         new._densities = _subsys_array(
-            self._supersys_info.densities,
-            self._subsys_chgs,
+            new._supersys_info.densities,
+            new._subsys_chgs,
             1,
-            self._n_frag,
-            Dmult=Dmult,
+            new._n_frag,
         )
 
         return new
@@ -223,6 +251,7 @@ class frag_resolve(object):
 
 # The things below are wrapper functions to make the dynamic_array objects, encapsulating the rules used as element generators.
 
+"""
 def _subsys_array(array, subsys_chgs, n_indices, n_frag, Dmult=None):
     subsystem, transitions = zip(*subsys_chgs)    # "unzip" subsystem indices from their charges
     def _rule(*indices):
@@ -238,6 +267,69 @@ def _subsys_array(array, subsys_chgs, n_indices, n_frag, Dmult=None):
             obj = obj[(chg_i, chg_j)][(mult_i, mult_j)]
         return obj
     return dynamic_array(_rule, [range(n_frag)]*n_indices)
+"""
+
+def _subsys_array(
+    array,
+    subsys_chgs,
+    n_indices,
+    n_frag,
+):
+    subsystem, transitions = zip(*subsys_chgs)
+
+    def _rule(*indices):
+
+        absolute_indices = tuple(
+            subsystem[index]
+            for index in indices
+        )
+
+        if len(absolute_indices) == 1:
+            absolute_indices = absolute_indices[0]
+
+        obj = array[absolute_indices]
+
+        """
+        #
+        # Density lookup.
+        #
+        if Dmult is not None and isinstance(obj, dict):
+
+            chg_pair, mult_pair = transitions[indices[0]]
+
+            #chg_i, chg_j = chg_pair
+
+            mult_i, mult_j = mult_pair[:2]
+            #mult_j = mult_i - Dmult[indices[0]]
+            #mult_j = mult_pair[1]
+
+            # TODO: this check is a bit unneccessary, because it passes if the directional mult diff
+            # is correct, but in fact also the actual mults need to be correct, because different
+            # absolute mults lead to different recoupling coefficients.
+            if Dmult[indices[0]] != mult_i - mult_j:
+                raise ValueError(f"provided multiplicities {mult_i, mult_j} don't differ by {Dmult[indices[0]]}")
+
+            #obj = obj[(chg_i, chg_j)]
+
+            #obj = obj[
+            #    (
+            #        mult_i,
+            #        mult_j,
+            #        rank2,
+            #        restr_ca,
+            #    )
+            #]
+
+            #print(obj.keys())
+            obj = obj[chg_pair][mult_pair]
+        """
+
+        return obj
+
+    return dynamic_array(
+        _rule,
+        [range(n_frag)] * n_indices,
+    )
 
 def _Dchg_array(subsys_chgs, n_frag):
     _, transitions = zip(*subsys_chgs)    # "unzip" subsystem indices from their charges
@@ -253,7 +345,7 @@ def _Dmult_array(subsys_chgs, n_frag):
     mults = [transition[1] for transition in transitions]
     def _rule(*indices):
         index = indices[0]
-        mult_i, mult_j = mults[index]
+        mult_i, mult_j, _, _ = mults[index]
         return mult_i - mult_j
     return dynamic_array(_rule, [range(n_frag)])
 
@@ -261,7 +353,7 @@ def _mult_array(subsys_chgs, n_frag):
     _, transitions = zip(*subsys_chgs)
     mults = [transition[1] for transition in transitions]
     def _rule(*indices):
-        return mults[indices[0]]
+        return mults[indices[0]]#[:2]
     return dynamic_array(_rule, [range(n_frag)])
 
 def _n_states_array(densities, subsys_chgs, n_frag):
@@ -282,11 +374,14 @@ def _density_array(densities, label, subsys_chgs, n_frag):
     _, transitions = zip(*subsys_chgs)
     charges = [transition[0] for transition in transitions]
     mults   = [transition[1] for transition in transitions]
+    #print("chgs in _density_array ", charges)
+    #print("mults in _density_array ", mults)
     def _rule(*indices):
         index = indices[0]
         try:
             rho = densities[index][label][charges[index]][mults[index]]    # charges/mults[index] is the bra and ket charge
         except KeyError:
+            print(f"key error for ind {index} label {label} charg {charges[index]} mult {mults[index]}")
             rho = None    # eventually return an object whose __getitem__ member reports exactly what is missing (in case access is attempted)
         return rho
     return dynamic_array(_rule, [range(n_frag)])
@@ -304,8 +399,7 @@ def _precontract_array(contract_cache, label, subsys_chgs, n_indices, n_frag):
             for transition in rho_transitions:
                 charge_pair = transition[0]
                 mult_pair   = transition[1]
-                contraction = contraction[charge_pair]
-                contraction = contraction[mult_pair]
+                contraction = contraction[charge_pair + mult_pair]
         except KeyError:
             contraction = None    # eventually return an object whose __getitem__ member reports exactly what is missing (in case access is attempted)
         except RuntimeError as err:

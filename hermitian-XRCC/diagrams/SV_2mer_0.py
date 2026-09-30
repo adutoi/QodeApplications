@@ -67,7 +67,7 @@ def v0011(X, contract_last=False):
         @ X.aa1(i1,j1,s,r)
         )
 """
-import numpy as np
+#import numpy as np
 
 def v0101(X, contract_last=False):
     if no_result(X, contract_last):  return []

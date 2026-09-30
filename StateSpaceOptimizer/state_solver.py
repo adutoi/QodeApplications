@@ -528,7 +528,7 @@ def optimize_states(max_iter, xr_order, dens_builder_stuff, ints, n_occ, n_orbs,
         #tmp_ccaa = raw(dens[0]["ccaa"][(0,0)])[0, 0]
         #idx = [0, 9]
         #print(tmp_ccaa[np.ix_(idx, idx, idx, idx)])
-        raise ValueError("stop here")
+        #raise ValueError("stop here")
         return state_coeffs_optimized, dens_builder_stuff, dens
     
 

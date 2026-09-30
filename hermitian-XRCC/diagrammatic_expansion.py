@@ -29,6 +29,8 @@ def _build_block(diagram_term, permutation, bra_det, ket_det, label):
     if frag_order==0:
         result = diagram_term()
     else:
+        if diagram_term() is None:
+            return diagram_term()
         reorder = [m for m in permutation] + [frag_order+m for m in permutation]
         if bra_det and not ket_det:
             if label == "u100":  # something needs to be done about this special diagram...e.g. evaluate it as a H1 term and add it to H2 later <- Code should be designed from the outside inward
@@ -102,7 +104,7 @@ class _multiplicities(object):
                     ),
                 )
 
-            except:
+            except KeyError:
                 raise NotImplementedError(
                     "diagram '{}' not implemented for {} bodies".format(
                         label,
@@ -236,6 +238,7 @@ class blocks(object):
         self._ket_det = ket_det
         self._items = {}
         self.densities = self._supersys_info.densities    # "public" member providing access to system definition
+        self.target_multiplicity = self._supersys_info.target_multiplicity
     def __getitem__(self, subsystem):
         if subsystem is None:  subsystem = tuple()        # just to make top-level syntax prettier
         subsystem = tuple(subsystem)                      # dict index must be hashable
