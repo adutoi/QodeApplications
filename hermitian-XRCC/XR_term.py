@@ -83,7 +83,7 @@ def _multiplicity_block_is_zero(subsys_transitions, target_mult):
         not _can_couple_to_target(ket_mults, target_mult)
     )
 
-def _evaluate_block(result, op_blocks, frag_order, active_diagrams, subsys_indices, subsys_transitions, timings, bra_det=False, ket_det=False):
+def _evaluate_block(result, op_blocks, frag_order, active_diagrams, subsys_indices, subsys_transitions, timings, bra_det=False, ket_det=False, apply_target_multiplicity_filter=True):
     # Can handle (sub)systems with any number of fragments using diagrams of any fragment order.
     # So can use for trimer_matrix, etc.
     # !!! Phases for some fragment_order < subsystem_size have not yet been coded in (easy)!
@@ -138,11 +138,12 @@ def _evaluate_block(result, op_blocks, frag_order, active_diagrams, subsys_indic
             if other_charges_match and frags_chgs_i==frags_chgs_j:
                 # TODO: Once the basis is not required to be the entire tensor product basis
                 # anymore, the non-zero sectors can simply be filtered out earlier.
-                if _multiplicity_block_is_zero(
-                    subsys_transitions,
-                    op_blocks.target_multiplicity,
-                ):
-                    return
+                if apply_target_multiplicity_filter:
+                    if _multiplicity_block_is_zero(
+                        subsys_transitions,
+                        op_blocks.target_multiplicity,
+                    ):
+                        return
                 block = None
                 for diagram in active_diagrams:
                     timings.start()
@@ -236,6 +237,22 @@ def monomer_matrix(
                 )
             ]
 
+            #TODO: The target multiplicity filter is not applicable for
+            # the monomer, but only for the terms, where the most fragments
+            # interact, i.e. 2 for dimer, 3 for trimer, etc. In case charges
+            # and mults are mixed within the remainder, then target mult needs
+            # to be defined or every single combination, even for the dimer case!!!
+
+            # A monomer Hamiltonian is a local spin scalar.
+            # It conserves the local multiplicity and charge.
+            if chg_i != chg_j:
+                Jbeg = Jend
+                continue
+
+            if mult_i != mult_j:
+                Jbeg = Jend
+                continue
+
             for frag_order in active_diagrams:
 
                 _evaluate_block(
@@ -246,6 +263,7 @@ def monomer_matrix(
                     (subsys_index,),
                     subsys_transitions,
                     timings,
+                    apply_target_multiplicity_filter=False,
                 )
 
             #if numpy.linalg.norm(result) > 1e-6:

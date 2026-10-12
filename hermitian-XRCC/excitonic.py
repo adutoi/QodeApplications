@@ -111,7 +111,6 @@ def _build_fci_matrix(monomer_Hamiltonians, dimer_Couplings):
     ]
 
     for m, H in enumerate(monomer_Hamiltonians):
-
         if H.shape != (dims[m], dims[m]):
             raise ValueError(
                 f"Monomer Hamiltonian {m} is not square: {H.shape}"
@@ -132,21 +131,12 @@ def _build_fci_matrix(monomer_Hamiltonians, dimer_Couplings):
         ),
     )
 
-    #
-    # Convert a tuple of local state indices to the corresponding
-    # flattened tensor-product index.
-    #
     def flat_index(indices):
         index = 0
-
         for m, i in enumerate(indices):
             index = index * dims[m] + i
-
         return index
 
-    #
-    # Loop over all bra/ket tensor-product states.
-    #
     for bra in itertools.product(*[range(dim) for dim in dims]):
         I = flat_index(bra)
 
@@ -155,17 +145,29 @@ def _build_fci_matrix(monomer_Hamiltonians, dimer_Couplings):
 
             value = 0.0
 
+            # -------------------------------------------------------------
+            # Monomer terms:
             #
-            # Monomer terms.
-            #
+            # H_m acts on fragment m and identity on every other
+            # fragment. Therefore all other bra/ket indices must agree.
+            # -------------------------------------------------------------
             for m in range(N_frag):
-                value += monomer_Hamiltonians[m][
-                    bra[m], ket[m]
-                ]
 
+                if all(
+                    bra[n] == ket[n]
+                    for n in range(N_frag)
+                    if n != m
+                ):
+                    value += monomer_Hamiltonians[m][
+                        bra[m], ket[m]
+                    ]
+
+            # -------------------------------------------------------------
+            # Dimer terms:
             #
-            # Dimer terms.
-            #
+            # H_mn acts on fragments m and n and identity on all
+            # remaining fragments.
+            # -------------------------------------------------------------
             for m in range(N_frag):
                 for n in range(m + 1, N_frag):
 
@@ -174,10 +176,13 @@ def _build_fci_matrix(monomer_Hamiltonians, dimer_Couplings):
                     if coupling is None:
                         continue
 
-                    #
-                    # Product-space index for the two local
-                    # states.
-                    #
+                    if not all(
+                        bra[k] == ket[k]
+                        for k in range(N_frag)
+                        if k != m and k != n
+                    ):
+                        continue
+
                     i = bra[m] * dims[n] + bra[n]
                     j = ket[m] * dims[n] + ket[n]
 

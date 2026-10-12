@@ -344,19 +344,28 @@ def diagram_couplings(supersys_info, X, Dchgs, tensor_mults):
             "Spin recoupling currently implemented only for monomer and dimer diagrams."
         )
 
+    # ------------------------------------------------------------------
+    # Monomer operator
+    # ------------------------------------------------------------------
     if len(X.mult) == 1:
+
         bra_mult, ket_mult = X.mult[0]
 
-        if bra_mult != target_mult or ket_mult != target_mult:
+        # A scalar monomer operator conserves local spin.
+        if bra_mult != ket_mult:
             return []
 
         return [
             (
                 1.0,       # prefactor
                 (0, 0),    # Dmult
-                0,       # rank2 = 2*k
+                0,         # rank2 = 2*k
             )
         ]
+
+    # ------------------------------------------------------------------
+    # Dimer operator
+    # ------------------------------------------------------------------
 
     #
     # Check whether the requested supersystem multiplicity can be

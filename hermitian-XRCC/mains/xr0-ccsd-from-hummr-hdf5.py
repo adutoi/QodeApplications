@@ -74,7 +74,7 @@ if len(sys.argv)==5:
         project_core = False
 
 roots = {
-            0:  {1: 4},#, 3: 2},
+            0:  {1: 4, 3: 2},
             +1: {2: 4},
             -1: {2: 4, 4: 2},
         }
@@ -84,6 +84,9 @@ dens_builder = DensBackend("hummr")
 # compute only unique fragments
 frags = [["Be", "/home/marco/hummr_tests/scratch/be_631g_fci.inp", roots, 0]]
 (mo_coeffs, states) = dens_builder.init_backend(frags)[0]
+
+#print(mo_coeffs)
+#print(states[0][1][0])
 
 # "Assemble" the supersystem for the displaced fragments and get integrals
 BeN = []
@@ -123,7 +126,12 @@ print("get_ints ...")
 symm_ints, bior_ints, nuc_rep = get_ints(BeN, project_core, integral_timings, spin_ints=False, backend="lible")#"hdf5")
 print("done")
 
-print(BeN[0].rho["ca"][(0,0)][(1,1,0,1)][0,0,:,:])
+#print(BeN[0].rho["ca"][(0,0)][(1,1,0,1)][0,0,:,:])
+#print(BeN[0].rho["ca"][(0,0)][(1,1,0,1)][0,1,:,:])
+#print(BeN[0].rho["ccaa"][(0,0)][(1,1,0,2)][0,0,:2,:2,:2,:2])
+#print(BeN[0].rho["ccaa"][(0,0)][(1,1,0,2)][0,1,:4,:4,:4,:4])
+from qode.math.tensornet import raw
+#print(raw(bior_ints.U[0,0,0] + bior_ints.T[0,0]))
 #print(BeN[1].rho["a"][(0,-1)][(1,2,1,0)])
 #print(BeN[0].rho["a"][(1,0)])
 #print(BeN[0].rho["c"][(0,1)])
@@ -131,12 +139,12 @@ print(BeN[0].rho["ca"][(0,0)][(1,1,0,1)][0,0,:,:])
 #eri_final_hummr_pre = numpy.loadtxt("eri.dat")
 #eri_final_hummr = eri_final_hummr_pre.reshape((9, 9, 9, 9))
 
-#print("U @ ca ", raw(bior_ints.U[0,0,0]("p", "q") @ BeN[0].rho["ca"][(0,0)][0,0,:,:]("p", "q")))
-#print("T @ ca ", raw(bior_ints.T[0,0]("p", "q") @ BeN[0].rho["ca"][(0,0)][0,0,:,:]("p", "q")))
+print("U @ ca ", raw(bior_ints.U[0,0,0]("p", "q") @ BeN[0].rho["ca"][(0,0)][(1,1,0,1)][0,0,:,:]("p", "q")))
+print("T @ ca ", raw(bior_ints.T[0,0]("p", "q") @ BeN[0].rho["ca"][(0,0)][(1,1,0,1)][0,0,:,:]("p", "q")))
 #print("V(prrs) @ ca ", numpy.einsum("prrq,pq->", eri_final_hummr, raw(BeN[0].rho["ca"][(0,0)][0,0,:,:])))
 #print("norm ca 00 ", numpy.linalg.norm(raw(Be.rho["ca"][(0,0)][0,0,:,:])))
-#print("V @ ccaa ", raw(bior_ints.V[0,0,0,0]("p", "q", "r", "s") @ BeN[0].rho["ccaa"][(0,0)][0,0,:,:,:,:]("p", "q", "s", "r")))
-#print("V @ ccaa ", raw(bior_ints.V[0,0,0,0]("p", "q", "r", "s") @ BeN[0].rho["ccaa"][(0,0)][0,0,:,:,:,:]("p", "q", "r", "s")))
+#print("V @ ccaa ", raw(bior_ints.V[0,0,0,0]("p", "q", "r", "s") @ BeN[0].rho["ccaa"][(0,0)][(1,1,0,2)][0,0,:,:,:,:]("p", "q", "s", "r")))
+print("V @ ccaa ", -1. * raw(bior_ints.V[0,0,0,0]("p", "q", "r", "s") @ BeN[0].rho["ccaa"][(0,0)][(1,1,0,2)][0,0,:,:,:,:]("p", "q", "r", "s")))
 #print("V ", numpy.linalg.norm(raw(bior_ints.V[0,0,0,0])))
 #print("norm ccaa 00 ", numpy.linalg.norm(raw(Be.rho["ccaa"][(0,0)][0,0,:,:,:,:])))
 #print("T ", numpy.linalg.norm(raw(bior_ints.T[0,0])))
@@ -150,6 +158,34 @@ print(BeN[0].rho["ca"][(0,0)][(1,1,0,1)][0,0,:,:])
 #            for l in range(lten):
 #                if abs(ccaa00[i,j,k,l]) > 1e-2:
 #                    print([i,j,k,l], ccaa00[i,j,k,l])
+
+print("U @ ca ", raw(bior_ints.U[0,0,0]("p", "q") @ BeN[0].rho["ca"][(1,1)][(2,2,0,1)][0,0,:,:]("p", "q")))
+print("T @ ca ", raw(bior_ints.T[0,0]("p", "q") @ BeN[0].rho["ca"][(1,1)][(2,2,0,1)][0,0,:,:]("p", "q")))
+print("V @ ccaa ", -1. * raw(bior_ints.V[0,0,0,0]("p", "q", "r", "s") @ BeN[0].rho["ccaa"][(1,1)][(2,2,0,2)][0,0,:,:,:,:]("p", "q", "r", "s")))
+
+
+print("trace ca neutral singlet ", numpy.linalg.trace(raw(BeN[0].rho["ca"][(0,0)][(1,1,0,1)][0,0,:,:])))
+print("trace ca neutral triplet ", numpy.linalg.trace(raw(BeN[0].rho["ca"][(0,0)][(3,3,0,1)][0,0,:,:])))
+print("trace ca cation doublet ", numpy.linalg.trace(raw(BeN[0].rho["ca"][(1,1)][(2,2,0,1)][0,0,:,:])))
+print("trace ca anion doublet", numpy.linalg.trace(raw(BeN[0].rho["ca"][(-1,-1)][(2,2,0,1)][0,0,:,:])))
+print("trace ca anion quartet", numpy.linalg.trace(raw(BeN[0].rho["ca"][(-1,-1)][(4,4,0,1)][0,0,:,:])))
+
+# Extract tensors
+ccaa_neutral_singlet = raw(BeN[0].rho["ccaa"][(0,0)][(1,1,0,2)][0,0,:,:,:,:])
+ccaa_neutral_triplet = raw(BeN[0].rho["ccaa"][(0,0)][(3,3,0,2)][0,0,:,:,:,:])
+ccaa_cation_doublet  = raw(BeN[0].rho["ccaa"][(1,1)][(2,2,0,2)][0,0,:,:,:,:])
+ccaa_anion_doublet   = raw(BeN[0].rho["ccaa"][(-1,-1)][(2,2,0,2)][0,0,:,:,:,:])
+ccaa_anion_quartet   = raw(BeN[0].rho["ccaa"][(-1,-1)][(4,4,0,2)][0,0,:,:,:,:])
+
+# Print exact scalar traces using einsum
+print("trace ccaa neutral singlet:", numpy.einsum('ijij', ccaa_neutral_singlet))
+print("trace ccaa neutral triplet:", numpy.einsum('ijij', ccaa_neutral_triplet))
+print("trace ccaa cation doublet :", numpy.einsum('ijij', ccaa_cation_doublet))
+print("trace ccaa anion doublet  :", numpy.einsum('ijij', ccaa_anion_doublet))
+print("trace ccaa anion quartet  :", numpy.einsum('ijij', ccaa_anion_quartet))
+
+print(raw(BeN[0].rho["ccaa"][(1,1)][(2,2,0,2)][0,0,:2,:2,:2,:2]))
+
 
 #print("test two elec ints antisymm")
 #print("V0101 + V1001 ", numpy.linalg.norm(raw(bior_ints.V[0,1,0,1]) + numpy.swapaxes(raw(bior_ints.V[1,0,0,1]), 2, 3)))
@@ -180,7 +216,7 @@ SV_blocks_bior = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=stru
 #SV_blocks_diff = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, V=bior_ints.V_diff), diagrams=SV_diagrams, contract_cache=contract_cache, timings=diagram_timings, precon_timings=precontract_timings)
 
 # charges under consideration
-monomer_charges = [0]#[0, +1, -1]
+monomer_charges = [0, +1, -1]
 # spin-adapted
 monomer_sectors = [
     (chg, mult)
@@ -435,14 +471,25 @@ for chg0, mult0, state0 in frag0_states:
 
 H2 = H2blocked[numpy.ix_(mapping, mapping)]
 
-print("H1[0] diagonal")
-print(numpy.diagonal(H1[0]))
+#print("H1[0] diagonal")
+#print(numpy.diagonal(H1[0]))
+#print("H1 and H2")
+print(H1[0])
+print(H2[0,:])
+print(H2[1,:])
+print(H2[13,:])
+#print(H2)
 #print("H2 diagonal")
-#print(numpy.diagonal(H2))
+print(numpy.diagonal(H2))
 #print("H2[0,:]")
 #print(H2[0, :])
 #print("H2[:,0]")
 #print(H2[:, 0])
+
+#print("make H2 zero during debugging!")
+#H2 = numpy.zeros_like(H2)
+H1_eigs, _ = numpy.linalg.eig(H1[0])
+print(H1_eigs)
 
 out, resources = struct(log=qode.util.textlog(echo=True)), qode.util.parallel.resources(1)
 #E, T = excitonic.ccsd((H1,[[None,H2],[None,None]]), out, resources)
