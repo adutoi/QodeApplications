@@ -69,7 +69,7 @@ def precontract(densities, integrals, timings):
             def contract_rho_int_m(chg_i,chg_j,mult_i,mult_j,rank2,restr_ca):
                 if chg_i-chg_j==Dchg:
                     try:
-                        print(f"dens in precon for {indices[0], rho_type, chg_i,chg_j, mult_i,mult_j,rank2,restr_ca}")
+                        #print(f"dens in precon for {indices[0], rho_type, chg_i,chg_j, mult_i,mult_j,rank2,restr_ca}")
                         rho = densities_m[rho_type][chg_i,chg_j][mult_i,mult_j,rank2,restr_ca]
                     except:
                         raise RuntimeError(f"missing density {rho_type} for charges {(chg_i,chg_j)}")

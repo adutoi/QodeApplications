@@ -74,9 +74,9 @@ if len(sys.argv)==5:
         project_core = False
 
 roots = {
-            0:  {1: 4, 3: 2},
-            +1: {2: 4},
-            -1: {2: 4, 4: 2},
+            0:  {1: 1, 3: 1},
+            +1: {2: 1},
+            -1: {2: 1, 4: 1},
         }
 
 dens_builder = DensBackend("hummr")
@@ -162,6 +162,13 @@ print("V @ ccaa ", -1. * raw(bior_ints.V[0,0,0,0]("p", "q", "r", "s") @ BeN[0].r
 print("U @ ca ", raw(bior_ints.U[0,0,0]("p", "q") @ BeN[0].rho["ca"][(1,1)][(2,2,0,1)][0,0,:,:]("p", "q")))
 print("T @ ca ", raw(bior_ints.T[0,0]("p", "q") @ BeN[0].rho["ca"][(1,1)][(2,2,0,1)][0,0,:,:]("p", "q")))
 print("V @ ccaa ", -1. * raw(bior_ints.V[0,0,0,0]("p", "q", "r", "s") @ BeN[0].rho["ccaa"][(1,1)][(2,2,0,2)][0,0,:,:,:,:]("p", "q", "r", "s")))
+
+
+print("U_bior @ ca 100", raw(bior_ints.U[1,0,0]("p", "q") @ BeN[0].rho["ca"][(0,0)][(1,1,0,1)][0,0,:,:]("p", "q")))
+print("U_bior @ ca 011", raw(bior_ints.U[0,1,1]("p", "q") @ BeN[1].rho["ca"][(0,0)][(1,1,0,1)][0,0,:,:]("p", "q")))
+
+print("U_symm @ ca 000", raw(symm_ints.U[0,0,0]("p", "q") @ BeN[0].rho["ca"][(0,0)][(1,1,0,1)][0,0,:,:]("p", "q")))
+print("U_symm @ ca 111", raw(symm_ints.U[1,1,1]("p", "q") @ BeN[1].rho["ca"][(0,0)][(1,1,0,1)][0,0,:,:]("p", "q")))
 
 
 print("trace ca neutral singlet ", numpy.linalg.trace(raw(BeN[0].rho["ca"][(0,0)][(1,1,0,1)][0,0,:,:])))
@@ -285,6 +292,9 @@ for m in [0,1]:
     H1 += [  XR_term.monomer_matrix(ST_blocks_symm, {1: ST1[0]}, m, monomer_sectors, matrix_timings) \
            + XR_term.monomer_matrix(SU_blocks_symm, {1: SU1[0]}, m, monomer_sectors, matrix_timings) \
            + XR_term.monomer_matrix(SV_blocks_symm, {1: SV1[0]}, m, monomer_sectors, matrix_timings) ]
+    print(XR_term.monomer_matrix(ST_blocks_symm, {1: ST1[0]}, m, monomer_sectors, matrix_timings)[0,0])
+    print(XR_term.monomer_matrix(SU_blocks_symm, {1: SU1[0]}, m, monomer_sectors, matrix_timings)[0,0])
+    print(XR_term.monomer_matrix(SV_blocks_symm, {1: SV1[0]}, m, monomer_sectors, matrix_timings)[0,0])
 #for i, row in enumerate(H1[0]):
 #    for j, elem in enumerate(row):
 #        if abs(elem) > 1e-2:
@@ -294,8 +304,19 @@ for m in [0,1]:
 #print(H1[1])
 print("build H2 (1e)")
 
-H2 =   XR_term.dimer_matrix(ST_blocks_bior, {1: ST1[0], 2: ST2[0]}, (0,1), dimer_sectors, matrix_timings) \
-     + XR_term.dimer_matrix(SU_blocks_bior, {1: SU1[0], 2: SU2[0]}, (0,1), dimer_sectors, matrix_timings)
+H2 =   XR_term.dimer_matrix(ST_blocks_bior, {1: ST1[0], 2: ST2[0]}, (0,1), dimer_sectors, matrix_timings) #\
+     #+ XR_term.dimer_matrix(SU_blocks_bior, {1: SU1[0], 2: SU2[0]}, (0,1), dimer_sectors, matrix_timings)
+
+print(H2[0,0])
+
+H2 -=  XR_term.dimer_matrix(ST_blocks_symm, {1: ST1[0]}, (0,1), dimer_sectors, matrix_timings)
+print(H2[0,0])
+
+H2 += XR_term.dimer_matrix(SU_blocks_bior, {1: SU1[0], 2: SU2[0]}, (0,1), dimer_sectors, matrix_timings)
+print(H2[0,0])
+
+H2 -= XR_term.dimer_matrix(SU_blocks_symm, {1: SU1[0]}, (0,1), dimer_sectors, matrix_timings)
+print(H2[0,0])
 #for i, row in enumerate(H2):
 #    for j, elem in enumerate(row):
 #        if abs(elem) > 1e-2:
@@ -304,14 +325,19 @@ H2 =   XR_term.dimer_matrix(ST_blocks_bior, {1: ST1[0], 2: ST2[0]}, (0,1), dimer
 print("build H2 (2e)")
 
 H2 +=  XR_term.dimer_matrix(SV_blocks_bior, {1: SV1[0], 2: SV2[0]}, (0,1), dimer_sectors, matrix_timings)
+print(H2[0,0])
+
+H2 -= XR_term.dimer_matrix(SV_blocks_symm, {1: SV1[0]}, (0,1), dimer_sectors, matrix_timings)
+print(H2[0,0])
 #print(numpy.linalg.norm(H2))
 #print(H2)
 print("finish H2 (subtract monomers)")
 
 H2blocked = H2
-H2blocked -=  XR_term.dimer_matrix(ST_blocks_symm, {1: ST1[0]}, (0,1), dimer_sectors, matrix_timings) \
-            + XR_term.dimer_matrix(SU_blocks_symm, {1: SU1[0]}, (0,1), dimer_sectors, matrix_timings) \
-            + XR_term.dimer_matrix(SV_blocks_symm, {1: SV1[0]}, (0,1), dimer_sectors, matrix_timings)
+#H2blocked -=  XR_term.dimer_matrix(ST_blocks_symm, {1: ST1[0]}, (0,1), dimer_sectors, matrix_timings) #\
+            #+ XR_term.dimer_matrix(SU_blocks_symm, {1: SU1[0]}, (0,1), dimer_sectors, matrix_timings) \
+            #+ XR_term.dimer_matrix(SV_blocks_symm, {1: SV1[0]}, (0,1), dimer_sectors, matrix_timings)
+print(H2blocked[0,0])
 #print(numpy.linalg.norm(H2))
 #for i, row in enumerate(H2):
 #    for j, elem in enumerate(row):
@@ -468,6 +494,9 @@ for chg0, mult0, state0 in frag0_states:
 
 # Apply the same permutation to rows and columns because the
 # supersystem Hamiltonian is square.
+
+#print(dimer_sectors)
+#print(numpy.ix_(mapping, mapping))
 
 H2 = H2blocked[numpy.ix_(mapping, mapping)]
 

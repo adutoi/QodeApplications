@@ -75,7 +75,7 @@ def build_diagram(contraction, Dchgs, permutations):
                 supersys_info.timings.start()
                 result = 0.0
                 for prefactor, Dmult, rank2 in couplings:
-                    print(label, permutation, prefactor, Dmult, rank2, restr_ca)
+                    #print(label, permutation, prefactor, Dmult, rank2, restr_ca)
                     if Dmult is None:  # plain old unrestricted workflow without spin-adaptation
                         Xk = X
                     else:  # spin-adapted workflow with allowed Dmult, rank and number of restricted rank-0 ca pairs
@@ -380,7 +380,7 @@ def _density_array(densities, label, subsys_chgs, n_frag):
     def _rule(*indices):
         index = indices[0]
         try:
-            print(f"dens for {index, label, charges[index], mults[index]}")
+            #print(f"dens for {index, label, charges[index], mults[index]}")
             rho = densities[index][label][charges[index]][mults[index]]    # charges/mults[index] is the bra and ket charge
         except KeyError:
             print(f"key error for ind {index} label {label} charg {charges[index]} mult {mults[index]}")
