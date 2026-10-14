@@ -102,6 +102,13 @@ def recoupling_factor(
     if not _triangle_allowed(S2p, S2, k):
         return 0.0
 
+    # These two triads should already be checked for by the allowed mults
+    #if not _triangle_allowed(S2, S1, Stot):
+    #    return 0.0
+
+    #if not _triangle_allowed(S1p, S2p, Stot):
+    #    return 0.0
+
     #
     # Reduction of
     #
@@ -120,7 +127,7 @@ def recoupling_factor(
     #
     phase_exponent = S2p + Stot + k + S1
 
-    phase = (-1) ** int(phase_exponent)
+    phase = (-1) ** round(phase_exponent)
 
     sixj = wigner_6j(
         S1p, S2p, Stot,
@@ -128,6 +135,7 @@ def recoupling_factor(
     )
 
     prefactor = phase / sqrt(2 * k + 1)
+    prefactor *= sqrt(bra_mult1 * bra_mult2)  # Edmonds to CG transition
 
     return float(prefactor * sixj)
 
