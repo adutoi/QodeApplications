@@ -25,6 +25,9 @@ from   qode.many_body import CCSD
 from   qode.many_body.hierarchical_fluctuations.excitonic import SD_operator, H_012_operator, inv_diagE, BakerCampbellHausdorff, space_traits
 from   hamiltonian import braket_loops
 
+import scipy.sparse as sp
+
+
 
 
 def ccsd(H, out, resources, diis_start=0):
@@ -90,7 +93,7 @@ def fci_old(H, out, target_state=0):
 	return E, vecs[target_state]
 
 
-def _build_fci_matrix(monomer_Hamiltonians, dimer_Couplings):
+def _build_fci_matrix_old(monomer_Hamiltonians, dimer_Couplings):
     """
     Build the Hamiltonian in the tensor-product basis.
 
@@ -192,33 +195,126 @@ def _build_fci_matrix(monomer_Hamiltonians, dimer_Couplings):
 
     return Hmat
 
-def fci(H, out, target_state=0, get_left_and_right=False):
+
+def _embed_two_body(coupling, m, n, dims):
+    """Embed a coupling in the (m,n) product basis into the full space (identity elsewhere)."""
+    N = len(dims)
+    rest = [k for k in range(N) if k not in (m, n)]
+    order = [m, n] + rest
+    d_order = [dims[k] for k in order]
+    d_rest = int(numpy.prod([dims[k] for k in rest])) if rest else 1
+
+    K = sp.kron(sp.csr_matrix(coupling), sp.identity(d_rest, format="csr"), format="csr")
+    if not rest:                       # 2 fragments: already in the right order
+        return K
+
+    # permute tensor axes from (m,n,rest...) back to (0,1,...,N-1)
+    inv = numpy.argsort(order)
+    D = int(numpy.prod(dims))
+    K = K.toarray().reshape(d_order + d_order)          # dense only if N>2
+    K = K.transpose(list(inv) + [N + i for i in inv]).reshape(D, D)
+    return sp.csr_matrix(K)
+
+
+def _build_fci_matrix(monomer_Hamiltonians, dimer_Couplings, sparse=False):
+    N = len(monomer_Hamiltonians)
+    dims = [H.shape[0] for H in monomer_Hamiltonians]
+    for m, H in enumerate(monomer_Hamiltonians):
+        if H.shape != (dims[m], dims[m]):
+            raise ValueError(f"Monomer Hamiltonian {m} is not square: {H.shape}")
+    D = int(numpy.prod(dims))
+
+    # monomer terms: I x ... x H_m x ... x I
+    Hmat = sp.csr_matrix((D, D), dtype=numpy.result_type(
+        *monomer_Hamiltonians,
+        *[dimer_Couplings[m][n] for m in range(N) for n in range(m+1, N)
+          if dimer_Couplings[m][n] is not None]))
+    for m in range(N):
+        left  = sp.identity(int(numpy.prod(dims[:m])),   format="csr")
+        right = sp.identity(int(numpy.prod(dims[m+1:])), format="csr")
+        Hmat = Hmat + sp.kron(sp.kron(left, sp.csr_matrix(monomer_Hamiltonians[m])), right, format="csr")
+
+    # dimer terms
+    for m in range(N):
+        for n in range(m+1, N):
+            c = dimer_Couplings[m][n]
+            if c is not None:
+                Hmat = Hmat + _embed_two_body(c, m, n, dims)
+
+    return Hmat if sparse else Hmat.toarray()
+
+
+def fci(H, out, timings, target_state=0, get_left_and_right=False, dense_cutoff=1000, basis_mask=None):
+    """
+    basis_mask: optional boolean array (or index list) over the tensor-product basis selecting the
+                states to diagonalize in (e.g. only a given total charge and the fragment spin pairs,
+                which can couple to the target multiplicity). The returned eigenvectors are given in
+                the full tensor-product basis, with zeros for the states outside of the mask.
+    """
 
     monomer_Hamiltonians, dimer_Couplings = H
 
     out.log("Building ...")
 
+    timings.start()
+
     Hmat = _build_fci_matrix(
         monomer_Hamiltonians,
         dimer_Couplings,
+        sparse=True,
     )
+
+    timings.record("Build global H from H1 and H2")
 
     out.log("Diagonalizing ...")
 
-    if get_left_and_right:
-        vals, vecs_l, vecs_r = sort_eigen(
-            scipy.linalg.eig(Hmat, left=True, right=True)
-		)
-    else:
-        vals, vecs = sort_eigen(
-            scipy.linalg.eig(Hmat)
-        )
+    timings.start()
 
-    E = vals[target_state]
+    D_full = Hmat.shape[0]
+    if basis_mask is None:
+        sel = numpy.arange(D_full)
+    else:
+        sel = numpy.flatnonzero(basis_mask) if numpy.asarray(basis_mask).dtype == bool else numpy.asarray(basis_mask)
+    Hblock = Hmat[sel][:, sel]
+    D = Hblock.shape[0]
+
+    # Ensure target_state is a numpy array if it's a list/tuple for safe 2D slicing
+    is_sequence = isinstance(target_state, (list, tuple, numpy.ndarray))
+    if is_sequence:
+        target_state_idx = numpy.asarray(target_state)
+    else:
+        target_state_idx = target_state
+
+    vecs_l = None
+    if D <= dense_cutoff or get_left_and_right or is_sequence:
+        A = Hblock.toarray()
+        if get_left_and_right:
+            vals, vecs_l, vecs = scipy.linalg.eig(A, left=True, right=True, check_finite=False)
+        else:
+            vals, vecs = scipy.linalg.eig(A, check_finite=False, overwrite_a=True)
+        idx = numpy.argsort(vals.real)
+        vals, vecs = vals[idx], vecs[:, idx]
+        if vecs_l is not None:
+            vecs_l = vecs_l[:, idx]
+    else:
+        k = target_state + 1
+        vals, vecs = sp.linalg.eigs(Hblock, k=k, which="SR", ncv=min(max(2*k+1, 40), D-1))
+        idx = numpy.argsort(vals.real)
+        vals, vecs = vals[idx], vecs[:, idx]
+
+    timings.record("Diagonalization")
+
+    E = vals[target_state_idx]
 
     out.log("FCI Energy  =", E)
 
+    def embed(v):
+        full = numpy.zeros((D_full,) + v.shape[1:], dtype=v.dtype)
+        full[sel] = v
+        return full
+
     if get_left_and_right:
-        return E, vecs_l[:, target_state], vecs_r[:, target_state]
+        return E, embed(vecs_l[:, target_state_idx]), embed(vecs[:, target_state_idx])
     else:
-        return E, vecs[:, target_state]
+        return E, embed(vecs[:, target_state_idx])
+

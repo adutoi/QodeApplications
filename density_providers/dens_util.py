@@ -17,6 +17,8 @@
 #
 
 import numpy as np
+from sympy import Rational
+from sympy.physics.quantum.cg import CG
 from densities import _tens_wrap
 
 
@@ -37,11 +39,11 @@ def multiplicity_iterator(second_layer):
 
     where channel is
 
-        (mult_bra, mult_ket, k, restr_ca)
+        (mult_bra, mult_ket, rank2, restr_ca, path)
 
-    for spin-adapted densities and
+    for spin-adapted densities (path: spin coupling path, see spin_tensors.py) and
 
-        (None, None, None, None)
+        (None, None, None, None, None)
 
     for non-spin-adapted densities.
     """
@@ -55,21 +57,73 @@ def multiplicity_iterator(second_layer):
     first_value = next(iter(second_layer.values()))
 
     if isinstance(first_value, dict) and "dims" in first_value:
-        yield (None, None, None, None), second_layer
+        yield (None, None, None, None, None), second_layer
 
     else:
         for channel, state_group in second_layer.items():
             #channel = tuple(map(int, channel.split("_")))
 
-            if len(channel) != 4:
+            if len(channel) != 5:
                 raise ValueError(
                     "Expected density channel "
-                    "(mult_bra, mult_ket, k, restr_ca), "
+                    "(mult_bra, mult_ket, rank2, restr_ca, path), "
                     f"got {channel!r}"
                 )
 
             yield channel, state_group
 
+
+def adjoint_name(dens_name):
+    """name of the adjoint operator string, e.g. caa -> cca"""
+    return dens_name[::-1].replace("c", "x").replace("a", "c").replace("x", "a")
+
+def reversed_densities_spin_adapt(dens):
+    """
+    Adjoint partners of spin-adapted densities in the CG convention,
+
+        <I S_I S_I| T^K_q |J S_J S_J> = <S_J S_J K q|S_I S_I> rho_IJ,
+
+    dens[name][(chg_bra, chg_ket)][(mult_bra, mult_ket, rank2, restr_ca, path)] = ndarray(n_bra, n_ket, orbitals...)
+    with the tensors of spin_tensors.py.  For the density type X, the adjoint of type Y,
+
+        X_q(P)^dagger = sum_P' c(P,P') Y_{-q}(P')   (legs permuted, spin_tensors.reversal)
+
+    gives  rho^X_BA(P) = sum_P' c(P,P') <S_B S_B K -q|S_A S_A> / <S_A S_A K q|S_B S_B> rho^Y_AB(P').
+    Generated are all channels of the adjoint types of non-self-adjoint types, and the mult_bra > mult_ket
+    channels of the self-adjoint ones (the others are computed directly).  Returns a dict of the same structure.
+    """
+    from spin_tensors import paths, reversal, cg2
+    out = {}
+    for name_y, by_chg in dens.items():
+        name_x = adjoint_name(name_y)
+        n_c_x, n_a_x = name_x.count("c"), name_x.count("a")
+        self_adjoint = name_x == name_y
+        for (chg_a, chg_b), by_channel in by_chg.items():
+            groups = {}
+            for (mult_a, mult_b, rank2, restr, path), data in by_channel.items():
+                if self_adjoint and mult_a >= mult_b:
+                    continue
+                groups.setdefault((mult_a, mult_b, rank2, restr), {})[path] = data
+            for (mult_a, mult_b, rank2, restr), by_path in groups.items():
+                Sa2, Sb2 = mult_a - 1, mult_b - 1
+                q2 = Sb2 - Sa2                     # of X between bra B and ket A
+                denom = cg2(Sa2, Sa2, rank2, q2, Sb2, Sb2)
+                if abs(denom) < 1e-12:
+                    continue
+                ratio = cg2(Sb2, Sb2, rank2, -q2, Sa2, Sa2) / denom
+                for path_x in paths(n_c_x, n_a_x, rank2, restr):
+                    perm, coefs = reversal(n_c_x, n_a_x, restr, path_x, q2)
+                    axes = (1, 0) + tuple(2 + int(y) for y in np.argsort(perm))
+                    result = None
+                    for path_y, c in coefs.items():
+                        if path_y not in by_path:
+                            raise KeyError(f"reversal of {name_y} {(chg_a, chg_b)} {(mult_a, mult_b, rank2, restr)} "
+                                           f"requires the missing path {path_y}")
+                        term = c * ratio * np.transpose(by_path[path_y], axes)
+                        result = term if result is None else result + term
+                    if result is not None:
+                        out.setdefault(name_x, {}).setdefault((chg_b, chg_a), {})[(mult_b, mult_a, rank2, restr, path_x)] = result
+    return out
 
 def build_reverse_density_spin_adapt(
     densities,
@@ -124,24 +178,43 @@ def build_reverse_density_spin_adapt(
     #
     else:
         #
-        # rank2 = 2*k.
+        # The densities are stored in the CG convention for proper
+        # spherical tensors, i.e. for the high-spin components
         #
-        k = rank2 / 2.0
-
+        #     <I S_I S_I| T^k_q |J S_J S_J> = <S_J S_J k q|S_I S_I> rho_IJ
         #
-        # q = Delta S = S_bra - S_ket.
+        # with q = S_I - S_J (the annihilator tensor is at_{+1/2} = a_beta,
+        # at_{-1/2} = -a_alpha). The partner density of the adjoint operator
+        # string then is
         #
-        q = (mult_b - mult_a) / 2.0
+        #     rho'_JI = eta (-1)^(k-q) <S_J S_J k q|S_I S_I> / <S_I S_I k -q|S_J S_J> rho_IJ
+        #
+        # where eta accounts for the reversed coupling order of the operator
+        # string.  This was verified against reference densities from an exact
+        # Fock-space FCI (machine precision for all channels of an H2 fragment).
+        #
+        S_I = Rational(mult_a - 1, 2)
+        S_J = Rational(mult_b - 1, 2)
+        k = Rational(rank2, 2)
+        q = S_I - S_J
 
-        exponent = k - q
-
-        if not np.isclose(exponent, round(exponent)):
-            raise ValueError(
-                "Invalid tensor-channel parity exponent: "
-                f"k={k}, q={q}, exponent={exponent}."
+        if dens_name in ("a", "caa"):
+            eta = 1
+        elif dens_name == "aa":
+            eta = (-1) ** int(1 - k)
+        elif dens_name == "ca":
+            eta = (-1) ** int(k)
+        else:
+            raise NotImplementedError(
+                f"the adjoint of the spin-adapted density {dens_name} (channel {channel}) "
+                "has not been derived/validated yet"
             )
 
-        parity_factor = (-1) ** int(round(exponent))
+        parity_factor = float(
+            eta * (-1) ** int(k - q)
+            * CG(S_J, S_J, k, q, S_I, S_I).doit()
+            / CG(S_I, S_I, k, -q, S_J, S_J).doit()
+        )
 
     reverse_channel = (
         mult_b,

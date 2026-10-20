@@ -42,9 +42,8 @@ def u100(X, special_processing=None):
         res = 1 * raw(
             X.ca0pq_U1pq(i0,j0)
             )
-        for i1 in range(i1s):
-            j1 = i1
-            tensor[:,i1,:,j1] = res
+        # delta(i1,j1), i.e. the overlap <i1|j1> for different bra and ket state sets
+        tensor[:,:,:,:] = numpy.einsum("ij,kl->ikjl", res, X.overlap[1])
     if special_processing is None:
         get_standard(result)
     elif special_processing <= 1:

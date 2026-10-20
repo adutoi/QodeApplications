@@ -18,6 +18,7 @@
 import tensorly
 from qode.util.dynamic_array import dynamic_array, cached
 from qode.math.tensornet     import evaluate, raw, tl_tensor
+from diagrams.build_diagram  import resolve_density
 
 
 
@@ -66,13 +67,14 @@ def precontract(densities, integrals, timings):
             densities_m = densities[indices[0]]
             Dchg = rho_type.count("a") - rho_type.count("c")    # get rid of this and allow the exception
 
-            def contract_rho_int_m(chg_i,chg_j,mult_i,mult_j,rank2,restr_ca):
+            def contract_rho_int_m(chg_i,chg_j,*channel):
+                # channel: (mult_bra, mult_ket, rank2, restr_ca, path, views) for spin-adapted densities, see
+                # coupl_fac.diagram_couplings (the view maps the density onto the index order of this label)
                 if chg_i-chg_j==Dchg:
                     try:
-                        #print(f"dens in precon for {indices[0], rho_type, chg_i,chg_j, mult_i,mult_j,rank2,restr_ca}")
-                        rho = densities_m[rho_type][chg_i,chg_j][mult_i,mult_j,rank2,restr_ca]
-                    except:
-                        raise RuntimeError(f"missing density {rho_type} for charges {(chg_i,chg_j)}")
+                        rho = resolve_density(densities_m[rho_type][chg_i,chg_j], channel, label)
+                    except KeyError as err:
+                        raise RuntimeError(f"missing density {rho_type} for charges {(chg_i,chg_j)} and channel {channel[:5]}: {err}")
                     timings.start()
                     result = evaluate(rho(*([0,1]+rho_indices)) @ ints(*int_indices))
                     timings.record(label)
@@ -90,8 +92,11 @@ def precontract(densities, integrals, timings):
             possible_rank2 = (0,1,2,3,4,5,6,7,8)  # god help us, if these are not sufficient
             # since sigma is block diagonal for hermitian subsystem Hamiltonians and we are
             # looking at maximum at 2 particle operators, this should never be higher than 2
-            possible_restr_ca = (0,1,2)
-            ranges_with_mults = [densities_m["n_states"].keys()]*2 + [unique_mults]*2 + [possible_rank2] + [possible_restr_ca]
+            possible_restr_ca = (0,1,2,3)
+            # path and access views are arbitrary hashable objects (see coupl_fac.diagram_couplings)
+            if None in unique_mults:    # not spin adapted
+                possible_rank2, possible_restr_ca = (None,), (None,)
+            ranges_with_mults = [densities_m["n_states"].keys()]*2 + [unique_mults]*2 + [possible_rank2] + [possible_restr_ca] + [None]*2
             return dynamic_array(cached(contract_rho_int_m), ranges_with_mults)
 
         def contract_rho_rho_int(*indices):

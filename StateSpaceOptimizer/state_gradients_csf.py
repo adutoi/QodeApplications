@@ -1,224 +1,132 @@
-#    (C) Copyright 2024 Marco Bauer
-# 
+#    (C) Copyright 2024, 2026 Marco Bauer
+#
 #    This file is part of QodeApplications.
-# 
+#
 #    QodeApplications is free software: you can redistribute it and/or modify
 #    it under the terms of the GNU General Public License as published by
 #    the Free Software Foundation, either version 3 of the License, or
 #    (at your option) any later version.
-# 
+#
 #    QodeApplications is distributed in the hope that it will be useful,
 #    but WITHOUT ANY WARRANTY; without even the implied warranty of
 #    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 #    GNU General Public License for more details.
-# 
+#
 #    You should have received a copy of the GNU General Public License
 #    along with QodeApplications.  If not, see <http://www.gnu.org/licenses/>.
 #
 
+# State gradients for the spin-adapted (CSF based) state solver (spin-adapted counterpart of state_gradients.py).
+#
+# The target state is expanded in the spin-coupled product basis of the fragment states,
+#
+#     |Psi> = sum_KL d_KL |K L; S M>,
+#
+# and the gradient of the energy with respect to the CSF coefficients c_K(p) of state K of the optimized
+# fragment (here fragment A) is
+#
+#     g_K(p) = sum_L d_KL <p L| H - E |Psi>,
+#
+# where p runs over the CSFs of the sector of K.  The matrix elements <p L|H|K' L'> are obtained from the
+# rectangular XR Hamiltonian with single CSFs as bra states on fragment A (densities <CSF|...|state>), i.e.
+#
+#     <p L|H|K' L'> = H1_A[p,K'] delta_LL' + O[p,K'] H1_B[L,L'] + H2[pL,K'L'],     O[p,K'] = <p|K'>,
+#
+# and <p L|Psi> = sum_K' O[p,K'] d_K'L.  For an eigenvector d of the Hamiltonian in the current state space,
+# g_K is orthogonal to all current states of the sector.
+#
+# grad_level "herm": only the right eigenvector r is used (d = r, as in the "herm" variant of state_gradients.py).
+#                    This is the exact gradient (up to a factor 2) only for a hermitian Hamiltonian.
+# grad_level "full": exact derivative of the (non-hermitian) eigenvalue with left (l) and right (r) eigenvectors,
+#
+#     g_K(p) = [ sum_L l_KL <p L|H - E|Psi_r>  +  sum_L <Psi_l|H - E|p L> r_KL ] / <l|r>,
+#
+#                    where the second term requires the rectangular Hamiltonian with single CSFs as ket states.
+
 import numpy as np
-import densities
-from get_xr_result import get_xr_states, get_xr_H
-from qode.util import sort_eigen
-import tensorly as tl
-from qode.math.tensornet import tl_tensor
-import scipy as sp
+from get_xr_result_spin_adapt import get_xr_H, local_sectors, drop_empty_sectors
 
-def get_adapted_overlaps(frag_map, dl, dr, d_slices):
-    # TODO: The following only works, if both fragments have the same charges, which are symmetrically sampled around zero
-    if sum(d_slices[0].keys()) != 0 or sum(d_slices[1].keys()) != 0:
-        raise ValueError("charges are not symmtrically sampled around zero, as currently required by this function")
-    overlaps = {}
-    for chg in d_slices[frag_map[1]].keys():
-        overlaps[chg * (-1)] = np.einsum("kl,il->ki", dl[d_slices[frag_map[0]][chg * (-1)], d_slices[frag_map[1]][chg]],
-                                                      dr[d_slices[frag_map[0]][chg * (-1)], d_slices[frag_map[1]][chg]])
-    return overlaps
 
-def contract_dens_with_d(dens, dl, dr, frag_map, d_slices, state_dict):  # updates dens in place
-    #beware, that the following only works, if both fragments have the same charges, which are symmetrically sampled around zero
-    if sum(d_slices[0].keys()) != 0 or sum(d_slices[1].keys()) != 0:
-        raise ValueError("charges are not symmtrically sampled around zero, as currently required by this function")
-    for op_string in dens:
-        if "n_" in op_string:
-            continue
-        for bra_chg,ket_chg in dens[op_string]:
-            dens_inds = [num for num in range(2, len(dens[op_string][(bra_chg,ket_chg)].shape))]
-            d_left  = tl_tensor(tl.tensor(dl[d_slices[frag_map[0]][bra_chg * (-1)], d_slices[frag_map[1]][bra_chg]], dtype=tl.float64))
-            d_right = tl_tensor(tl.tensor(dr[d_slices[frag_map[0]][ket_chg * (-1)], d_slices[frag_map[1]][ket_chg]], dtype=tl.float64))
-            dens[op_string][(bra_chg,ket_chg)] = d_left(0,"i") @ dens[op_string][(bra_chg,ket_chg)]("i","j",*dens_inds) @ d_right(1,"j")
-    for chg in d_slices[frag_map[0]]:
-        dens["n_states"][chg] = state_dict[frag_map[0]][chg * (-1)]
 
-def get_slices(dict, chgs, append=False, type="standard"):
-    if type != "standard" and not append:
-        raise ValueError("all types except standard require a dictionary provided by the append keyword argument")
-    dummy_ind = 0
-    ret = {}
-    for chg in chgs:
-        if type == "standard":
-            ret[chg] = slice(dummy_ind, dummy_ind+dict[chg])
-            dummy_ind += dict[chg]
-        #elif type == "double":
-        #    ret[chg] = slice(dummy_ind, dummy_ind + 2 * dict[chg])
-        #    dummy_ind += 2 * dict[chg]
-        elif type == "first":
-            ret[chg] = slice(dummy_ind, dummy_ind + dict[chg])
-            dummy_ind += append[chg] + dict[chg]
-        elif type == "latter":
-            ret[chg] = slice(dummy_ind + dict[chg], dummy_ind + append[chg] + dict[chg])
-            dummy_ind += append[chg] + dict[chg]
-        else:
-            raise ValueError(f"type {type} is unknown")
-    return ret
+def unit_vectors(states):
+    """single CSFs (unit vectors) of every sector of states (structure states[chg][mult] = list of CSF vectors)"""
+    return {chg: {mult: list(np.eye(len(vecs[0]))) for mult, vecs in mult_dict.items() if len(vecs) > 0}
+            for chg, mult_dict in states.items()}
 
-def get_gs(current_state_dict, d_sl, H1_new, H2_new, monomer_charges, target_state, grad_level):
-        #new_gs_en, new_gs_vec = get_xr_states(ints, dens, 0)  # TODO: This is not possible, until solvers are fixed
-        #H1_new, H2_new = get_xr_H(ints, dens, xr_order)
-        n_states = [sum(current_state_dict[i][chg] for chg in monomer_charges[i]) for i in range(2)]
-        H2_new = H2_new.reshape(n_states[0], n_states[1],
-                                n_states[0], n_states[1])
-        for chg0 in monomer_charges[0]:
-            for chg1 in monomer_charges[1]:
-                H2_new[d_sl[0][chg0], d_sl[1][chg1], d_sl[0][chg0], d_sl[1][chg1]] +=\
-                    np.einsum("ij,kl->ikjl", H1_new[0][d_sl[0][chg0], d_sl[0][chg0]], np.eye(current_state_dict[1][chg1])) +\
-                    np.einsum("ij,kl->ikjl", np.eye(current_state_dict[0][chg0]), H1_new[1][d_sl[1][chg1], d_sl[1][chg1]])
-        H2_new = H2_new.reshape(n_states[0] * n_states[1],
-                                n_states[0] * n_states[1])
-        full_eigvals_raw, full_eigvec_l_unsorted, full_eigvec_r_unsorted = sp.linalg.eig(H2_new, left=True, right=True)
-        full_eigvals, full_eigvec_l = sort_eigen((full_eigvals_raw, full_eigvec_l_unsorted))
-        full_eigvals_check, full_eigvec_r = sort_eigen((full_eigvals_raw, full_eigvec_r_unsorted))
-        if any(full_eigvals - full_eigvals_check):  # this check should be unnecessary and might need to be refined for fully degenerate states
-            raise ValueError("something went wrong with the sorting")
-        #return full_eigvals[0], H2_new, full_eigvec_l[:, 0].T / np.linalg.norm(full_eigvec_l[:, 0]), full_eigvec_r[:, 0].T
-        if "herm" in grad_level:
-            print("currently state gradients are build with only dr and not dl")
-            return full_eigvals[target_state], H2_new, full_eigvec_r[:, target_state].T, full_eigvec_r[:, target_state].T
-        else:
-            print("currently state gradients are build with dl and dr")
-            return full_eigvals[target_state], H2_new, full_eigvec_l[:, target_state].T / np.linalg.norm(full_eigvec_l[:, target_state]), full_eigvec_r[:, target_state].T
+def _block_overlap(rho, monomer_charges):
+    """<bra|ket> of a fragment in the local ordering (block diagonal over the sectors)"""
+    bra = local_sectors(rho['n_states_bra'], monomer_charges)
+    ket = local_sectors(rho['n_states'], monomer_charges)
+    O = np.zeros((bra[-1][2].stop, ket[-1][2].stop))
+    for (chg, mult, sl_bra), (chg_k, mult_k, sl_ket) in zip(bra, ket):
+        assert (chg, mult) == (chg_k, mult_k)
+        O[sl_bra, sl_ket] = rho['overlap'][chg][mult]
+    return O
 
-def state_gradients(frag_ind, ints, dens_builder_stuff, dens, monomer_charges, n_threads=1, xr_order=0, dets={}, grad_level="herm", target_state=0):
+def _rectangular_H(frag, H1_frag, H2, O, H1):
+    """
+    product-basis Hamiltonian between different bra and ket state sets on fragment frag (e.g. single CSFs as bra),
+    assembled from the rectangular H1 of frag, the overlap O = <bra|ket> of frag and H1 of the other fragment;
+    returns it together with the product-basis overlap
+    """
+    other = 1 - frag
+    I_other = np.eye(H1[other].shape[0])
+    if frag == 0:
+        return np.kron(H1_frag, I_other) + np.kron(O, H1[1]) + H2, np.kron(O, I_other)
+    else:
+        return np.kron(H1[0], O) + np.kron(I_other, H1_frag) + H2, np.kron(I_other, O)
+
+def _contract_with_d(frag, X, d, n_csf):
+    """G[p, K] = sum_L X[p,L] d[K,L] (frag 0) or sum_K' X[K',p] d[K',L] (frag 1), X given in the product ordering"""
+    if frag == 0:
+        return X.reshape(n_csf, d.shape[1]) @ d.T
+    else:
+        return X.reshape(d.shape[0], n_csf).T @ d
+
+def state_gradients(frag, states, dens, E, d, H1, ints, build_dens, monomer_charges, target_multiplicity, xr_order=0,
+                    grad_level="herm", d_left=None):
+    """
+    frag:       fragment whose states are optimized
+    states:     states[frag][chg][mult] = list of (orthonormal) CSF vectors
+    dens:       square densities of both fragments for states
+    E, d:       target energy and right eigenvector of the XR Hamiltonian in the current state space,
+                d[K,L] in the tensor-product ordering of get_xr_H (zeros outside of the basis mask)
+    d_left:     left eigenvector (same structure), required for grad_level="full"
+    H1:         monomer Hamiltonians of the current state space (from get_xr_H)
+    build_dens: build_dens(frag, states, bra_states=None) -> fragment densities
+    returns {chg: {mult: gradient vectors (n_states_sector x n_csf_sector)}}
+    """
     if xr_order != 0:
-        raise NotImplementedError("gradients for higher orders in S than 0 are not implemented yet")
+        raise NotImplementedError("state gradients are only implemented for XR[0] (no overlap terms)")
+    if grad_level not in ("herm", "full"):
+        raise ValueError(f"unknown grad_level {grad_level!r}")
+    if grad_level == "full" and d_left is None:
+        raise ValueError("grad_level 'full' requires the left eigenvector")
+    other = 1 - frag
+    frag_states = drop_empty_sectors(states[frag])
+    csfs = unit_vectors(frag_states)
 
-    if frag_ind == 0:
-        frag_map = {0: 0, 1: 1}
-    elif frag_ind == 1:
-        frag_map = {0: 1, 1: 0}
-    else:
-        raise IndexError("for dimer interactions only frag_ind 0 and 1 are acceptable")
+    # <p L| H - E |Psi_r>
+    rect_dens = [None, None]
+    rect_dens[other] = dens[other]
+    rect_dens[frag] = build_dens(frag, frag_states, bra_states=csfs)
+    H1r, H2r = get_xr_H(ints, rect_dens, xr_order, monomer_charges, target_multiplicity)
+    O = _block_overlap(rect_dens[frag], monomer_charges[frag])
+    Hr, Or = _rectangular_H(frag, H1r[frag], H2r, O, H1)
+    n_csf = O.shape[0]
+    d_bra = d if grad_level == "herm" else d_left
+    G = _contract_with_d(frag, (Hr - E * Or) @ d.reshape(-1), d_bra, n_csf)
 
-    state_dict = [{chg: len(dens_builder_stuff[i][0][chg].coeffs) for chg in monomer_charges[i]} for i in range(2)]
-    if dets:
-        conf_dict = [{chg: len(dets[chg]) for chg in monomer_charges[i]} for i in range(2)]
-    else:
-        conf_dict = [{chg: len(dens_builder_stuff[i][0][chg].coeffs[0]) for chg in monomer_charges[i]} for i in range(2)]
-
-    d_slices = [get_slices(state_dict[i], monomer_charges[i]) for i in range(2)]
-    c_slices = [get_slices(conf_dict[i], monomer_charges[i]) for i in range(2)] 
-
-    state_coeffs = [{chg: np.array(states.coeffs) for chg, states in dens_builder_stuff[frag][0].items()} for frag in range(len(dens_builder_stuff))]
-
-    #gs_energy, gs_state = get_xr_states(ints, dens, xr_order)
-    H1_for_d, H2_for_d = get_xr_H(ints, dens, xr_order, monomer_charges)
-    gs_energy, H_no_dets, dl, dr = get_gs(state_dict, d_slices, H1_for_d, H2_for_d, monomer_charges, target_state, grad_level)
-    E = np.real(gs_energy)
-    #dl, dr = gs_state
-    print("dropping imaginary part of non-diagonalized d with norm", np.linalg.norm(np.imag(dl)), np.linalg.norm(np.imag(dr)))
-    dl = np.real(dl).reshape(sum(state_dict[0].values()), sum(state_dict[1].values()))
-    dr = np.real(dr).reshape(sum(state_dict[0].values()), sum(state_dict[1].values()))
-    if frag_ind == 1:
-        dl, dr = dl.T, dr.T
-
-    # normalize d
-    # careful, this doesn't yield <Psi_D|Psi_D> = 1, because dl @ dr.T != 1
-    # also dr should already be normalized and dl should be normalized from get_gs()
-    dl = dl / np.linalg.norm(dl)
-    dr = dr / np.linalg.norm(dr)
-    #dl_extra = dl_extra / np.linalg.norm(dl_extra)
-    
-    # build new densities (slater det densities for fragment under optimization and contract_with_d densities for the other one)
-    # decomposing the following densities sometimes yields errors, so dont decompose them for now
-    print(f"contract densities on fragment {frag_map[1]} with d")
-    # alternatively save to new object (less CPU time, but more RAM, since densities dont need to be rebuild)
-    contract_dens_with_d(dens[frag_map[1]], dl, dr, frag_map, d_slices, state_dict)
-    print(f"build densities between slater determinant and state on fragment {frag_map[0]}")
-    # maybe its a good idea to contract d with the ket states here, because it doesnt affect how one has to deal with the
-    # determinant to state densities, but maybe eases up the building of them, because it might put a lot more elements
-    # of the state below the threshold indicating whether the transition density for this element should even be built or not.
-    dens[frag_map[0]] = densities.build_tensors(*dens_builder_stuff[frag_map[0]][:-1], options=dens_builder_stuff[frag_map[0]][-1] + ["bra_det"], n_threads=n_threads, dets=dets)
-
-    # build gradient
-    H1, H2 = get_xr_H(ints, dens, xr_order, monomer_charges, bra_det=True)
-
-    print(H1[0].shape, H1[1].shape, H2.shape)
-    H2 = H2.reshape((H1[0].shape[0], H1[1].shape[0]))#, H1[0].shape[1], H1[1].shape[1]))
-
-    # the following is the contribution <psi psi | H - E | phi psi>
-    if "full" in grad_level:
-        # TODO: this is a waste...one can also obtain the corresponding grad terms from biorthogonalizing the kets of the integrals
-        # instead of the bras, which is much faster than building the new densities
-        dens[frag_map[0]] = densities.build_tensors(*dens_builder_stuff[frag_map[0]][:-1], options=dens_builder_stuff[frag_map[0]][-1] + ["ket_det"], n_threads=n_threads, dets=dets)
-        H1_new, H2_new = get_xr_H(ints, dens, xr_order, monomer_charges, ket_det=True)
-        print(H1_new[0].shape, H1_new[1].shape, H2_new.shape)
-        H2_new = H2_new.reshape((H1_new[0].shape[1], H1_new[1].shape[1]))
-    
-    # H1 of frag A can be used as is and H1 of frag B needs to be contracted with the state coeffs of frag A. Note, that this is independent of the XR order 
-    gradient_states = {}
-    new_overlaps = get_adapted_overlaps(frag_map, dl, dr, d_slices)
-
-    # intermediates for S^{-1} terms left
     if grad_level == "full":
-        H_dr = np.einsum("ik,k->i", H_no_dets, dr.reshape((H_no_dets.shape[1])))
-        dl_partial_H_dr = np.einsum("il,ml->im", dl, H_dr.reshape(dl.shape))
+        # <Psi_l| H - E |p L>
+        rect_dens[frag] = build_dens(frag, csfs, bra_states=frag_states)
+        H1c, H2c = get_xr_H(ints, rect_dens, xr_order, monomer_charges, target_multiplicity)
+        Hc, Oc = _rectangular_H(frag, H1c[frag], H2c, O.T, H1)
+        G += _contract_with_d(frag, d_left.reshape(-1) @ (Hc - E * Oc), d, n_csf)
+        G /= d_left.reshape(-1) @ d.reshape(-1)
 
-    # intermediates for S^{-1} terms right
-    if grad_level == "full":
-        H_dl = np.einsum("ik,i->k", H_no_dets, dl.reshape((H_no_dets.shape[0])))
-        dl_H_dr_partial = np.einsum("il,ml->im", H_dl.reshape(dl.shape), dr)
-
-    E_prefac = -1
-    if grad_level == "full":
-        E_prefac = 1
-    
-    for chg in monomer_charges[frag_map[0]]:
-        if dets:
-            # compress state to smaller configuration space
-            c0 = np.einsum("ip,qp->iq", state_coeffs[frag_map[0]][chg], np.array(dets[chg])) 
-        else:
-            c0 = state_coeffs[frag_map[0]][chg]
-        gradient_states[chg] = np.einsum("pi,ki->kp", H1[frag_map[0]][c_slices[frag_map[0]][chg], d_slices[frag_map[0]][chg]], new_overlaps[chg])  # frag A monomer H term
-        gradient_states[chg] += E_prefac * np.einsum("ip,ki->kp", c0, new_overlaps[chg]) * E  # E term
-        if frag_ind == 0:
-            gradient_states[chg] += H2[c_slices[frag_map[0]][chg], d_slices[frag_map[0]][chg]].T  # dimer H term
-        else:
-            gradient_states[chg] += H2[d_slices[frag_map[0]][chg], c_slices[frag_map[0]][chg]]  # dimer H term
-        # this line also relies on equal charges on fragments A and B
-        gradient_states[chg] += np.einsum("ip,ki->kp", c0, H1[frag_map[1]][d_slices[frag_map[0]][chg], d_slices[frag_map[0]][chg]])  # frag B monomer H term
-        #if not "full" in grad_level:
-        #    gradient_states[chg] *= 2
-
-        # TODO: check for stronger interacting systems whether this should be the one term for the "herm" gradient option
-        # the following is the contribution <psi psi | H - E | phi psi>
-        if "full" in grad_level:
-            gradient_states[chg] += np.einsum("ip,ki->kp", H1_new[frag_map[0]][d_slices[frag_map[0]][chg], c_slices[frag_map[0]][chg]], new_overlaps[chg])  # frag A monomer H term
-            gradient_states[chg] += E_prefac * np.einsum("ip,ik->kp", c0, new_overlaps[chg]) * E  # E term
-            if frag_ind == 0:
-                gradient_states[chg] += H2_new[c_slices[frag_map[0]][chg], d_slices[frag_map[0]][chg]].T  # dimer H term
-            else:
-                gradient_states[chg] += H2_new[d_slices[frag_map[0]][chg], c_slices[frag_map[0]][chg]]  # dimer H term
-            # this line also relies on equal charges on fragments A and B
-            gradient_states[chg] += np.einsum("ip,ki->kp", c0, H1_new[frag_map[1]][d_slices[frag_map[0]][chg], d_slices[frag_map[0]][chg]])  # frag B monomer H term
-            
-        # the following are the two terms from the derivative with respect to S^{-1} from the left
-        if grad_level == "full":
-            gradient_states[chg] -= np.einsum("mp,im->ip", c0, dl_partial_H_dr[d_slices[frag_map[0]][chg], d_slices[frag_map[0]][chg]])
-            gradient_states[chg] -= np.einsum("kp,ki->ip", c0, dl_partial_H_dr[d_slices[frag_map[0]][chg], d_slices[frag_map[0]][chg]])
-
-        # the following are the two terms from the derivative with respect to S^{-1} from the right
-        if grad_level == "full":
-            gradient_states[chg] -= np.einsum("im,mp->ip", dl_H_dr_partial[d_slices[frag_map[0]][chg], d_slices[frag_map[0]][chg]], c0)
-            gradient_states[chg] -= np.einsum("ki,kp->ip", dl_H_dr_partial[d_slices[frag_map[0]][chg], d_slices[frag_map[0]][chg]], c0)
-        
-    return gs_energy, gradient_states, dl, dr
-
+    gradients = {}
+    for (chg, mult, sl_csf), (_, _, sl_state) in zip(local_sectors(rect_dens[frag]['n_states' if grad_level == "full" else 'n_states_bra'], monomer_charges[frag]),
+                                                    local_sectors(dens[frag]['n_states'], monomer_charges[frag])):
+        gradients.setdefault(chg, {})[mult] = G[sl_csf, sl_state].T
+    return gradients

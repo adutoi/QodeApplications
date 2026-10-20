@@ -53,6 +53,7 @@ matrix_timings = timer()
 integral_timings = timer()
 diagram_timings = timer()
 precontract_timings = timer()
+diagonalizer_timings = timer()
 qode.math.tensornet.initialize_timer()
 qode.math.tensornet.tensorly_backend.initialize_timer()
 
@@ -75,15 +76,19 @@ if len(sys.argv)==5:
 
 roots = {
             0:  {1: 10, 3: 6},
-            +1: {2: 10},
+            +1: {2: 8},         # with the frozen 1s, Be+ has 1 active electron in 8 orbitals: 8 doublets, no quartet
+                                #     (all-electron (4,9): {2: 10, 4: 1})
             -1: {2: 10, 4: 6},
         }
 
 dens_builder = DensBackend("hummr")
 
 # compute only unique fragments
-frags = [["Be", "/home/marco/hummr_tests/scratch/be_631g_fci.inp", roots, 0]]
+frags = [["Be", "/home/marco/hummr_tests/scratch/be_631g_fci_fcore.inp", roots, 0]]
 (mo_coeffs, states) = dens_builder.init_backend(frags)[0]
+
+global_timings.record("initial MOs and states")
+global_timings.start()
 
 #print(mo_coeffs)
 #print(states[0][1][0])
@@ -101,8 +106,9 @@ for m in range(int(n_frag)):
     Be.basis = empty
     Be.basis.n_spatial_orb = 9
     Be.basis.AOcode = "6-31G"
-    print("no core and therefore no core projection, as long as core is not provided as frozen core")
-    Be.basis.core = []#[0]
+    # frozen core of the hummr input (empty for all-electron inputs), projected out of the valence in get_ints.
+    # The densities from the density builder already include the doubly occupied core.
+    Be.basis.core = dens_builder.frozen_core("Be")
     #Be.basis.MOcoeffs = pickle.load(open(f"/home/marco/QodeApplications/tests/ref_data/check_mos_{m}.pkl", "rb"))
 
 
@@ -116,7 +122,7 @@ for m in range(int(n_frag)):
     #Be.rho['n_states'] = {chg_a: chg_dens.shape[m] for (chg_a, chg_b), chg_dens in Be.rho["ca"].items()}
     #Be.rho['n_elec'] = {chgs[m]: Be.n_elec_ref - chgs[m] for chgs in Be.rho["ca"]}
     # TODO: give general build with mult = None for unrestricted
-    Be.rho['n_states'] = {chg_a: {mult_a: mult_dens.shape[m] for (mult_a, mult_b, _, _), mult_dens in chg_dens.items() if mult_a == mult_b}
+    Be.rho['n_states'] = {chg_a: {mult_a: mult_dens.shape[m] for (mult_a, mult_b, *_), mult_dens in chg_dens.items() if mult_a == mult_b}
                           for (chg_a, chg_b), chg_dens in Be.rho["ca"].items()}
     Be.rho['n_elec'] = {chgs[m]: Be.n_elec_ref - chgs[m] for chgs in Be.rho["ca"]}
 
@@ -125,6 +131,9 @@ for m in range(int(n_frag)):
 print("get_ints ...")
 symm_ints, bior_ints, nuc_rep = get_ints(BeN, project_core, integral_timings, spin_ints=False, backend="lible")#"psi4")#"lible")
 print("done")
+
+global_timings.record("densities and integrals")
+global_timings.start()
 #print("symm_ints.S[0,0]")
 #print(symm_ints.S[0,0])
 #print("symm_ints.S[0,1]")
@@ -289,7 +298,7 @@ for chg_pair in all_dimer_charges:
 #                }
 #all_dimer_charges = [(0,0), (0,+1), (0,-1), (+1,0), (+1,+1), (+1,-1), (-1,0), (-1,+1), (-1,-1)]
 
-global_timings.record("setup")
+global_timings.record("diagrammatic expansion")
 global_timings.start()
 
 #########
@@ -536,11 +545,14 @@ H2 = H2blocked[numpy.ix_(mapping, mapping)]
 
 out, resources = struct(log=qode.util.textlog(echo=True)), qode.util.parallel.resources(1)
 #E, T = excitonic.ccsd((H1,[[None,H2],[None,None]]), out, resources)
-E, T = excitonic.fci((H1,[[None,H2],[None,None]]), out, target_state=0)#target_state=slice(0, 20))
+E, T = excitonic.fci((H1,[[None,H2],[None,None]]), out, diagonalizer_timings, target_state=0)#target_state=slice(0, 20))
 E += sum(nuc_rep[m1,m2] for m1 in range(n_frag) for m2 in range(m1+1))
 out.log("\nTotal Excitonic Energy = ", E)
 
 print("ref from HCI without frozen core = ", -29.22740841 -0.00004272)  # selected casscf + hci pt correction
+# I don't know how that happened, but I set up the same without fcore calculation again and got -29.22739320 -0.00005711
+print("ref from HCI with frozen core = ", -29.21086186)  # selected CASSCF + hci pt correction, but the correction is 0 here
+print("ref from psi4 with frozen core = ", -29.225805355910)
 
 global_timings.record("apply")
 
@@ -549,5 +561,6 @@ matrix_timings.print("MATRIX")
 integral_timings.print("INTEGRALS")
 diagram_timings.print("DIAGRAMS")
 precontract_timings.print("PRECONTRACTIONS")
+diagonalizer_timings.print("DIAGONALIZATION")
 qode.math.tensornet.print_timings("TENSORNET COMPONENTS")
 qode.math.tensornet.tensorly_backend.print_timings("TENSORLY BACKEND")

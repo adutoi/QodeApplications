@@ -16,12 +16,9 @@
 #    along with QodeApplications.  If not, see <http://www.gnu.org/licenses/>.
 #
 import re    # regular expressions
+import numpy
 from qode.util.dynamic_array import dynamic_array
-from .coupl_fac import (
-    diagram_couplings,
-    tensor_multiplicities_from_label,
-    tensor_restr_ca_from_label,
-)
+from .coupl_fac import diagram_couplings
 
 ####
 # In this file is all the book keeping stuff for getting the right arrays to the diagram contraction
@@ -48,8 +45,6 @@ def build_diagram(contraction, Dchgs, permutations):
         # This function is used immediately below.  It feeds permuted input tensors to the contraction and
         # returns the final objective function that does the contraction once informed of the fragment states.
         label = contraction.__name__
-        tensor_mults = tensor_multiplicities_from_label(label)
-        restr_ca = tensor_restr_ca_from_label(label)
         # _multiplicities supplies
         #     (frag_idx, charge_pair, multiplicity_pair)
         #
@@ -64,7 +59,7 @@ def build_diagram(contraction, Dchgs, permutations):
         # Evaluate one contraction, summing over all allowed
         # tensor multiplicities.
         def permuted_diagram(X, phase):
-            couplings = diagram_couplings(supersys_info, X, Dchgs, tensor_mults)
+            couplings = diagram_couplings(supersys_info, X, label, len(subsys_chgs))
             # No allowed spin coupling.
             #if len(couplings) == 0:
             #    return 0.0
@@ -74,12 +69,11 @@ def build_diagram(contraction, Dchgs, permutations):
                     return None
                 supersys_info.timings.start()
                 result = 0.0
-                for prefactor, Dmult, rank2 in couplings:
-                    #print(label, permutation, prefactor, Dmult, rank2, restr_ca)
-                    if Dmult is None:  # plain old unrestricted workflow without spin-adaptation
+                for prefactor, channels in couplings:
+                    if channels is None:  # plain old unrestricted workflow without spin-adaptation
                         Xk = X
-                    else:  # spin-adapted workflow with allowed Dmult, rank and number of restricted rank-0 ca pairs
-                        Xk = X.with_Dmult(Dmult, rank2, restr_ca)
+                    else:  # spin-adapted workflow: density channels (rank, path) and access views per fragment
+                        Xk = X.with_channels(channels)
                     # accumulate all allowed combinations of multiplicities and rank with corresponding prefactor
                     result += (
                         prefactor
@@ -152,6 +146,7 @@ class frag_resolve(object):
         self._storage["mult"] = _mult_array(self._subsys_chgs, self._n_frag)
         self._storage["n_frag"] = self._n_frag
         self._storage["n_states"] = _n_states_array(self._supersys_info.densities, self._subsys_chgs, self._n_frag)
+        self._storage["overlap"] = _overlap_array(self._supersys_info.densities, self._subsys_chgs, self._n_frag)
         try:
             self._storage["s##"]   = _subsys_array(self._supersys_info.integrals.S, self._subsys_chgs, 2, self._n_frag)    # one of these ...
         except:
@@ -176,6 +171,7 @@ class frag_resolve(object):
             or attr == "Dchg"
             or attr == "Dmult"
             or attr == "n_states"
+            or attr == "overlap"
             or attr == "mult"
             or attr == "n_frag"
         ):
@@ -194,58 +190,28 @@ class frag_resolve(object):
                     frag_count = label_template.count("#")
                     self._storage[label_template] = _precontract_array(self._supersys_info.contract_cache.general, label_template, self._subsys_chgs, frag_count, self._n_frag)
                 else:                                  # ... otherwise must be a single-fragment density
-                    self._storage[label_template] = _density_array(self._densities, label_template[:-1], self._subsys_chgs, self._n_frag)
+                    self._storage[label_template] = _density_array(self._densities, label_template, self._subsys_chgs, self._n_frag)
             return self._storage[label_template][frag_indices]
     
-    def with_Dmult(self, Dmult, rank2, restr_ca):
+    def with_channels(self, channels):
         """
-        Return a lightweight resolver identical to the current one,
-        except that density lookups use the requested multiplicity
-        differences, tensor rank, and rank-0 ca-pair restriction.
+        Return a lightweight resolver identical to the current one, except that the density lookups use the
+        given channels, one per fragment of the subsystem (in the permuted order),
 
-        Parameters
-        ----------
-        Dmult : tuple[int]
-            Required multiplicity differences (bra - ket).
+            (mult_bra, mult_ket, rank2, restr_ca, path, views),
 
-        rank2 : int
-            Twice the tensor rank k.
-
-        restr_ca : int or None
-            Number of ca-pairs restricted to rank 0 for this diagram.
-
-        Returns
-        -------
-        frag_resolve
-            Resolver with identical subsystem, permutation and caches,
-            but different density lookup rules.
+        see coupl_fac.diagram_couplings.
         """
-
         new = frag_resolve.__new__(frag_resolve)
-
-        #
-        # Everything except the density resolver can be shared.
-        #
-        new._storage = dict(self._storage)
-
+        new._storage = dict(self._storage)    # everything except the density resolver can be shared
         new._supersys_info = self._supersys_info
         new._n_frag = self._n_frag
-
+        new._permutation = self._permutation
         new._subsys_chgs = tuple(
-            (frag_idx, (chg_pair, (mult_i, mult_j, rank2, restr_ca[i])))
-            for i, (frag_idx, (chg_pair, (mult_i, mult_j))) in enumerate(self._subsys_chgs)
+            (frag_idx, (chg_pair, channel))
+            for (frag_idx, (chg_pair, _)), channel in zip(self._subsys_chgs, channels)
         )
-
-        #
-        # Replace only the density resolver.
-        #
-        new._densities = _subsys_array(
-            new._supersys_info.densities,
-            new._subsys_chgs,
-            1,
-            new._n_frag,
-        )
-
+        new._densities = _subsys_array(new._supersys_info.densities, new._subsys_chgs, 1, new._n_frag)
         return new
 
 
@@ -371,6 +337,69 @@ def _n_states_array(densities, subsys_chgs, n_frag):
         return (n_states_bra[chg_i][mult_i], n_states[chg_j][mult_j])
     return dynamic_array(_rule, [range(n_frag)])
 
+def _overlap_array(densities, subsys_chgs, n_frag):
+    """
+    <bra|ket> of a fragment (n_states_bra x n_states), which takes the place of the Kronecker delta of
+    spectator fragments; the identity, if bra and ket states are the same, None for differing sectors
+    """
+    subsystem, transitions = zip(*subsys_chgs)
+    def _rule(*indices):
+        index = indices[0]
+        (chg_i, chg_j), mults = transitions[index]
+        mult_i, mult_j = mults[:2]
+        if chg_i != chg_j or mult_i != mult_j:
+            return None
+        frag = densities[subsystem[index]]
+        if "overlap" in frag:
+            return frag["overlap"][chg_i][mult_i]
+        n_bra, n_ket = frag["n_states_bra"][chg_i][mult_i], frag["n_states"][chg_j][mult_j]
+        if n_bra != n_ket:
+            raise ValueError("the overlap of different bra and ket state sets is required")
+        return numpy.eye(n_ket)
+    return dynamic_array(_rule, [range(n_frag)])
+
+class density_view(object):
+    """
+    density accessed with a different index order: canonical slot s sits at the accessed position
+    positions[s], and rho_access = sign * rho_canonical (see spin_structure.FragmentStructure.view)
+    """
+    def __init__(self, rho, positions, sign):
+        self.rho, self.positions, self.sign = rho, positions, sign
+    def __call__(self, *indices):
+        states, orbs = indices[:2], indices[2:]
+        result = self.rho(*states, *[orbs[p] for p in self.positions])
+        return result if self.sign == 1 else self.sign * result
+
+def resolve_density(by_channel, channel, template):
+    """density of a channel (6-entry spin-adapted channel with access views, see coupl_fac.diagram_couplings)"""
+    if channel is None or channel[0] is None:    # not spin adapted (spin orbitals)
+        return by_channel[(None,) * 5]
+    if len(channel) < 6:
+        return lookup_channel(by_channel, channel)
+    rho = lookup_channel(by_channel, tuple(channel[:5]))
+    views = dict(channel[5])
+    if template not in views:
+        raise KeyError(f"no index view for the density access {template}")
+    positions, sign = views[template]
+    if positions == tuple(range(len(positions))) and sign == 1:
+        return rho
+    return density_view(rho, positions, sign)
+
+def lookup_channel(by_channel, key):
+    """
+    density of a channel (mult_bra, mult_ket, rank2, restr_ca, path); a 4-entry key without the path is
+    accepted, if the path is unique (e.g. for all XR[0] densities)
+    """
+    if key in by_channel:
+        return by_channel[key]
+    if len(key) == 4:
+        matches = [ch for ch in by_channel if ch[:4] == tuple(key)]
+        if len(matches) == 1:
+            return by_channel[matches[0]]
+        if len(matches) > 1:
+            raise KeyError(f"channel {key} is ambiguous, the coupling path is required: {matches}")
+    raise KeyError(key)
+
 def _density_array(densities, label, subsys_chgs, n_frag):
     _, transitions = zip(*subsys_chgs)
     charges = [transition[0] for transition in transitions]
@@ -381,9 +410,9 @@ def _density_array(densities, label, subsys_chgs, n_frag):
         index = indices[0]
         try:
             #print(f"dens for {index, label, charges[index], mults[index]}")
-            rho = densities[index][label][charges[index]][mults[index]]    # charges/mults[index] is the bra and ket charge
+            rho = resolve_density(densities[index][label[:-1]][charges[index]], mults[index], label)    # charges/mults[index] is the bra and ket charge
         except KeyError:
-            print(f"key error for ind {index} label {label} charg {charges[index]} mult {mults[index]}")
+            print(f"key error for ind {index} label {label[:-1]} charg {charges[index]} mult {mults[index][:5]}")
             rho = None    # eventually return an object whose __getitem__ member reports exactly what is missing (in case access is attempted)
         return rho
     return dynamic_array(_rule, [range(n_frag)])
@@ -400,8 +429,8 @@ def _precontract_array(contract_cache, label, subsys_chgs, n_indices, n_frag):
         try:
             for transition in rho_transitions:
                 charge_pair = transition[0]
-                mult_pair   = transition[1]
-                contraction = contraction[charge_pair + mult_pair]
+                mult_pair   = tuple(transition[1])
+                contraction = contraction[charge_pair + mult_pair + (None,) * (6 - len(mult_pair))]
         except KeyError:
             contraction = None    # eventually return an object whose __getitem__ member reports exactly what is missing (in case access is attempted)
         except RuntimeError as err:

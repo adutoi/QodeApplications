@@ -67,7 +67,12 @@ class DensBackend:
 
                 mo_coeffs = frag_engine.initialize(frag[1])
 
-                states = frag_engine.get_states(frag[2])
+                # The extra (intermediate) sectors are only needed by hummr itself (their CSF spaces), they are
+                # dropped from the returned states, i.e. they enter neither the densities nor the XR basis.
+                roots = frag[2]
+                states = frag_engine.get_states(frag_engine.with_intermediate_sectors(roots))
+                states = {chg: {mult: vecs for mult, vecs in by_mult.items() if mult in roots.get(chg, {})}
+                          for chg, by_mult in states.items() if chg in roots}
 
                 ret.append([mo_coeffs, states])
             return ret
@@ -106,6 +111,16 @@ class DensBackend:
                         )
         else:
             raise NotImplementedError
+
+    def frozen_core(self, frag_name):
+        """
+        Indices of the frozen (doubly occupied) core MOs of a fragment, as needed for
+        basis.core of the core projection in get_ints.  The densities returned by
+        build_densities already include the core (see embed_frozen_core).
+        """
+        if self.backend == "hummr":
+            return list(range(self.engine.fragments[frag_name].n_core))
+        return []
 
     def finalize_all(self):
         if self.backend == "hummr":

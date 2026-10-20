@@ -23,8 +23,10 @@ from pathlib import Path
 from typing import Dict, Mapping, Optional, Sequence
 
 import numpy as np
+from sympy import Rational, sqrt
+from sympy.physics.quantum.cg import CG
 
-from dens_util import multiplicity_iterator, build_reverse_density_spin_adapt
+from dens_util import multiplicity_iterator, reversed_densities_spin_adapt
 from densities import _tens_wrap
 
 
@@ -185,11 +187,45 @@ def write_hummr_input(
 
     return path
 
-def wrap_dens_and_build_transpose(dens_inp):
+def to_cg_convention(dens_name, channel, data):
     """
-    Load transition densities exported by hummr, wrap them with
-    the internal tensor wrapper and build the transpose densities,
-    which haven't been built explicitly yet.
+    The XR machinery (coupl_fac.recoupling_factor, dens_util.reversed_densities_spin_adapt)
+    expects all spin-adapted densities in the CG convention
+
+        <I S_I S_I| T^K_q |J S_J S_J> = <S_J S_J K q|S_I S_I> rho_IJ,      q = S_I - S_J,
+
+    with the tensors T^K_q(path) of spin_tensors.py (the channel key is
+    (mult_bra, mult_ket, rank2, restr_ca, path)).
+
+    hummr returns stretched elements <I S_I S_I| T^K_q |J S_J S_J> for all types and paths (including the
+    rank-1 ca channels, T^1 = -sqrt(2) [c x at]^1), i.e. the CG coefficient has to be divided out (it is 1 for
+    S_I = S_J + K, e.g. for ccaa with restr_ca 2, rank 0 and equal multiplicities).  This was verified against
+    reference densities from an exact Fock-space FCI (tests/spin_adapted).
+    """
+    mult_bra, mult_ket, rank2, restr_ca, path = channel
+    S_I, S_J = Rational(mult_bra - 1, 2), Rational(mult_ket - 1, 2)
+    k, q = Rational(rank2, 2), S_I - S_J
+    return data / float(CG(S_J, S_J, k, q, S_I, S_I).doit())
+
+def embed_frozen_core(dens, n_core, n_mo, overlaps=None):
+    """
+    Embed densities of an active space (orbitals n_core ... n_core+n_act-1 of the n_mo fragment MOs)
+    into the full fragment MO space, with the n_core core orbitals doubly occupied in every state
+    (all types and paths, see density_providers/frozen_core.py).  E.g.
+
+        ca   (rank 0)   E_KL                           = 2 delta_KL delta_IJ
+        caa  E_pr at_s  [K,K,s] = 2 a_s,               [K,r,K] = -a_r
+
+    The delta_IJ are the overlaps <I|J> of the active parts: overlaps[(chg, mult)] (bra x ket) if given,
+    otherwise bra and ket states have to be the same (orthonormal) set.
+    """
+    from frozen_core import embed
+    return embed(dens, n_core, n_mo, overlaps)
+
+def wrap_dens_and_build_transpose(dens_inp, n_core=0, n_mo=None, overlaps=None, parts="both"):
+    """
+    Convert the densities returned by hummr into the CG convention, embed them into the full MO space
+    (frozen core), add their adjoint partners and wrap them with the internal tensor wrapper.
 
     Internal hierarchy
     ------------------
@@ -201,65 +237,78 @@ def wrap_dens_and_build_transpose(dens_inp):
             (charge_bra, charge_ket)
 
         channel_key =
-            (mult_bra, mult_ket, rank2, restr_ca)
+            (mult_bra, mult_ket, rank2, restr_ca, path)
 
-    and rank2 = 2*k.
+    with rank2 = 2*K and the spin coupling path of spin_tensors.py.
+
+    parts: "both"     the computed densities and their reversed (adjoint) partners
+           "direct"   only the computed densities
+           "reversed" only the reversed partners (of channels, which are not computed directly)
+    The latter two are used for different bra and ket state sets, where the partners have to be obtained
+    from a calculation with bra and ket swapped (see HummrXRFragment.compute_densities).
+    overlaps: <bra|ket> per (chg, mult) for the frozen-core embedding (see embed_frozen_core)
     """
+    if parts not in ("both", "direct", "reversed"):
+        raise ValueError(f"unknown parts {parts!r}")
+
+    # convert into the CG convention and embed the active space into the full MO space (frozen core)
+    dens_cg = {}
+    for dens_name, dens_group in dens_inp.items():
+        dens_cg[dens_name] = {}
+        for charge_pair, second_layer in dens_group.items():
+            dens_cg[dens_name][charge_pair] = {channel: to_cg_convention(dens_name, channel, np.asarray(state_group))
+                                               for channel, state_group in multiplicity_iterator(second_layer)}
+    dens_np = embed_frozen_core(dens_cg, n_core, n_mo, overlaps)
 
     dens_out = {}
-
-    # Note that there is no -2 factor included here, because it is not included
-    # in the XR specific density build of hummr anymore.
-
-    #print("apply -2 definition on ccaa in json load, note that this definition" \
-    #"is only in line with the internal hummr definition, but not with the" \
-    #"ccaa build of the density builder from the XR module.")
-
-    #densities["spin_adapted"] = spin_adapted
-
-    for dens_name, dens_group in dens_inp.items():
-
-        #
-        # Do not treat our own metadata as a density.
-        #
-        #if dens_name == "spin_adapted":
-        #    continue
-
-        top_map = {}
-
-        for charge_pair, second_layer in dens_group.items():
-
-            #charge_pair = tuple(map(int, chg_key.split("_")))
-
-            channel_map = {}
-
-            for channel, state_group in multiplicity_iterator(
-                second_layer
-            ):
-                #print(dens_name, charge_pair, channel)
-
-                # pybind11 interface already included the state
-                # indices into the numpy density tensor and released the
-                # original tensors, which didn't include the state
-                # indices in the tensor.
-                channel_map[channel] = _tens_wrap(state_group)
-
-                #
-                # Generate the reversed density immediately.
-                #
-                build_reverse_density_spin_adapt(
-                    densities=dens_out,
-                    dens_name=dens_name,
-                    data=state_group,
-                    charge_pair=charge_pair,
-                    channel=channel,
-                )
-
-            top_map[charge_pair] = channel_map
-
-        dens_out[dens_name] = top_map
-
+    if parts != "reversed":
+        for dens_name, by_chg in dens_np.items():
+            for charge_pair, by_channel in by_chg.items():
+                for channel, data in by_channel.items():
+                    dens_out.setdefault(dens_name, {}).setdefault(charge_pair, {})[channel] = _tens_wrap(data)
+    if parts != "direct":
+        # adjoint partners (directly computed channels take precedence)
+        for dens_name, by_chg in reversed_densities_spin_adapt(dens_np).items():
+            for charge_pair, by_channel in by_chg.items():
+                for channel, data in by_channel.items():
+                    if channel not in dens_np.get(dens_name, {}).get(charge_pair, {}):
+                        dens_out.setdefault(dens_name, {}).setdefault(charge_pair, {})[channel] = _tens_wrap(data)
     return dens_out
+
+
+def frozen_core_from_input(input_file, n_mo):
+    """
+    Number of doubly occupied (frozen) core orbitals of a hummr CASSCF/CASCI input, i.e.
+    (sum of nuclear charges - Charge - NEl) / 2.  hummr orders the MOs as core, active, virtual.
+    Returns (n_core, n_act, n_act_elec, charge): inputs without an active space (no NEl/NOrb) are treated as
+    all-electron; n_act_elec is the number of active electrons of the input charge.
+    """
+    from qode.atoms.elements import atomic_number
+    blocks, block = {}, None
+    for line in Path(input_file).read_text().splitlines():
+        words = line.split()
+        if not words or words[0].startswith("#"):
+            continue
+        if block is None:
+            block = words[0]
+            blocks[block] = []
+        elif words[0] == "End":
+            block = None
+        else:
+            blocks[block].append(words)
+    general = {w[0]: w[1:] for w in blocks.get("General", [])}
+    cas = {w[0]: w[1:] for w in blocks.get("CASSCF", [])}
+    charge = int(general.get("Charge", ["0"])[0])
+    n_elec = sum(atomic_number(w[0]) for w in blocks["Geom"]) - charge
+    if "NEl" not in cas or "NOrb" not in cas:
+        return 0, n_mo, n_elec, charge
+    n_core2 = n_elec - int(cas["NEl"][0])
+    if n_core2 < 0 or n_core2 % 2:
+        raise ValueError(f"{input_file}: inconsistent active space ({n_elec} electrons, NEl {cas['NEl'][0]})")
+    n_core, n_act = n_core2 // 2, int(cas["NOrb"][0])
+    if n_core + n_act > n_mo:
+        raise ValueError(f"{input_file}: {n_core} core + {n_act} active orbitals exceed the {n_mo} MOs")
+    return n_core, n_act, n_elec - 2 * n_core, charge
 
 
 class HummrXRFragment:
@@ -280,6 +329,9 @@ class HummrXRFragment:
         self._engine = None
         self.input_file: Optional[Path] = None
         self.orbitals: Optional[np.ndarray] = None
+        # frozen core: densities are embedded into the full MO space with doubly occupied core
+        self.n_core = 0
+        self.n_act = None
 
     def prepare_input(
         self,
@@ -350,8 +402,28 @@ class HummrXRFragment:
                 str(self.input_file)
             )
         )
+        self.n_core, self.n_act, self._n_act_elec, self._input_charge = frozen_core_from_input(self.input_file, self.orbitals.shape[1])
 
         return self.orbitals
+
+    def multiplicities(self, charge):
+        """all multiplicities with CSFs of the active space for the given fragment charge"""
+        n = self._n_act_elec - (charge - self._input_charge)
+        if n < 0 or n > 2 * self.n_act:
+            return []
+        return [S2 + 1 for S2 in range(n % 2, min(n, 2 * self.n_act - n) + 1, 2)]
+
+    def with_intermediate_sectors(self, roots):
+        """
+        hummr resolves the identity in the composite densities (aa, caa, ccaa and all XR[1]/XR[2] types) only over
+        the (charge, multiplicity) sectors requested in get_states, using their full CSF spaces.  Returns roots
+        extended by one root for every multiplicity with CSFs of each requested charge, which is not requested.
+        """
+        out = {chg: dict(by_mult) for chg, by_mult in roots.items()}
+        for chg in roots:
+            for mult in self.multiplicities(chg):
+                out[chg].setdefault(mult, 1)
+        return out
 
     def get_states(
         self,
@@ -400,13 +472,35 @@ class HummrXRFragment:
                 "fragment has not been initialized"
             )
 
-        return wrap_dens_and_build_transpose(
-            self._engine.compute_densities(
-                bra,
-                ket,
-                xr_level
+        n_mo = self.orbitals.shape[1]
+        if bra is ket:
+            return wrap_dens_and_build_transpose(
+                self._engine.compute_densities(
+                    bra,
+                    ket,
+                    xr_level
+                ),
+                n_core=self.n_core,
+                n_mo=n_mo,
             )
-        )
+
+        # Different bra and ket sets (e.g. single CSFs as bra for the state gradients): the adjoint partners
+        # <bra|c|ket> etc. are the reversed densities of <ket|a|bra>, which requires a second calculation.
+        overlaps = {}
+        for chg, mult_dict in bra.items():
+            for mult, vecs in mult_dict.items():
+                if len(vecs) > 0 and len(ket.get(chg, {}).get(mult, [])) > 0:
+                    overlaps[(chg, mult)] = np.array(vecs, dtype=float) @ np.array(ket[chg][mult], dtype=float).T
+        overlaps_T = {key: S.T for key, S in overlaps.items()}
+        dens = wrap_dens_and_build_transpose(self._engine.compute_densities(bra, ket, xr_level),
+                                             n_core=self.n_core, n_mo=n_mo, overlaps=overlaps, parts="direct")
+        partners = wrap_dens_and_build_transpose(self._engine.compute_densities(ket, bra, xr_level),
+                                                 n_core=self.n_core, n_mo=n_mo, overlaps=overlaps_T, parts="reversed")
+        for dens_name, by_chg in partners.items():
+            for charge_pair, by_channel in by_chg.items():
+                for channel, data in by_channel.items():
+                    dens.setdefault(dens_name, {}).setdefault(charge_pair, {}).setdefault(channel, data)
+        return dens
 
     def finalize(self) -> None:
 

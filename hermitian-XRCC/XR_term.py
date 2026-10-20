@@ -100,17 +100,14 @@ def _evaluate_block(result, op_blocks, frag_order, active_diagrams, subsys_indic
     rho = op_blocks.densities
     m = subsys_indices    # alias makes code more readable
     n_frag = len(m)
+    # (spin-orbital fragment states have the multiplicity None)
     n_states_i = [
         rho[m[x]]['n_states_bra'][chg_i][mult_i]
-        if mult_i is not None
-        else rho[m[x]]['n_states_bra'][chg_i]
         for x,((chg_i,mult_i), _) in enumerate(subsys_transitions)
     ]
 
     n_states_j = [
         rho[m[x]]['n_states'][chg_j][mult_j]
-        if mult_j is not None
-        else rho[m[x]]['n_states'][chg_j]
         for x,(_, (chg_j,mult_j)) in enumerate(subsys_transitions)
     ]
     loops = [(m_,range(n_frag)) for m_ in range(frag_order)]

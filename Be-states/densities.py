@@ -176,8 +176,8 @@ def _build_tensors(states, n_orbs, n_elec_0, thresh, options, xr_order, dets, n_
         for bra_chg,ket_chg in densities[op_string]:
             print("<>", op_string, bra_chg, ket_chg)
             rho = densities[op_string][bra_chg,ket_chg]
-            temp_ij = _tensor_sum()
-            temp_ji = _tensor_sum()
+            temp_ij = tl_tensor.zeros()
+            temp_ji = tl_tensor.zeros()
             #
             arguments = []
             n_bras = len(rho)

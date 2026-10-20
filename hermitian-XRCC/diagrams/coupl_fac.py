@@ -15,7 +15,6 @@
 #    You should have received a copy of the GNU General Public License
 #    along with QodeApplications.  If not, see <http://www.gnu.org/licenses/>.
 #
-import re
 from sympy import sqrt, S as Sym
 from sympy.physics.wigner import wigner_6j
 
@@ -140,77 +139,6 @@ def recoupling_factor(
     return float(prefactor * sixj)
 
 
-def tensor_multiplicities_from_label(label):
-    """
-    Determine the allowed tensor multiplicities from the operator
-    topology encoded in the diagram label.
-
-    The returned multiplicities describe the tensor rank k:
-
-        1 -> k = 0
-        2 -> k = 1/2
-        3 -> k = 1
-        ...
-
-    Local c-a pairs belonging to the same operator are internally
-    rank restricted.  Their number is therefore tracked separately
-    through ``restr_ca`` and does not enter the tensor multiplicity
-    calculation.
-    """
-
-    free_legs = [0, 0]
-
-    for tensor, digits in re.findall(r"([stuv])([01]+)", label):
-
-        if tensor == "s":
-            ops = [
-                ("c", digits[0]),
-                ("a", digits[1]),
-            ]
-
-        elif tensor == "t":
-            ops = [
-                ("c", digits[0]),
-                ("a", digits[1]),
-            ]
-
-        elif tensor == "u":
-            ops = [
-                ("c", digits[1]),
-                ("a", digits[2]),
-            ]
-
-        elif tensor == "v":
-            ops = [
-                ("c", digits[0]),
-                ("c", digits[1]),
-                ("a", digits[2]),
-                ("a", digits[3]),
-            ]
-
-        else:
-            raise RuntimeError(f"Unknown tensor '{tensor}'")
-
-        fragment_ops = {}
-
-        for op, frag in ops:
-            fragment_ops.setdefault(frag, []).append(op)
-
-        for frag, ops_here in fragment_ops.items():
-
-            nc = ops_here.count("c")
-            na = ops_here.count("a")
-
-            paired = min(nc, na)
-
-            free_legs[int(frag)] += nc - paired
-            free_legs[int(frag)] += na - paired
-
-    # the rank for both fragments needs to be equal, when put together to the
-    # total Hamiltonian, which has rank 0, so pick the smallest maximum rank possible.
-    return tuple(range(1 + min(free_legs) % 2, min(free_legs) + 2, 2))
-
-
 def allowed_total_multiplicities(mults):
     """
     Return all multiplicities obtainable by successively coupling
@@ -242,198 +170,73 @@ def allowed_total_multiplicities(mults):
     return allowed
 
 
-def tensor_restr_ca_from_label(label):
+def diagram_couplings(supersys_info, X, label, n_frag):
     """
-    Determine how many c-a pairs are locally restricted to rank k=0.
+    Spin-recoupling contributions of a diagram for spin-adapted fragment states.
 
-    A c-a pair is restricted when the creator and annihilator belonging
-    to the same operator occur on the same fragment.
+    Returns a list of
 
-    The operator labels use creator-first / annihilator-second ordering,
-    so the relevant local pairs can be identified directly from the
-    fragment indices.
+        (prefactor, channels)
 
-    Returns
-    -------
-    int
-        Number of locally rank-0-restricted c-a pairs.
+    where channels[f] = (mult_bra, mult_ket, rank2, restr_ca, path, views) selects the density of fragment f
+    (in the fragment order of the diagram) and views (a tuple of (attr template, (positions, sign))) maps
+    its canonical layout onto the index order of the accesses in the diagram code (see spin_structure.py).
+    The prefactor contains the spin weight of the diagram for these tensors and the recoupling factor of
+    the spin-coupled product states.  Non-spin-adapted calculations return [(1.0, None)].
     """
+    from .spin_structure import diagram_structure
 
-    restr_ca = [0, 0]
+    if X is None or X.mult[0][0] is None:
+        return [(1.0, None)]
 
-    for tensor, digits in re.findall(r"([stuv])([01]+)", label):
+    if len(X.mult) not in (1, 2):
+        raise NotImplementedError("Spin recoupling currently implemented only for monomer and dimer diagrams.")
 
-        if tensor == "s":
-            creator_frag = digits[0]
-            annihilator_frag = digits[1]
+    frags, accesses, weights = diagram_structure(label, n_frag)
 
-            if creator_frag == annihilator_frag:
-                restr_ca[int(digits[0])] += 1
-
-        elif tensor == "t":
-            creator_frag = digits[0]
-            annihilator_frag = digits[1]
-
-            if creator_frag == annihilator_frag:
-                restr_ca[int(digits[0])] += 1
-
-        elif tensor == "u":
-            creator_frag = digits[1]
-            annihilator_frag = digits[2]
-
-            if creator_frag == annihilator_frag:
-                restr_ca[int(digits[1])] += 1
-
-        elif tensor == "v":
-            #
-            # v has creators first and annihilators second:
-            #
-            #   c(d0) c(d1) a(d2) a(d3)
-            #
-            # The two operator-local ca pairings are therefore
-            #
-            #   d0 <-> d2
-            #   d1 <-> d3
-            #
-            if digits[0] == digits[2]:
-                restr_ca[int(digits[0])] += 1
-
-            if digits[1] == digits[3]:
-                restr_ca[int(digits[1])] += 1
-
-        else:
-            raise RuntimeError(f"Unknown tensor '{tensor}'")
-
-    return restr_ca
-
-
-def diagram_couplings(supersys_info, X, Dchgs, tensor_mults):
-    """
-    Return all spin-recoupling contributions for this diagram.
-
-    Each returned entry contains
-
-        (prefactor, Dmult, rank2)
-
-    where
-
-        prefactor
-            Spin recoupling coefficient.
-
-        Dmult
-            Required bra-ket multiplicity difference of each
-            fragment density.
-
-        rank2
-            Twice the tensor rank k.  Thus
-
-                rank2 = 0  -> k = 0
-                rank2 = 1  -> k = 1/2
-                rank2 = 2  -> k = 1
-                ...
-
-    The restriction in the number of rank-0 ca pairs is diagram
-    specific and is therefore not part of this return value.
-    """
-
-    #
-    # Non-spin-adapted calculations.
-    #
-    if X.mult[0][0] is None:
-        return [(1.0, None, None)]
-
-    target_mult = supersys_info.target_multiplicity
-
-    #
-    # Spin recoupling is currently implemented for dimer diagrams.
-    #
-    if len(X.mult) != 2 and len(X.mult) != 1:
-        raise NotImplementedError(
-            "Spin recoupling currently implemented only for monomer and dimer diagrams."
-        )
+    def channels(rank2, paths):
+        return tuple((X.mult[f][0], X.mult[f][1], rank2, frags[f].restr, paths[f], tuple(sorted(accesses[f].items())))
+                     for f in range(len(frags)))
 
     # ------------------------------------------------------------------
-    # Monomer operator
+    # Monomer operator (spin scalar)
     # ------------------------------------------------------------------
     if len(X.mult) == 1:
-
         bra_mult, ket_mult = X.mult[0]
-
-        # A scalar monomer operator conserves local spin.
         if bra_mult != ket_mult:
             return []
-
-        return [
-            (
-                1.0,       # prefactor
-                (0, 0),    # Dmult
-                0,         # rank2 = 2*k
-            )
-        ]
+        return [(w, channels(0, [P0])) for (rank2, P0), w in weights.items()]
 
     # ------------------------------------------------------------------
     # Dimer operator
     # ------------------------------------------------------------------
+    target_mult = supersys_info.target_multiplicity
 
-    #
-    # Check whether the requested supersystem multiplicity can be
-    # formed from the bra and ket fragment multiplicities.
-    #
-    bra_allowed = allowed_total_multiplicities(
-        [X.mult[i][0] for i in range(len(X.mult))] #[mult_i for mult_i, _ in X.mult]
-    )
-
-    ket_allowed = allowed_total_multiplicities(
-        [X.mult[i][1] for i in range(len(X.mult))] #[mult_j for _, mult_j in X.mult]
-    )
-
-    if target_mult not in bra_allowed:
+    if target_mult not in allowed_total_multiplicities([X.mult[0][0], X.mult[1][0]]):
+        return []
+    if target_mult not in allowed_total_multiplicities([X.mult[0][1], X.mult[1][1]]):
         return []
 
-    if target_mult not in ket_allowed:
-        return []
-
-    mult1 = X.mult[0]
-    mult2 = X.mult[1]
-
-    bra_mult1, ket_mult1 = mult1
-    bra_mult2, ket_mult2 = mult2
+    #
+    # X.mult is in the (permuted) fragment order of the diagram, but the
+    # supersystem states are coupled in the absolute fragment order
+    # |(S_0 S_1) S>.  The recoupling is therefore evaluated in absolute order,
+    # where the operator [T_B x T_A]^0 of a permuted diagram becomes
+    # (-1)^(2k) [T_A x T_B]^0.
+    #
+    permutation = tuple(X._permutation)
+    if permutation not in ((0, 1), (1, 0)):
+        raise NotImplementedError(f"unexpected fragment permutation {permutation}")
+    swapped = permutation == (1, 0)
+    mult1, mult2 = (X.mult[1], X.mult[0]) if swapped else (X.mult[0], X.mult[1])
 
     couplings = []
-
-    #
-    # tensor_mult = 2*k + 1
-    #
-    for tensor_mult in tensor_mults:
-
-        prefactor = recoupling_factor(
-            bra_mult1,
-            bra_mult2,
-            ket_mult1,
-            ket_mult2,
-            target_mult,
-            tensor_mult,
-        )
-
-        if abs(prefactor) < 1e-10:
+    for (rank2, P0, P1), w in weights.items():
+        prefactor = recoupling_factor(mult1[0], mult2[0], mult1[1], mult2[1], target_mult, rank2 + 1)
+        if swapped:
+            prefactor *= (-1) ** rank2
+        prefactor *= w
+        if abs(prefactor) < 1e-12:
             continue
-
-        # returning Dmults here is not a unique definition, but that
-        # is also not necessary, because only one specific transition of
-        # subsystem-transitions is requested.
-        Dmult = (
-            bra_mult1 - ket_mult1,
-            bra_mult2 - ket_mult2,
-        )
-
-        rank2 = tensor_mult - 1
-
-        couplings.append(
-            (
-                prefactor,
-                Dmult,
-                rank2,
-            )
-        )
-
+        couplings.append((prefactor, channels(rank2, [P0, P1])))
     return couplings

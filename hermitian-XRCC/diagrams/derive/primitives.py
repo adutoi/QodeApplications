@@ -150,6 +150,19 @@ class v_int(integral_type):
         else:   # new from four indices
             p, q, r, s, = arg1, arg2, arg3, arg4
             integral_type.__init__(self, [p,q], [r,s])
+    def compare_sign_to(self, other):
+        # The spin-summed (spatial) integrals v_pqrs (sum_st c_ps c_qt a_st a_rs) are only symmetric under the
+        # simultaneous swap of both electrons, v_pqrs = v_qpsr, but not antisymmetric in (p,q) or (r,s) alone,
+        # as the antisymmetrized spin-orbital integrals.  Only the former may therefore be used to merge terms.
+        if self.kind != other.kind or self._fragment != other._fragment:
+            return 0
+        c1, a1 = list(self.c_indices), list(self.a_indices)
+        c2, a2 = list(other.c_indices), list(other.a_indices)
+        if c1 == c2 and a1 == a2:
+            return 1
+        if c1 == c2[::-1] and a1 == a2[::-1]:
+            return 1
+        return 0
     def abbrev_hack(self):
         frags, letters = self._code_labels()
         return f"v{frags}"

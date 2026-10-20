@@ -56,10 +56,27 @@ def tensorly_wrapper2(timings):
         return wrap_it
     return wrapper
 
-def tens_diff(A, B):
-    def rule(*indices):
-        return A[indices] - B[indices]
+def electron_swap_symmetrized(V):
+    """
+    1/2 (V_pqrs + V_qpsr): the spin-summed operator sum V_pqrs c_ps c_qt a_st a_rs only depends on this part of V,
+    and the diagrams were derived using this symmetry, which the half-transformed V_half does not have
+    """
+    def rule(m1, m2, m3, m4):
+        return 0.5 * (V[m1, m2, m3, m4] + numpy.transpose(V[m2, m1, m4, m3], (1, 0, 3, 2)))
     return rule
+
+def tens_diff(A, B, factor_A=1):
+    def rule(*indices):
+        return factor_A * A[indices] - B[indices]
+    return rule
+
+# V_diff, which enters the S expansion of XR[1] and XR[2] (get_xr_result.py), is the first-order (in S) expansion of the
+# fully biorthogonalized V, i.e. one correction per electron:  2 V_half - V,  with V_half transformed for one electron.
+# With the antisymmetrized spin-orbital integrals of spin_orb_integrals this is obtained as V_half - V, because the
+# antisymmetrizer of V_half (_spinAnti4half_rule, over both index pairs) carries twice the weight of the one of V
+# (_spinAnti4_rule) for integrals with the electron-swap symmetry.  For plain (spatial or not antisymmetrized
+# spin-orbital) integrals the factor 2 has to be included explicitly.
+V_HALF_FACTOR_PLAIN = 2
 
 # TODO: move the antisymmetrization somewhere else
 def _spinAnti4_rule(V):
@@ -132,7 +149,9 @@ def direct_CoreProj(fragments, S):
 
     return Left, Right
 
-def get_ints(fragments, project_core=True, timings=None, spin_ints=True, backend="psi4"):    # spin_ints=False does not appear to be used ... prefer to remove option
+def get_ints(fragments, project_core=True, timings=None, spin_ints=True, backend="psi4", antisymmetrize=True):    # spin_ints=False does not appear to be used ... prefer to remove option
+    # antisymmetrize: only for spin_ints, antisymmetrized spin-orbital V (as required by diagrams derived with V
+    #                 antisymmetry) or the plain one (as the spatial V of spin-adapted calculations)
     # More needs to be done regarding the basis to prevent mismatches with the fragment states
     AO_ints     = AO_integrals(fragments, backend=backend)
     FragMO_ints = fragMO_integrals(AO_ints, [frag.basis.MOcoeffs for frag in fragments], cache=True)     # Cache because multiple calls to each block during biorthogonalization
@@ -146,12 +165,15 @@ def get_ints(fragments, project_core=True, timings=None, spin_ints=True, backend
     ### biorthogonalize everything without regard to core or valence
     Sinv = direct_Sinv(fragments, FragMO_ints.S)
     BiFragMO_ints = bra_transformed(Sinv, FragMO_ints, cache=True)
+    # the half-transformed V_half, symmetrized under the electron swap (see electron_swap_symmetrized)
+    BiFragMO_ints = struct(fragments=BiFragMO_ints.fragments, S=BiFragMO_ints.S, T=BiFragMO_ints.T, U=BiFragMO_ints.U, V=BiFragMO_ints.V,
+                           V_half=dynamic_array([cached, electron_swap_symmetrized(BiFragMO_ints.V_half)], BiFragMO_ints.V.ranges))
 
     if spin_ints:
         #-#-# FragMO_spin_ints   = spin_orb_integrals(  FragMO_ints, rule_wrappers=[tensorly_wrapper], cache=True)     # no need to cache? because each block only called once by contraction code
         #-#-# BiFragMO_spin_ints = spin_orb_integrals(BiFragMO_ints, rule_wrappers=[tensorly_wrapper], cache=True)     # no need to cache? because each block only called once by contraction code
-        FragMO_spin_ints_raw   = spin_orb_integrals(  FragMO_ints, "blocked")     # no need to cache? because each block only called once by contraction code
-        BiFragMO_spin_ints_raw = spin_orb_integrals(BiFragMO_ints, "blocked")     # no need to cache? because each block only called once by contraction code
+        FragMO_spin_ints_raw   = spin_orb_integrals(  FragMO_ints, "blocked", antisymmetrize=antisymmetrize)     # no need to cache? because each block only called once by contraction code
+        BiFragMO_spin_ints_raw = spin_orb_integrals(BiFragMO_ints, "blocked", antisymmetrize=antisymmetrize)     # no need to cache? because each block only called once by contraction code
         FragMO_spin_ints = struct(
             S = wrap(FragMO_spin_ints_raw.S,   [cached, tensorly_wrapper(timings)]),
             T = wrap(FragMO_spin_ints_raw.T,   [cached, tensorly_wrapper(timings)]),
@@ -164,7 +186,7 @@ def get_ints(fragments, project_core=True, timings=None, spin_ints=True, backend
             U      = wrap(BiFragMO_spin_ints_raw.U, [cached, tensorly_wrapper(timings)]),
             V      = wrap(BiFragMO_spin_ints_raw.V, [cached, tensorly_wrapper2(timings)]),
             V_half = wrap(BiFragMO_spin_ints_raw.V_half, [cached, tensorly_wrapper2(timings)]),
-            V_diff = dynamic_array([cached, tensorly_wrapper2(timings), tens_diff(BiFragMO_spin_ints_raw.V_half, BiFragMO_spin_ints_raw.V)], BiFragMO_spin_ints_raw.V.ranges),
+            V_diff = dynamic_array([cached, tensorly_wrapper2(timings), tens_diff(BiFragMO_spin_ints_raw.V_half, BiFragMO_spin_ints_raw.V, 1 if antisymmetrize else V_HALF_FACTOR_PLAIN)], BiFragMO_spin_ints_raw.V.ranges),
             #V_half1 = wrap(BiFragMO_spin_ints_raw.V_half1, [cached, tensorly_wrapper2(timings)]),
             #V_half2 = wrap(BiFragMO_spin_ints_raw.V_half2, [cached, tensorly_wrapper2(timings)])
         )
@@ -183,9 +205,9 @@ def get_ints(fragments, project_core=True, timings=None, spin_ints=True, backend
             U      = wrap(BiFragMO_ints.U, [cached, tensorly_wrapper(timings)]),
             V      = wrap(BiFragMO_ints.V, [cached, tensorly_wrapper2(timings)]),  # eri without antisymmetry
             #V = dynamic_array([cached, tensorly_wrapper2(timings), _spinAnti4_rule(BiFragMO_ints.V)], ranges=BiFragMO_ints.V.ranges),  # antisymmetrized eri
-            V_half = wrap(BiFragMO_ints.V_half, [cached, tensorly_wrapper2(timings)]),  # without antisymmetry
+            V_half = wrap(BiFragMO_ints.V_half, [cached, tensorly_wrapper2(timings)]),  # without antisymmetry, but electron-swap symmetric
             #V_half = dynamic_array([cached, tensorly_wrapper2(timings), _spinAnti4half_rule(BiFragMO_ints.V_half)], ranges=BiFragMO_ints.V.ranges),  # antisymmetrized
-            V_diff = dynamic_array([cached, tensorly_wrapper2(timings), tens_diff(BiFragMO_ints.V_half, BiFragMO_ints.V)], BiFragMO_ints.V.ranges)  # without antisymmetry
+            V_diff = dynamic_array([cached, tensorly_wrapper2(timings), tens_diff(BiFragMO_ints.V_half, BiFragMO_ints.V, V_HALF_FACTOR_PLAIN)], BiFragMO_ints.V.ranges)  # without antisymmetry
             #V_diff = dynamic_array([cached, tensorly_wrapper2(timings), tens_diff(_spinAnti4half_rule(BiFragMO_ints.V_half), _spinAnti4_rule(BiFragMO_ints.V))], BiFragMO_ints.V.ranges)  # antisymmetrized
         )
         return FragMO_ints_wrapped, BiFragMO_ints_wrapped, Nuc_repulsion(fragments).matrix

@@ -22,10 +22,11 @@ p, q, r, s, t, u, v, w = "pqrstuvw"    # some contraction indices for easier rea
 
 
 
+
 def s01v0100(X, contract_last=False):
     if no_result(X, contract_last):  return []
     i0, i1, j0, j1 = state_indices(contract_last)    # = 0, 1, 2, 3
-    return -2 * raw(
+    return -1 * raw(
         #  X.ccaa0(i0,j0,p,t,s,r)
         #@ X.ca1(i1,j1,q,u)
         #@ X.s01(t,u)
@@ -34,16 +35,40 @@ def s01v0100(X, contract_last=False):
         @ X.ca1Xu_S0u(i1,j1,q,t)
         )
 
+def s01v1000(X, contract_last=False):
+    if no_result(X, contract_last):  return []
+    i0, i1, j0, j1 = state_indices(contract_last)    # = 0, 1, 2, 3
+    return 1 * raw(
+        #  X.ccaa0(i0,j0,q,t,s,r)
+        #@ X.ca1(i1,j1,p,u)
+        #@ X.s01(t,u)
+        #@ X.v1000(p,q,r,s)
+          X.ccaa0qXsr_V1qrs(i0,j0,t,p)
+        @ X.ca1Xu_S0u(i1,j1,p,t)
+        )
+
 def s01v1101(X, contract_last=False):
     if no_result(X, contract_last):  return []
     i0, i1, j0, j1 = state_indices(contract_last)    # = 0, 1, 2, 3
-    return 2 * raw(
+    return 1 * raw(
         #  X.ca0(i0,j0,t,r)
         #@ X.ccaa1(i1,j1,p,q,u,s)
         #@ X.s01(t,u)
         #@ X.v1101(p,q,r,s)
           X.ca0tX_St1(i0,j0,r,u)
         @ X.ccaa1pqXs_Vpq0s(i1,j1,u,r)
+        )
+
+def s01v1110(X, contract_last=False):
+    if no_result(X, contract_last):  return []
+    i0, i1, j0, j1 = state_indices(contract_last)    # = 0, 1, 2, 3
+    return -1 * raw(
+        #  X.ca0(i0,j0,t,s)
+        #@ X.ccaa1(i1,j1,p,q,u,r)
+        #@ X.s01(t,u)
+        #@ X.v1110(p,q,r,s)
+          X.ca0tX_St1(i0,j0,s,u)
+        @ X.ccaa1pqXr_Vpqr0(i1,j1,u,s)
         )
 
 def s01v0000(X, contract_last=False):
@@ -61,13 +86,25 @@ def s01v0000(X, contract_last=False):
 def s01v0101(X, contract_last=False):
     if no_result(X, contract_last):  return []
     i0, i1, j0, j1 = state_indices(contract_last)    # = 0, 1, 2, 3
-    return 4 * (-1)**(X.n_j0) * raw(
+    return 2 * (-1)**(X.n_j0) * raw(
         #  X.cca0(i0,j0,p,t,r)
         #@ X.caa1(i1,j1,q,u,s)
         #@ X.s01(t,u)
         #@ X.v0101(p,q,r,s)
           X.cca0pXr_Vp1r1(i0,j0,t,q,s)
         @ X.caa1XuX_S0u(i1,j1,q,s,t)
+        )
+
+def s01v0110(X, contract_last=False):
+    if no_result(X, contract_last):  return []
+    i0, i1, j0, j1 = state_indices(contract_last)    # = 0, 1, 2, 3
+    return 2 * (-1)**(X.n_j0 + 1) * raw(
+        #  X.cca0(i0,j0,p,t,s)
+        #@ X.caa1(i1,j1,q,u,r)
+        #@ X.s01(t,u)
+        #@ X.v0110(p,q,r,s)
+          X.cca0pXs_Vp11s(i0,j0,t,q,r)
+        @ X.caa1XuX_S0u(i1,j1,q,r,t)
         )
 
 def s01v1100(X, contract_last=False):
@@ -97,7 +134,7 @@ def s01v1111(X, contract_last=False):
 def s01v0001(X, contract_last=False):
     if no_result(X, contract_last):  return []
     i0, i1, j0, j1 = state_indices(contract_last)    # = 0, 1, 2, 3
-    return 2 * raw(
+    return 1 * raw(
         #  X.ccca0(i0,j0,p,q,t,r)
         #@ X.aa1(i1,j1,u,s)
         #@ X.s01(t,u)
@@ -106,16 +143,40 @@ def s01v0001(X, contract_last=False):
         @ X.aa1uX_S0u(i1,j1,s,t)
         )
 
+def s01v0010(X, contract_last=False):
+    if no_result(X, contract_last):  return []
+    i0, i1, j0, j1 = state_indices(contract_last)    # = 0, 1, 2, 3
+    return -1 * raw(
+        #  X.ccca0(i0,j0,p,q,t,s)
+        #@ X.aa1(i1,j1,u,r)
+        #@ X.s01(t,u)
+        #@ X.v0010(p,q,r,s)
+          X.ccca0pqXs_Vpq1s(i0,j0,t,r)
+        @ X.aa1uX_S0u(i1,j1,r,t)
+        )
+
 def s01v0111(X, contract_last=False):
     if no_result(X, contract_last):  return []
     i0, i1, j0, j1 = state_indices(contract_last)    # = 0, 1, 2, 3
-    return -2 * raw(
+    return -1 * raw(
         #  X.cc0(i0,j0,p,t)
         #@ X.caaa1(i1,j1,q,u,s,r)
         #@ X.s01(t,u)
         #@ X.v0111(p,q,r,s)
           X.cc0Xt_St1(i0,j0,p,u)
         @ X.caaa1qXsr_V0qrs(i1,j1,u,p)
+        )
+
+def s01v1011(X, contract_last=False):
+    if no_result(X, contract_last):  return []
+    i0, i1, j0, j1 = state_indices(contract_last)    # = 0, 1, 2, 3
+    return 1 * raw(
+        #  X.cc0(i0,j0,q,t)
+        #@ X.caaa1(i1,j1,p,u,s,r)
+        #@ X.s01(t,u)
+        #@ X.v1011(p,q,r,s)
+          X.cc0Xt_St1(i0,j0,q,u)
+        @ X.caaa1pXsr_Vp0rs(i1,j1,u,q)
         )
 
 def s01v0011(X, contract_last=False):
