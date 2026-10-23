@@ -34,8 +34,13 @@ import excitonic
 import diagrammatic_expansion   # defines information structure for housing results of diagram evaluations
 import XR_term                  # knows how to use ^this information to pack a matrix for use in XR model
 from diagrams import S_diagrams, ST_diagrams, SU_diagrams, SV_diagrams    # definitions of diagrams needed for S and SH
+import os
+import precontract as precontract_module
 from precontract import precontract
 import diagram_lists as D
+
+# default byte budget of the cached intermediates of one XR Hamiltonian build (see resolve_memory_budget)
+DEFAULT_MEMORY_BUDGET = 8e9
 
 
 
@@ -71,23 +76,102 @@ def local_sectors(n_states, monomer_charges):
             offset += n
     return ret
 
-def build_frag_densities(dens_builder, frag_name, states, xr_level, n_elec_ref, bra_states=None):
+def estimate_xr_memory(n_mo, n_act, xr_level, states, n_frag=2):
+    """
+    Rough memory (bytes) of one XR Hamiltonian build besides the budgeted caches, for n_frag fragments like the one
+    with the states (states[chg][mult] = vectors), n_mo orbitals and n_act active orbitals:
+        - the integrals of the supersystem (a few tensors of (n_frag n_mo)^4),
+        - the cached pre-contracted intermediates with at most 3 orbital indices (per fragment ~ n_labels x the
+          bra-ket state pairs of the sector pairs x n_act^3; n_labels grows with the XR order),
+        - the transient 4-index intermediates of XR[2] (a few dozen of the largest sector pair x n_act^4),
+        - a fixed overhead (Python, libraries, hummr's CI spaces).
+    The coefficients are calibrated on all-electron Be2 cc-pVTZ XR[2] (n_act = 30, 3 states per sector); this is
+    only meant for choosing the cache budget.
+    """
+    n_states = [len(vecs) for by_mult in states.values() for vecs in by_mult.values() if len(vecs) > 0]
+    pairs = sum(n_states) ** 2                       # bra-ket state pairs over all sector pairs (upper bound)
+    largest_pair = max(n_states) ** 2 if n_states else 0
+    n_labels = {0: 3, 1: 6}.get(xr_level, 9)
+    integrals = 5 * (n_frag * n_mo) ** 4
+    small = n_frag * n_labels * pairs * n_act ** 3
+    transient = 35 * largest_pair * n_act ** 4 if xr_level >= 2 else 35 * largest_pair * n_act ** 3
+    return 8 * (integrals + small + transient) + 1e9
+
+def _meminfo():
+    """(MemTotal, MemAvailable) in bytes and the resident memory of this process"""
+    info = {}
+    with open("/proc/meminfo") as f:
+        for line in f:
+            key, value = line.split(":")
+            info[key] = int(value.split()[0]) * 1024
+    with open("/proc/self/status") as f:
+        rss = next(int(line.split()[1]) * 1024 for line in f if line.startswith("VmRSS"))
+    return info["MemTotal"], info["MemAvailable"], rss
+
+def resolve_memory_budget(memory_budget, n_mo, n_act, xr_level, states, n_frag=2):
+    """
+    The byte budget of the cached intermediates of one XR Hamiltonian build:
+        - a number: used as given,
+        - None: DEFAULT_MEMORY_BUDGET,
+        - "auto" or ("auto", node_memory[, fraction]): as large as possible, such that the estimated memory of the
+          build (estimate_xr_memory) plus the budget fill fraction (default 0.85) of the node memory (default
+          MemTotal, minus what other processes use; a given node_memory is used as it is).
+    """
+    if memory_budget is None:
+        return DEFAULT_MEMORY_BUDGET
+    if memory_budget == "auto" or (isinstance(memory_budget, tuple) and memory_budget[0] == "auto"):
+        spec = memory_budget if isinstance(memory_budget, tuple) else ("auto",)
+        fraction = spec[2] if len(spec) > 2 else 0.85
+        total, available, rss = _meminfo()
+        if len(spec) > 1 and spec[1] is not None:
+            node_memory, others = spec[1], 0
+        else:
+            node_memory, others = total, max(total - available - rss, 0)
+        estimate = estimate_xr_memory(n_mo, n_act, xr_level, states, n_frag)
+        return max(fraction * node_memory - others - estimate, 0.0)
+    return float(memory_budget)
+
+def apply_memory_budget(memory_budget, n_frag=2):
+    """
+    Splits the budget B of one XR Hamiltonian build: B/4 for the large pre-contracted intermediates (precontract),
+    B/n_frag for the density provider of every fragment, which keeps half of it as explicit densities and gives the
+    other half to hummr's density engines (see hummr_dens/streamed.py). For a dimer of one molecule (one shared
+    hummr instance) this is B/4 + 2 x B/4 + B/4. Returns the budget of one density provider.
+    """
+    precontract_module.set_large_cache_limit(memory_budget / 4)
+    return memory_budget / n_frag
+
+def build_frag_densities(dens_builder, frag_name, states, xr_level, n_elec_ref, bra_states=None, streamed=False,
+                         memory_budget=None):
     """
     states[chg][mult] = list of CSF vectors
     bra_states:         optional different bra states (same structure, e.g. single CSFs for the state gradients),
-                        the densities are then <bra_states|...|states> and the Hamiltonian rectangular
+                        the densities are then <bra_states|...|states> and the Hamiltonian rectangular.  For
+                        xr_level >= 1 the overlap (S) diagrams are additionally built between the bra states
+                        (rho['bra_bra'], only the types with at most 2 operators), since H2 = S2^-1 S2H2 requires
+                        S2 in the bra space.  This is exact if the bra states span the ket states (per sector,
+                        e.g. all single CSFs as bra), which get_xr_H checks.
+    streamed:           the large density types (4 and more operators) are not built, their contractions with the
+                        integrals are evaluated on demand (hummr_dens/streamed.py)
+    memory_budget:      bytes for the cached intermediates of the XR Hamiltonian build (None: DEFAULT_MEMORY_BUDGET,
+                        "auto": as large as the node memory allows, see resolve_memory_budget)
     Returns the density dictionary of one fragment, including the bookkeeping entries
     required by diagrammatic_expansion.
     """
     states = drop_empty_sectors(states)
+    fragment = dens_builder.engine.fragments[frag_name]    # (hummr backend)
+    memory_budget = apply_memory_budget(resolve_memory_budget(memory_budget, fragment.orbitals.shape[1], fragment.n_act,
+                                                              xr_level, states))
     if bra_states is None:
-        rho = dens_builder.build_densities(frag_name, xr_level, states, states)
+        rho = dens_builder.build_densities(frag_name, xr_level, states, states, streamed=streamed,
+                                           memory_budget=memory_budget)
         bra_states = states
     else:
         bra_states = drop_empty_sectors(bra_states)
         if count_sectors(bra_states) != count_sectors(states):
             raise ValueError("bra and ket states need to have the same (chg, mult) sectors")
-        rho = dens_builder.build_densities(frag_name, xr_level, bra_states, states)
+        rho = dens_builder.build_densities(frag_name, xr_level, bra_states, states, streamed=streamed,
+                                           memory_budget=memory_budget)
     rho['n_states'] = {chg: {mult: len(vecs) for mult, vecs in mult_dict.items()} for chg, mult_dict in states.items()}
     rho['n_states_bra'] = {chg: {mult: len(vecs) for mult, vecs in mult_dict.items()} for chg, mult_dict in bra_states.items()}
     # <bra|ket> per sector, which replaces the Kronecker delta of spectator fragments (e.g. in u100)
@@ -95,6 +179,22 @@ def build_frag_densities(dens_builder, frag_name, states, xr_level, n_elec_ref, 
                                    numpy.array(bra_states[chg][mult], dtype=float) @ numpy.array(vecs, dtype=float).T)
                             for mult, vecs in mult_dict.items()} for chg, mult_dict in states.items()}
     rho['n_elec'] = {chg: n_elec_ref - chg for chg in states}
+    rho['rectangular'] = bra_states is not states
+    if rho['rectangular'] and xr_level >= 1:
+        rho['unspanned_sectors'] = []    # checked by get_xr_H
+        for chg, mult_dict in states.items():
+            for mult, vecs in mult_dict.items():
+                B, K = numpy.array(bra_states[chg][mult], dtype=float), numpy.array(vecs, dtype=float)
+                residual = K - numpy.linalg.lstsq(B.T, K.T, rcond=None)[0].T @ B
+                if numpy.linalg.norm(residual) > 1e-8 * max(1.0, numpy.linalg.norm(K)):
+                    rho['unspanned_sectors'].append((chg, mult))
+        bra_bra = dens_builder.build_densities(frag_name, 0, bra_states, bra_states, max_ops=2)
+        bra_bra['n_states'] = bra_bra['n_states_bra'] = rho['n_states_bra']
+        bra_bra['overlap'] = {chg: {mult: numpy.array(vecs, dtype=float) @ numpy.array(vecs, dtype=float).T
+                                    for mult, vecs in mult_dict.items()} for chg, mult_dict in bra_states.items()}
+        bra_bra['n_elec'] = rho['n_elec']
+        bra_bra['rectangular'] = False
+        rho['bra_bra'] = bra_bra
     return rho
 
 def get_xr_H(ints, dens, xr_order, monomer_charges, target_multiplicity):
@@ -137,7 +237,17 @@ def get_xr_H(ints, dens, xr_order, monomer_charges, target_multiplicity):
         H2blocked += XR_term.dimer_matrix(SV_blocks_bior, {2: D.SV2[0]}, (0,1), dimer_sectors, matrix_timer)
     elif xr_order in (1, 2):
         # as in get_xr_result.get_xr_H:  H2 = S2^-1 S2H2 - (monomer terms), with the S expansion up to xr_order
-        S_blocks       = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=symm_ints.S, diagrams=S_diagrams, contract_cache=contract_cache, timings=diag_timer, precon_timings=precon_timer, target_multiplicity=target_multiplicity)
+        # S2 is inverted in the bra space, i.e. for rectangular builds (bra != ket states) it is built from the
+        # densities between the bra states (see build_frag_densities)
+        if any(rho.get('rectangular', False) and 'bra_bra' not in rho for rho in BeN_rho):
+            raise ValueError("rectangular XR[1]/[2] Hamiltonians require the bra-bra densities (build_frag_densities with xr_level >= 1)")
+        for rho in BeN_rho:
+            if rho.get('unspanned_sectors'):
+                raise ValueError(f"the bra states do not span the ket states of the sectors (chg, mult) {rho['unspanned_sectors']}, "
+                                 "which the rectangular XR[1]/[2] Hamiltonian requires (S2 is inverted in the bra space)")
+        S_rho = [rho['bra_bra'] if rho.get('rectangular', False) else rho for rho in BeN_rho]
+        S_cache = contract_cache if all(a is b for a, b in zip(S_rho, BeN_rho)) else precontract(S_rho, symm_ints.S, precon_timer)
+        S_blocks       = diagrammatic_expansion.blocks(densities=S_rho, integrals=symm_ints.S, diagrams=S_diagrams, contract_cache=S_cache, timings=diag_timer, precon_timings=precon_timer, target_multiplicity=target_multiplicity)
         SV_blocks_diff = diagrammatic_expansion.blocks(densities=BeN_rho, integrals=struct(S=symm_ints.S, V=bior_ints.V_diff), diagrams=SV_diagrams, contract_cache=contract_cache, timings=diag_timer, precon_timings=precon_timer, target_multiplicity=target_multiplicity)
 
         H1 = []
@@ -168,7 +278,7 @@ def get_xr_H(ints, dens, xr_order, monomer_charges, target_multiplicity):
         # The rows/columns of the sector pairs, which cannot couple to target_multiplicity, vanish (they are only
         # kept for the tensor-product basis), so S2 is inverted on the coupling ones (identity elsewhere).
         coupling = numpy.concatenate([
-            numpy.full(BeN_rho[0]['n_states'][chg0][mult0] * BeN_rho[1]['n_states'][chg1][mult1],
+            numpy.full(S_rho[0]['n_states'][chg0][mult0] * S_rho[1]['n_states'][chg1][mult1],
                        multiplicities_couple(mult0, mult1, target_multiplicity))
             for (chg0, mult0), (chg1, mult1) in dimer_sectors])
         S2 = S2 + numpy.diag(~coupling * 1.0)

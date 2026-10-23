@@ -50,21 +50,26 @@ import scipy as sp
 def count_states(states):
     return {chg: {mult: len(vecs) for mult, vecs in mult_dict.items()} for chg, mult_dict in states.items()}
 
-def unit_vector_pool(states, n_passes=1):
+def unit_vector_pool(states, n_passes=1, csf_indices=None):
     """
     Pool of candidate states consisting of all CSFs of every sector, i.e. unit vectors (zero vectors with a
     single 1) in the CSF basis of the sector.  The dimension is taken from the given states (at least one
     state per sector is required).  Candidates, which are (nearly) contained in the current state space,
     are skipped by the solver, so the pool can be passed through completely.
-    n_passes: the CSFs are offered this many times (CSFs discarded in an early compression can become
-              relevant again later)
+    n_passes:    the CSFs are offered this many times (CSFs discarded in an early compression can become
+                 relevant again later)
+    csf_indices: optional csf_indices[chg][mult] = CSF indices, which restrict the pool of the sector to these
+                 CSFs (e.g. those of a selected CI space, see hummr_dens.space_selection)
     """
     pool = {}
     for chg, mult_dict in states.items():
         for mult, vecs in mult_dict.items():
             if len(vecs) == 0:
                 raise ValueError(f"unit_vector_pool needs at least one state in sector (chg {chg}, mult {mult}) for its dimension")
-            pool.setdefault(chg, {})[mult] = list(np.eye(len(vecs[0]))) * n_passes
+            unit_vectors = np.eye(len(vecs[0]))
+            if csf_indices is not None:
+                unit_vectors = unit_vectors[csf_indices[chg][mult]]
+            pool.setdefault(chg, {})[mult] = list(unit_vectors) * n_passes
     return pool
 
 def optimize_states(max_iter, xr_order, states, additional_states, ints, build_dens, monomer_charges, target_multiplicity,
@@ -87,7 +92,9 @@ def optimize_states(max_iter, xr_order, states, additional_states, ints, build_d
                            the solver does not converge with it, although each step is a valid search direction).
     grad_conv_thresh:      the gradient based variant is converged, if additionally the norm of the gradients is below
     build_dens:            build_dens(frag, states[frag]) -> fragment densities as needed by get_xr_H
-    max_states_per_sector: the enlarged state space contains at most this many states per (chg, mult) sector
+    max_states_per_sector: the enlarged state space contains at most this many states per (chg, mult) sector, unless
+                           the sector already holds more states (after compression), in which case it may grow by 1/3
+                           of its current size, i.e. the cap is max(max_states_per_sector, 4/3 * n_current)
     eval_reduced:          additionally evaluate the energy in the compressed state space (debugging only,
                            requires an additional density and Hamiltonian build per iteration)
     returns the energy histories of the enlarged and of the compressed state spaces (the latter only if eval_reduced)
@@ -142,16 +149,20 @@ def optimize_states(max_iter, xr_order, states, additional_states, ints, build_d
 
     def enlarge_state_space(frag):
         """
-        add linearly independent states from the pool until max_states_per_sector is reached (candidates,
-        which are already contained in the current state space, are skipped); returns the number of added states
+        add linearly independent states from the pool until max(max_states_per_sector, 4/3 * n_current) is reached
+        (candidates, which are already contained in the current state space, are skipped); returns the number of
+        added states
         """
         n_added = 0
         for chg, mult_dict in additional_states[frag].items():
             for mult, pool in mult_dict.items():
                 current = [np.array(vec, dtype=float) for vec in states[frag].setdefault(chg, {}).setdefault(mult, [])]
                 n_before, n_skipped = len(current), 0
+                # sectors, which require many states, may push beyond max_states_per_sector by a relative increase of 1/3
+                # (the XR evaluation scales as the fourth order in the number of states, so this is roughly a factor of 3)
+                max_states = max(max_states_per_sector, n_before * 4 // 3)
                 Q = np.array(current) if len(current) > 0 else None    # orthonormal rows
-                while len(current) < max_states_per_sector and pool_tracker[frag][chg][mult] < len(pool):
+                while len(current) < max_states and pool_tracker[frag][chg][mult] < len(pool):
                     vec = np.array(pool[pool_tracker[frag][chg][mult]], dtype=float)
                     pool_tracker[frag][chg][mult] += 1
                     if len(current) > 0:
@@ -255,7 +266,7 @@ def optimize_states(max_iter, xr_order, states, additional_states, ints, build_d
         n_added = sum(enlarge_state_space(frag) for frag in range(2))
         if n_added == 0 and it > 0:
             print("pool of additional states is exhausted" if pool_exhausted() else
-                  "no room for additional states (all sectors at max_states_per_sector after compression)")
+                  "no room for additional states (no sector can grow after compression)")
             break
         dens = [build_dens(frag, states[frag]) for frag in range(2)]
         E, target_vecs, n_states = solve(dens)

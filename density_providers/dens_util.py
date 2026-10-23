@@ -77,7 +77,7 @@ def adjoint_name(dens_name):
     """name of the adjoint operator string, e.g. caa -> cca"""
     return dens_name[::-1].replace("c", "x").replace("a", "c").replace("x", "a")
 
-def reversed_densities_spin_adapt(dens):
+def reversed_densities_spin_adapt(dens, wrap=None):
     """
     Adjoint partners of spin-adapted densities in the CG convention,
 
@@ -91,6 +91,8 @@ def reversed_densities_spin_adapt(dens):
     gives  rho^X_BA(P) = sum_P' c(P,P') <S_B S_B K -q|S_A S_A> / <S_A S_A K q|S_B S_B> rho^Y_AB(P').
     Generated are all channels of the adjoint types of non-self-adjoint types, and the mult_bra > mult_ket
     channels of the self-adjoint ones (the others are computed directly).  Returns a dict of the same structure.
+    wrap: if given (a tensornet wrapper of numpy arrays, which does not copy), the partners are returned as
+    lazily scaled transposed views (or lazy sums of them) of the input arrays, instead of new numpy arrays.
     """
     from spin_tensors import paths, reversal, cg2
     out = {}
@@ -119,7 +121,8 @@ def reversed_densities_spin_adapt(dens):
                         if path_y not in by_path:
                             raise KeyError(f"reversal of {name_y} {(chg_a, chg_b)} {(mult_a, mult_b, rank2, restr)} "
                                            f"requires the missing path {path_y}")
-                        term = c * ratio * np.transpose(by_path[path_y], axes)
+                        view = np.transpose(by_path[path_y], axes)
+                        term = c * ratio * (view if wrap is None else wrap(view))
                         result = term if result is None else result + term
                     if result is not None:
                         out.setdefault(name_x, {}).setdefault((chg_b, chg_a), {})[(mult_b, mult_a, rank2, restr, path_x)] = result

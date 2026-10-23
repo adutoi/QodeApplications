@@ -161,6 +161,20 @@ def _evaluate_block(result, op_blocks, frag_order, active_diagrams, subsys_indic
                                 block = numpy.zeros(n_states_i+n_states_j)    # concatenate lists and make ndarray
                         # !!! phases not yet implemented should be handled here.
                         #count = 0
+                        if not (bra_det or ket_det):
+                            # the spectator fragments contribute their bra-ket overlap (identity for the same bra
+                            # and ket states), i.e. block[bra..., ket...] += diagram_block[frags] * prod_x S_x
+                            letters = iter("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
+                            bra_l = [next(letters) for _ in range(n_frag)]
+                            ket_l = [next(letters) for _ in range(n_frag)]
+                            operands = [numpy.asarray(diagram_block)]
+                            subscripts = ["".join(bra_l[f] for f in frags) + "".join(ket_l[f] for f in frags)]
+                            for x, ((chg_x, mult_x), _) in enumerate(subsys_transitions):
+                                if x not in frags:
+                                    operands.append(numpy.asarray(rho[m[x]]['overlap'][chg_x][mult_x]))
+                                    subscripts.append(bra_l[x] + ket_l[x])
+                            block += numpy.einsum(",".join(subscripts) + "->" + "".join(bra_l + ket_l), *operands)
+                            continue
                         for J in compound_range([range(n) for n in n_states_j], inactive=frags):    # with frags of interest inactive, i vs j does not matter here
                             for frag in frags:  J[frag] = full
                             if bra_det or ket_det:
@@ -320,69 +334,55 @@ def dimer_matrix(
     Matrix = numpy.zeros((Ibeg, Jbeg))
 
     #
-    # Fill every allowed bra/ket sector.
+    # Fill every allowed bra/ket sector, looping over the transitions of the first fragment outside and the ones of
+    # the second fragment inside: the pre-contracted intermediates of a fragment only depend on its own transition,
+    # so the large ones of the first fragment are computed once and released after its inner loop (the small ones
+    # stay cached in precontract, the large ones of the second fragment in its LRU cache, as far as it allows).
     #
-    for (bra_chg1, bra_mult1), (bra_chg2, bra_mult2) in dimer_sectors:
+    sectors1 = list(dict.fromkeys(sec1 for sec1, _ in dimer_sectors))
+    sectors2 = list(dict.fromkeys(sec2 for _, sec2 in dimer_sectors))
+    release = getattr(op_blocks, "release_intermediates", None)
 
-        bra_key = (
-            bra_chg1,
-            bra_chg2,
-            bra_mult1,
-            bra_mult2,
-        )
+    for bra_sec1 in sectors1:
+        for ket_sec1 in sectors1:
+            (bra_chg1, bra_mult1), (ket_chg1, ket_mult1) = bra_sec1, ket_sec1
 
-        Ibeg = bra_offsets[bra_key]
+            for bra_sec2 in sectors2:
+                for ket_sec2 in sectors2:
+                    (bra_chg2, bra_mult2), (ket_chg2, ket_mult2) = bra_sec2, ket_sec2
 
-        bra_dim = (
-            rho1['n_states_bra'][bra_chg1][bra_mult1]
-            * rho2['n_states_bra'][bra_chg2][bra_mult2]
-        )
+                    bra_key = (bra_chg1, bra_chg2, bra_mult1, bra_mult2)
+                    ket_key = (ket_chg1, ket_chg2, ket_mult1, ket_mult2)
+                    if bra_key not in bra_offsets or ket_key not in ket_offsets:
+                        continue
 
-        Iend = Ibeg + bra_dim
+                    Ibeg = bra_offsets[bra_key]
+                    Iend = Ibeg + rho1['n_states_bra'][bra_chg1][bra_mult1] * rho2['n_states_bra'][bra_chg2][bra_mult2]
+                    Jbeg = ket_offsets[ket_key]
+                    Jend = Jbeg + rho1['n_states'][ket_chg1][ket_mult1] * rho2['n_states'][ket_chg2][ket_mult2]
 
-        for (ket_chg1, ket_mult1), (ket_chg2, ket_mult2) in dimer_sectors:
+                    result = Matrix[Ibeg:Iend, Jbeg:Jend]
 
-            ket_key = (
-                ket_chg1,
-                ket_chg2,
-                ket_mult1,
-                ket_mult2,
-            )
+                    subsys_transitions = [
+                        (bra_sec1, ket_sec1),
+                        (bra_sec2, ket_sec2),
+                    ]
 
-            Jbeg = ket_offsets[ket_key]
+                    for frag_order in active_diagrams:
 
-            ket_dim = (
-                rho1['n_states'][ket_chg1][ket_mult1]
-                * rho2['n_states'][ket_chg2][ket_mult2]
-            )
+                        _evaluate_block(
+                            result,
+                            op_blocks,
+                            frag_order,
+                            active_diagrams[frag_order],
+                            subsys_indices,
+                            subsys_transitions,
+                            timings,
+                            bra_det=bra_det,
+                            ket_det=ket_det,
+                        )
 
-            Jend = Jbeg + ket_dim
-
-            result = Matrix[Ibeg:Iend, Jbeg:Jend]
-
-            subsys_transitions = [
-                (
-                    (bra_chg1, bra_mult1),
-                    (ket_chg1, ket_mult1),
-                ),
-                (
-                    (bra_chg2, bra_mult2),
-                    (ket_chg2, ket_mult2),
-                )
-            ]
-
-            for frag_order in active_diagrams:
-
-                _evaluate_block(
-                    result,
-                    op_blocks,
-                    frag_order,
-                    active_diagrams[frag_order],
-                    subsys_indices,
-                    subsys_transitions,
-                    timings,
-                    bra_det=bra_det,
-                    ket_det=ket_det,
-                )
+            if release is not None:
+                release(subsys_indices[0], (bra_sec1, ket_sec1))
 
     return Matrix

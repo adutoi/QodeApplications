@@ -127,21 +127,26 @@ def core_terms(n_c, n_a, restr, path, q2, core_slots, core_orbitals, n_core):
         return None
     return (n_c_act, n_a_act), restr_act, tuple(slot_of), coefs
 
-def embed(dens, n_core, n_mo, overlaps=None):
+def embed(dens, n_core, n_mo, overlaps=None, consume=False):
     """
     dens[name][(chg_bra, chg_ket)][(mult_bra, mult_ket, rank2, restr_ca, path)] = ndarray(bra, ket, active orbitals...)
     in the CG convention (lowering and self-adjoint types as returned by hummr).  Returns the densities over all
     n_mo MOs (core orbitals 0..n_core-1 doubly occupied).  overlaps[(chg, mult)] = <bra|ket> of the active parts
     (identity if not given, which requires the same bra and ket states).
+    consume: every active density is removed from dens right after its embedding (to keep the peak memory down).
+    This is possible, since the types are processed with decreasing number of operators and the core terms of a
+    type only require active densities of types with (at least two) operators less.
     """
     if n_core == 0:
         return dens
     out = {}
-    for name, by_chg in dens.items():
+    for name in sorted(dens, key=lambda name: -len(name)):
+        by_chg = dens[name]
         n_c, n_a = name.count("c"), name.count("a")
         N = n_c + n_a
         for charge_pair, by_channel in by_chg.items():
-            for channel, x in by_channel.items():
+            for channel in list(by_channel):
+                x = by_channel[channel]
                 mult_bra, mult_ket, rank2, restr, path = channel
                 x = np.asarray(x)
                 n_act = x.shape[2]
@@ -188,4 +193,7 @@ def embed(dens, n_core, n_mo, overlaps=None):
                                 index[s] = slice(n_core, n_core + n_act)
                             y[(slice(None), slice(None)) + tuple(index)] += acc
                 out.setdefault(name, {}).setdefault(charge_pair, {})[channel] = y
-    return out
+                if consume:
+                    del by_channel[channel], x
+    # in the original order of the types
+    return {name: out[name] for name in dens if name in out}

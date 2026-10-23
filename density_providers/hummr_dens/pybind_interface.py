@@ -23,11 +23,25 @@ from pathlib import Path
 from typing import Dict, Mapping, Optional, Sequence
 
 import numpy as np
+import tensorly
 from sympy import Rational, sqrt
 from sympy.physics.quantum.cg import CG
 
+from qode.util.PyC import Double
+from qode.math.tensornet import tl_tensor
 from dens_util import multiplicity_iterator, reversed_densities_spin_adapt
 from densities import _tens_wrap
+
+
+def _tens_wrap_view(data):
+    """
+    Like densities._tens_wrap, but without copying for the numpy backend (tensorly.tensor is np.array there,
+    which always copies, also turning transposed views into contiguous copies).  tensornet never modifies the
+    raw tensors in place, so the densities and their reversed partners can share the data.
+    """
+    if tensorly.get_backend() == "numpy":
+        return tl_tensor.init(np.asarray(data, dtype=Double.numpy))
+    return _tens_wrap(data)
 
 
 StateRoots = Dict[int, Dict[int, int]]
@@ -187,6 +201,13 @@ def write_hummr_input(
 
     return path
 
+def cg_factor(channel):
+    """the CG coefficient <S_J S_J K q|S_I S_I> of a channel (mult_bra, mult_ket, rank2, ...), see to_cg_convention"""
+    mult_bra, mult_ket, rank2 = channel[:3]
+    S_I, S_J = Rational(mult_bra - 1, 2), Rational(mult_ket - 1, 2)
+    k, q = Rational(rank2, 2), S_I - S_J
+    return float(CG(S_J, S_J, k, q, S_I, S_I).doit())
+
 def to_cg_convention(dens_name, channel, data):
     """
     The XR machinery (coupl_fac.recoupling_factor, dens_util.reversed_densities_spin_adapt)
@@ -201,13 +222,15 @@ def to_cg_convention(dens_name, channel, data):
     rank-1 ca channels, T^1 = -sqrt(2) [c x at]^1), i.e. the CG coefficient has to be divided out (it is 1 for
     S_I = S_J + K, e.g. for ccaa with restr_ca 2, rank 0 and equal multiplicities).  This was verified against
     reference densities from an exact Fock-space FCI (tests/spin_adapted).
-    """
-    mult_bra, mult_ket, rank2, restr_ca, path = channel
-    S_I, S_J = Rational(mult_bra - 1, 2), Rational(mult_ket - 1, 2)
-    k, q = Rational(rank2, 2), S_I - S_J
-    return data / float(CG(S_J, S_J, k, q, S_I, S_I).doit())
 
-def embed_frozen_core(dens, n_core, n_mo, overlaps=None):
+    The conversion is done in place (data has to be a fresh array, e.g. as returned by hummr).
+    """
+    cg = cg_factor(channel)
+    if cg != 1.0:
+        np.divide(data, cg, out=data)
+    return data
+
+def embed_frozen_core(dens, n_core, n_mo, overlaps=None, consume=False):
     """
     Embed densities of an active space (orbitals n_core ... n_core+n_act-1 of the n_mo fragment MOs)
     into the full fragment MO space, with the n_core core orbitals doubly occupied in every state
@@ -218,11 +241,12 @@ def embed_frozen_core(dens, n_core, n_mo, overlaps=None):
 
     The delta_IJ are the overlaps <I|J> of the active parts: overlaps[(chg, mult)] (bra x ket) if given,
     otherwise bra and ket states have to be the same (orthonormal) set.
+    consume: the active densities are removed from dens as soon as they are no longer needed (peak memory)
     """
     from frozen_core import embed
-    return embed(dens, n_core, n_mo, overlaps)
+    return embed(dens, n_core, n_mo, overlaps, consume=consume)
 
-def wrap_dens_and_build_transpose(dens_inp, n_core=0, n_mo=None, overlaps=None, parts="both"):
+def wrap_dens_and_build_transpose(dens_inp, n_core=0, n_mo=None, overlaps=None, parts="both", keep_active=False):
     """
     Convert the densities returned by hummr into the CG convention, embed them into the full MO space
     (frozen core), add their adjoint partners and wrap them with the internal tensor wrapper.
@@ -247,32 +271,43 @@ def wrap_dens_and_build_transpose(dens_inp, n_core=0, n_mo=None, overlaps=None, 
     The latter two are used for different bra and ket state sets, where the partners have to be obtained
     from a calculation with bra and ket swapped (see HummrXRFragment.compute_densities).
     overlaps: <bra|ket> per (chg, mult) for the frozen-core embedding (see embed_frozen_core)
+
+    dens_inp is consumed (emptied, and its arrays are modified in place) to keep the peak memory down: apart
+    from the frozen-core embedding into the full MO space, no densities are copied (the reversed partners are
+    lazily scaled transposed views, or lazy sums of them, of the computed densities).
     """
     if parts not in ("both", "direct", "reversed"):
         raise ValueError(f"unknown parts {parts!r}")
 
-    # convert into the CG convention and embed the active space into the full MO space (frozen core)
+    # convert into the CG convention (in place) and embed the active space into the full MO space (frozen core)
     dens_cg = {}
     for dens_name, dens_group in dens_inp.items():
         dens_cg[dens_name] = {}
         for charge_pair, second_layer in dens_group.items():
             dens_cg[dens_name][charge_pair] = {channel: to_cg_convention(dens_name, channel, np.asarray(state_group))
                                                for channel, state_group in multiplicity_iterator(second_layer)}
-    dens_np = embed_frozen_core(dens_cg, n_core, n_mo, overlaps)
+    dens_inp.clear()    # dens_cg holds the only references, so that embed can release the active densities
+    # the active densities (CG convention), e.g. for the core terms of the streamed large types
+    active = {name: {cp: dict(by_channel) for cp, by_channel in by_chg.items()} for name, by_chg in dens_cg.items()} \
+             if keep_active else None
+    dens_np = embed_frozen_core(dens_cg, n_core, n_mo, overlaps, consume=True)
+    del dens_cg
 
     dens_out = {}
     if parts != "reversed":
         for dens_name, by_chg in dens_np.items():
             for charge_pair, by_channel in by_chg.items():
                 for channel, data in by_channel.items():
-                    dens_out.setdefault(dens_name, {}).setdefault(charge_pair, {})[channel] = _tens_wrap(data)
+                    dens_out.setdefault(dens_name, {}).setdefault(charge_pair, {})[channel] = _tens_wrap_view(data)
     if parts != "direct":
-        # adjoint partners (directly computed channels take precedence)
-        for dens_name, by_chg in reversed_densities_spin_adapt(dens_np).items():
+        # adjoint partners (directly computed channels take precedence), already wrapped
+        for dens_name, by_chg in reversed_densities_spin_adapt(dens_np, wrap=_tens_wrap_view).items():
             for charge_pair, by_channel in by_chg.items():
                 for channel, data in by_channel.items():
                     if channel not in dens_np.get(dens_name, {}).get(charge_pair, {}):
-                        dens_out.setdefault(dens_name, {}).setdefault(charge_pair, {})[channel] = _tens_wrap(data)
+                        dens_out.setdefault(dens_name, {}).setdefault(charge_pair, {})[channel] = data
+    if keep_active:
+        return dens_out, active
     return dens_out
 
 
@@ -323,8 +358,11 @@ class HummrXRFragment:
         self,
         *,
         xr_level: int = 0,
+        omp_threads: Optional[int] = None,
     ):
         self.xr_level = xr_level
+        # None: the number of threads at initialize() (see HummrXREngine)
+        self.omp_threads = omp_threads
 
         self._engine = None
         self.input_file: Optional[Path] = None
@@ -392,6 +430,8 @@ class HummrXRFragment:
         self._engine = (
             hummr_python.HummrForXRMain()
         )
+        if self.omp_threads is not None:
+            self._engine.set_num_threads(self.omp_threads)
 
         # initialize of the hummr engine lets hummr setup its MPI environment
         # once and then use this MPI environment across all initialized
@@ -406,6 +446,10 @@ class HummrXRFragment:
 
         return self.orbitals
 
+    def csf_layout(self):
+        """{charge: {mult: [(cfg, first CSF position, number of CSFs)]}} of all sectors, in the CSF order of the states"""
+        return self._engine.csf_layout()
+
     def multiplicities(self, charge):
         """all multiplicities with CSFs of the active space for the given fragment charge"""
         n = self._n_act_elec - (charge - self._input_charge)
@@ -413,12 +457,26 @@ class HummrXRFragment:
             return []
         return [S2 + 1 for S2 in range(n % 2, min(n, 2 * self.n_act - n) + 1, 2)]
 
+    def set_selected_cfgs(self, selected):
+        """
+        Use fixed (selected) CFG spaces {charge: {mult: CFGs}} instead of the complete CSF spaces (hummr's
+        HCIManager, e.g. the union of the selections of hummr_dens.space_selection): every requested sector of
+        get_states is solved in its space (HCI without further selection), and the densities resolve the identity
+        exactly over the CFGs connected to the bra and ket spaces.  Before get_states.
+        """
+        self._engine.set_selected_cfgs({int(chg): {int(mult): sorted(cfgs) for mult, cfgs in by_mult.items()}
+                                        for chg, by_mult in selected.items()})
+        self.selected = True
+
     def with_intermediate_sectors(self, roots):
         """
         hummr resolves the identity in the composite densities (aa, caa, ccaa and all XR[1]/XR[2] types) only over
         the (charge, multiplicity) sectors requested in get_states, using their full CSF spaces.  Returns roots
         extended by one root for every multiplicity with CSFs of each requested charge, which is not requested.
+        Selected spaces (set_selected_cfgs) do not need them (roots unchanged).
         """
+        if getattr(self, "selected", False):
+            return roots
         out = {chg: dict(by_mult) for chg, by_mult in roots.items()}
         for chg in roots:
             for mult in self.multiplicities(chg):
@@ -453,11 +511,34 @@ class HummrXRFragment:
             self.xr_level
         )
 
+    def contract_density_sector(self, n_c, n_a, restr_ca, bra_sector, ket_sector, bra_vecs, ket_vecs, channel,
+                                slot_axis, tensor):
+        """
+        contraction of one channel of these active densities (stretched elements, as hummr returns them) with
+        tensor: slot s (operator order) is contracted with axis slot_axis[s] of tensor or free (-1); result
+        (bra, ket, free slots in slot order, free axes of tensor in axis order), without building the density
+        """
+        path = list(channel[4][0]) + list(channel[4][1])
+        return self._engine.contract_density_sector(n_c, n_a, restr_ca, bra_sector[0], bra_sector[1], ket_sector[0],
+                                                    ket_sector[1], list(bra_vecs), list(ket_vecs), channel[2], path,
+                                                    list(slot_axis), np.ascontiguousarray(tensor, dtype=float))
+
+    def density_sector(self, n_c, n_a, restr_ca, bra_sector, ket_sector, bra_vecs, ket_vecs):
+        """
+        active densities of the operator string (n_c, n_a, restr_ca) for one bra x ket sector pair
+        ((chg, mult) each), all channels, as hummr returns them: {channel: ndarray (bra, ket, orbitals...)}
+        """
+        return self._engine.compute_density_sector(n_c, n_a, restr_ca, bra_sector[0], bra_sector[1], ket_sector[0],
+                                                   ket_sector[1], list(bra_vecs), list(ket_vecs))
+
     def compute_densities(
         self,
         bra: StateVectors,
         ket: StateVectors,
         xr_level: int,
+        streamed: bool = False,
+        memory_budget: Optional[int] = None,
+        max_ops: int = -1,
     ):
         """
         Build densities between arbitrary supplied bra and ket state maps.
@@ -465,6 +546,13 @@ class HummrXRFragment:
         Each state map has the structure
 
             charge -> multiplicity -> [CI vectors]
+
+        streamed:      the large types (4 and more operators) are not built here; their entries are
+                       StreamedDensityType objects, whose contractions (precontract.py) are evaluated by a
+                       StreamedDensities provider (hummr_dens/streamed.py) keeping at most memory_budget bytes of
+                       active densities (None: no limit)
+        max_ops:       only the types with at most this many operators (-1: all types of xr_level), e.g. 2 for
+                       the overlap (S) diagrams
         """
 
         if self._engine is None:
@@ -472,13 +560,18 @@ class HummrXRFragment:
                 "fragment has not been initialized"
             )
 
+        from hummr_dens.streamed import STREAMED_MIN_OPS
+        if streamed and not 0 <= max_ops < STREAMED_MIN_OPS:
+            return self._compute_densities_streamed(bra, ket, xr_level, memory_budget)
+
         n_mo = self.orbitals.shape[1]
         if bra is ket:
             return wrap_dens_and_build_transpose(
                 self._engine.compute_densities(
                     bra,
                     ket,
-                    xr_level
+                    xr_level,
+                    max_ops
                 ),
                 n_core=self.n_core,
                 n_mo=n_mo,
@@ -492,14 +585,45 @@ class HummrXRFragment:
                 if len(vecs) > 0 and len(ket.get(chg, {}).get(mult, [])) > 0:
                     overlaps[(chg, mult)] = np.array(vecs, dtype=float) @ np.array(ket[chg][mult], dtype=float).T
         overlaps_T = {key: S.T for key, S in overlaps.items()}
-        dens = wrap_dens_and_build_transpose(self._engine.compute_densities(bra, ket, xr_level),
+        dens = wrap_dens_and_build_transpose(self._engine.compute_densities(bra, ket, xr_level, max_ops),
                                              n_core=self.n_core, n_mo=n_mo, overlaps=overlaps, parts="direct")
-        partners = wrap_dens_and_build_transpose(self._engine.compute_densities(ket, bra, xr_level),
+        partners = wrap_dens_and_build_transpose(self._engine.compute_densities(ket, bra, xr_level, max_ops),
                                                  n_core=self.n_core, n_mo=n_mo, overlaps=overlaps_T, parts="reversed")
         for dens_name, by_chg in partners.items():
             for charge_pair, by_channel in by_chg.items():
                 for channel, data in by_channel.items():
                     dens.setdefault(dens_name, {}).setdefault(charge_pair, {}).setdefault(channel, data)
+        return dens
+
+    def _compute_densities_streamed(self, bra, ket, xr_level, memory_budget):
+        from hummr_dens.streamed import StreamedDensities, StreamedDensityType, STREAMED_MIN_OPS
+        n_mo = self.orbitals.shape[1]
+        max_ops = STREAMED_MIN_OPS - 1
+        if bra is ket:
+            dens, active = wrap_dens_and_build_transpose(self._engine.compute_densities(bra, ket, xr_level, max_ops),
+                                                         n_core=self.n_core, n_mo=n_mo, keep_active=True)
+            active_small, overlaps = {False: active, True: active}, None
+        else:
+            overlaps = {}
+            for chg, mult_dict in bra.items():
+                for mult, vecs in mult_dict.items():
+                    if len(vecs) > 0 and len(ket.get(chg, {}).get(mult, [])) > 0:
+                        overlaps[(chg, mult)] = np.array(vecs, dtype=float) @ np.array(ket[chg][mult], dtype=float).T
+            overlaps_T = {key: S.T for key, S in overlaps.items()}
+            dens, active = wrap_dens_and_build_transpose(self._engine.compute_densities(bra, ket, xr_level, max_ops),
+                                                         n_core=self.n_core, n_mo=n_mo, overlaps=overlaps,
+                                                         parts="direct", keep_active=True)
+            partners, active_swapped = wrap_dens_and_build_transpose(
+                self._engine.compute_densities(ket, bra, xr_level, max_ops), n_core=self.n_core, n_mo=n_mo,
+                overlaps=overlaps_T, parts="reversed", keep_active=True)
+            for dens_name, by_chg in partners.items():
+                for charge_pair, by_channel in by_chg.items():
+                    for channel, data in by_channel.items():
+                        dens.setdefault(dens_name, {}).setdefault(charge_pair, {}).setdefault(channel, data)
+            active_small, overlaps = {False: active, True: active_swapped}, {False: overlaps, True: overlaps_T}
+        provider = StreamedDensities(self, bra, ket, xr_level, active_small, overlaps, memory_budget)
+        for name in provider.streamed_types():
+            dens[name] = StreamedDensityType(provider, name)
         return dens
 
     def finalize(self) -> None:
@@ -529,17 +653,20 @@ class HummrXREngine:
     environment can be tuned via the input file. Furthermore, the OpenMP
     environment can be configured using either hummr internals or the
     configure() function of this class
+
+    The OpenMP (and MKL) runtime is shared with all other libraries in the
+    process, which can change the number of threads (e.g. "import psi4",
+    which happens in get_ints, sets it to 1). Every hummr instance therefore
+    re-applies its number of threads at the beginning of each get_states()
+    and compute_densities() call: omp_threads, if given, otherwise the
+    numbers at its initialization (OMP_NUM_THREADS or NThreads of the input).
     """
 
     def __init__(
         self,
         omp_threads: Optional[int] = None,
     ):
-        self.omp_threads = (
-            omp_threads
-            if omp_threads is not None
-            else os.cpu_count()  # or 1
-        )
+        self.omp_threads = omp_threads
 
         self.fragments: Dict[str, HummrXRFragment] = {}
 
@@ -562,6 +689,7 @@ class HummrXREngine:
 
         fragment = HummrXRFragment(
             xr_level=xr_level,
+            omp_threads=self.omp_threads,
         )
 
         self.fragments[name] = fragment

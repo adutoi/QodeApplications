@@ -78,13 +78,13 @@ roots = {
             0:  {1: 10, 3: 6},
             +1: {2: 8},         # with the frozen 1s, Be+ has 1 active electron in 8 orbitals: 8 doublets, no quartet
                                 #     (all-electron (4,9): {2: 10, 4: 1})
-            -1: {2: 10, 4: 6},
+            -1: {2: 10, 4: 1},
         }
 
 dens_builder = DensBackend("hummr")
 
 # compute only unique fragments
-frags = [["Be", "/home/marco/hummr_tests/scratch/be_631g_fci_fcore.inp", roots, 0]]
+frags = [["Be", "/home/marco/hummr_tests/scratch/be_cctz_fci_fcore.inp", roots, 0]]
 (mo_coeffs, states) = dens_builder.init_backend(frags)[0]
 
 global_timings.record("initial MOs and states")
@@ -104,8 +104,8 @@ for m in range(int(n_frag)):
     Be.charge = 0
     Be.n_elec_ref = 4
     Be.basis = empty
-    Be.basis.n_spatial_orb = 9
-    Be.basis.AOcode = "6-31G"
+    Be.basis.n_spatial_orb = mo_coeffs.shape[1]
+    Be.basis.AOcode = "cc-pvtz"#"6-31G"
     # frozen core of the hummr input (empty for all-electron inputs), projected out of the valence in get_ints.
     # The densities from the density builder already include the doubly occupied core.
     Be.basis.core = dens_builder.frozen_core("Be")

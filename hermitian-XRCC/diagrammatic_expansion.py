@@ -239,6 +239,14 @@ class blocks(object):
         self._items = {}
         self.densities = self._supersys_info.densities    # "public" member providing access to system definition
         self.target_multiplicity = self._supersys_info.target_multiplicity
+    def release_intermediates(self, fragment, transition):
+        """
+        drops the large pre-contracted intermediates of the density of fragment for the transition
+        ((chg_i, mult_i), (chg_j, mult_j)) (see precontract.cached_if_small), once no block needs them anymore
+        """
+        for cache in (self._supersys_info.contract_cache.rho_S, self._supersys_info.contract_cache.general):
+            if hasattr(cache, "release"):
+                cache.release(fragment, transition)
     def __getitem__(self, subsystem):
         if subsystem is None:  subsystem = tuple()        # just to make top-level syntax prettier
         subsystem = tuple(subsystem)                      # dict index must be hashable

@@ -29,7 +29,8 @@ class DensBackend:
             self.engine = HummrXREngine()
             #engine.configure()
 
-            # frags should be [frag_name, input_file, roots, xr_level]
+            # frags should be [frag_name, input_file, roots, xr_level] or
+            # [frag_name, input_file, roots, xr_level, selected CFGs {chg: {mult: CFGs}}] (selected CI spaces)
             ret = []
             for frag in frags:
                 frag_engine = self.engine.add_fragment(
@@ -66,6 +67,8 @@ class DensBackend:
                 """
 
                 mo_coeffs = frag_engine.initialize(frag[1])
+                if len(frag) > 4 and frag[4] is not None:
+                    frag_engine.set_selected_cfgs(frag[4])
 
                 # The extra (intermediate) sectors are only needed by hummr itself (their CSF spaces), they are
                 # dropped from the returned states, i.e. they enter neither the densities nor the XR basis.
@@ -86,9 +89,15 @@ class DensBackend:
             bra_states,
             ket_states,
             #n_threads,
+            streamed=False,
+            memory_budget=None,
+            max_ops=-1,
             ):
         """
         Build all fragment density tensors required by get_xr_H.
+        streamed: the contractions of the large types are evaluated on demand (hummr_dens/streamed.py), keeping
+                  at most memory_budget bytes of their densities
+        max_ops:  only the types with at most this many operators (-1: all types of xr_level)
 
         state_coeffs[chg] has shape
             (n_states, n_csf)
@@ -108,6 +117,9 @@ class DensBackend:
                             bra=bra_states,
                             ket=ket_states,
                             xr_level=xr_level,
+                            streamed=streamed,
+                            memory_budget=memory_budget,
+                            max_ops=max_ops,
                         )
         else:
             raise NotImplementedError
@@ -121,6 +133,12 @@ class DensBackend:
         if self.backend == "hummr":
             return list(range(self.engine.fragments[frag_name].n_core))
         return []
+
+    def csf_layout(self, frag_name):
+        """{charge: {mult: [(cfg, first CSF position, number of CSFs)]}} of the sectors of a fragment"""
+        if self.backend == "hummr":
+            return self.engine.fragments[frag_name].csf_layout()
+        raise NotImplementedError
 
     def finalize_all(self):
         if self.backend == "hummr":
