@@ -109,6 +109,9 @@ def build_diagram(contraction, Dchgs, permutations):
             else:
                 permuted_diagrams.append((diagram, permutation))
         return permuted_diagrams
+    # the parts of the diagram, for drivers evaluating the coupling terms one by one (e.g. embedded.py)
+    get_permuted_diagrams.contraction, get_permuted_diagrams.Dchgs = contraction, Dchgs
+    get_permuted_diagrams.permutations = permutations
     return get_permuted_diagrams
 
 
@@ -408,9 +411,20 @@ def _density_array(densities, label, subsys_chgs, n_frag):
     #print("mults in _density_array ", mults)
     def _rule(*indices):
         index = indices[0]
+        by_type = densities[index][label[:-1]]
+        if hasattr(by_type, "provider"):
+            # density given by a provider (hummr_dens/streamed.py, embedded.py): the density itself, i.e. the
+            # provider's contraction without operands, in the slot order of this access
+            channel = mults[index]
+            positions, sign = dict(channel[5])[label]
+            n_slots = len(positions)
+            canonical = [2 + p for p in positions]
+            rho = by_type.provider.contract(label[:-1], tuple(charges[index]), tuple(channel[:5]), canonical, [])
+            from qode.math.tensornet import tl_tensor
+            return tl_tensor.init(sign * rho)
         try:
             #print(f"dens for {index, label, charges[index], mults[index]}")
-            rho = resolve_density(densities[index][label[:-1]][charges[index]], mults[index], label)    # charges/mults[index] is the bra and ket charge
+            rho = resolve_density(by_type[charges[index]], mults[index], label)    # charges/mults[index] is the bra and ket charge
         except KeyError:
             print(f"key error for ind {index} label {label[:-1]} charg {charges[index]} mult {mults[index][:5]}")
             rho = None    # eventually return an object whose __getitem__ member reports exactly what is missing (in case access is attempted)

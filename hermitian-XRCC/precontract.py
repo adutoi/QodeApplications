@@ -175,6 +175,8 @@ def precontract(densities, integrals, timings):
             if None in unique_mults:    # not spin adapted
                 possible_rank2, possible_restr_ca = (None,), (None,)
             ranges_with_mults = [densities_m["n_states"].keys()]*2 + [unique_mults]*2 + [possible_rank2] + [possible_restr_ca] + [None]*2
+            if getattr(getattr(densities_m.get(rho_type), "provider", None), "uncached", False):
+                return dynamic_array(contract_rho_int_m, ranges_with_mults)    # e.g. the probe of embedded.py
             return dynamic_array(cached_if_small(contract_rho_int_m, owner, indices[0]), ranges_with_mults)
 
         def contract_rho_rho_int(*indices):

@@ -36,7 +36,8 @@
 # fragment is enlarged by the gradients of its states (and, if a pool is given, the state space of the other
 # fragment by states from the pool), followed by the same diagonalization and compression.
 
-from get_xr_result_spin_adapt import get_xr_H, get_xr_states_from_H, local_sectors, drop_empty_sectors, product_basis_mask
+from get_xr_result_spin_adapt import get_xr_H, get_xr_states_from_H, local_sectors, drop_empty_sectors, product_basis_mask, \
+                                     multiplicities_couple
 from state_gradients_csf import state_gradients
 from state_screening import orthogonalize
 from qode.util import struct, timer
@@ -74,7 +75,9 @@ def unit_vector_pool(states, n_passes=1, csf_indices=None):
 
 def optimize_states(max_iter, xr_order, states, additional_states, ints, build_dens, monomer_charges, target_multiplicity,
                     target_charge=0, max_states_per_sector=15, conv_thresh=1e-6, dens_filter_thresh=1e-7, target_state=0, eval_reduced=False,
-                    exhaust_pool=False, lin_dep_thresh=1e-6, use_gradients=False, grad_level="herm", grad_conv_thresh=1e-5):
+                    exhaust_pool=False, lin_dep_thresh=1e-6, use_gradients=False, grad_level="herm", grad_conv_thresh=1e-5,
+                    pool_order="given", embedded=None, use_davidson=False, davidson_tol=1e-5, davidson_max_iter=100,
+                    davidson_max_size=40, dm_perturbation=1e-3, davidson_preconditioner=True):
     """
     max_iter:              maximum number of enlarge-diagonalize-compress cycles
     states:                states[frag][chg][mult] = list of CSF vectors (initial guess), modified in place
@@ -95,6 +98,30 @@ def optimize_states(max_iter, xr_order, states, additional_states, ints, build_d
     max_states_per_sector: the enlarged state space contains at most this many states per (chg, mult) sector, unless
                            the sector already holds more states (after compression), in which case it may grow by 1/3
                            of its current size, i.e. the cap is max(max_states_per_sector, 4/3 * n_current)
+    pool_order:            "given": the pool is passed through in its order, "cipsi": after every solve, the remaining
+                           pool vectors v of each fragment are reordered by their first-order (Epstein-Nesbet)
+                           importance sum_b (v^T r_b)^2 / (E - <v b|H^eff|v b>)^2, r = (H^eff - E) x the residual of
+                           the target state x in the fragment's complete CSF space (embedded XR[0] problem, the
+                           current states projected out, the diagonal element in the diagonal approximation
+                           sum_p v_p^2 H^eff_{pb,pb}, exact for the CSF pool), most important first; "residual": the
+                           same without the denominator, ||v^T r||^2
+    embedded:              embedded(frag, dens, H1) -> embedded.EmbeddedHamiltonian of fragment frag (pool_order="cipsi",
+                           use_davidson)
+    use_davidson:          Davidson sweeps instead of the pool: alternately for both fragments, the target state of the
+                           XR[0] problem with the fragment's complete (selected) CSF space and the other fragment's
+                           states fixed (embedded.py) is solved with a non-symmetric Davidson (residual norm
+                           davidson_tol, at most davidson_max_iter iterations, subspace restarted at
+                           davidson_max_size), and the fragment's states are replaced by the eigenvectors of its
+                           (perturbed, see dm_perturbation) reduced density matrix per sector with eigenvalues above
+                           dens_filter_thresh (at least one, at most max_states_per_sector); a single target state at
+                           XR[0] only
+    davidson_preconditioner: diagonal (Davidson) preconditioner (D - theta)^-1 with the diagonal D of H^eff
+    dm_perturbation:       weight alpha of the density-matrix perturbation of the Davidson sweeps (White's correction
+                           of single-site DMRG): rho += alpha sum_t Y_t Y_t^T with Y_t the contributions of the dimer
+                           terms to H^eff x, which contain the fragment's directions coupling the target state to
+                           the other fragment's states outside its current set (without it, the number of states per
+                           sector cannot grow beyond the other fragment's); these directions are the ones XR[1] and
+                           XR[2] couple to, so alpha also decides how well the states describe the higher XR orders
     eval_reduced:          additionally evaluate the energy in the compressed state space (debugging only,
                            requires an additional density and Hamiltonian build per iteration)
     returns the energy histories of the enlarged and of the compressed state spaces (the latter only if eval_reduced)
@@ -181,9 +208,52 @@ def optimize_states(max_iter, xr_order, states, additional_states, ints, build_d
                           f"({len(pool) - pool_tracker[frag][chg][mult]} left in pool)")
         return n_added
 
+    last = struct(H1=None)
+
+    def cipsi_reorder(dens, E, target_vec):
+        """reorders the remaining pool vectors of both fragments by their first-order importance (see pool_order)"""
+        if xr_order != 0 or len(target_states) > 1:
+            raise NotImplementedError("pool_order='cipsi' is implemented for XR[0] and a single target state")
+        for frag in range(2):
+            remaining = {(chg, mult): pool_tracker[frag][chg][mult] for chg, mult_dict in additional_states[frag].items()
+                         for mult, pool in mult_dict.items() if pool_tracker[frag][chg][mult] < len(pool)}
+            if not remaining:
+                continue
+            emb = embedded(frag, dens, last.H1)
+            d = target_vec if frag == 0 else target_vec.T          # (fragment's local states, other's local states)
+            x = emb.states_to_csf(drop_empty_sectors(states[frag]), d)
+            r = emb.sigma(x) - E * x
+            allowed = allowed_pairs(emb)
+            for (chg, mult), start in remaining.items():
+                if (chg, mult) not in emb.rows:
+                    continue
+                r_s = r[emb.rows[(chg, mult)]]
+                if len(states[frag][chg][mult]) > 0:
+                    C = np.array(states[frag][chg][mult], dtype=float)
+                    r_s = r_s - C.T @ (C @ r_s)
+                pool = additional_states[frag][chg][mult]
+                rest = pool[start:]
+                if pool_order == "residual":
+                    importance = [np.sum((np.asarray(v, dtype=float) @ r_s) ** 2) for v in rest]
+                else:
+                    # Epstein-Nesbet: sum_b (v^T r_b)^2 / (E - <v b|H^eff|v b>)^2, the diagonal element in the
+                    # diagonal approximation sum_p v_p^2 D[p, b] (exact for the CSF pool)
+                    D_s, cols = emb.diagonal()[emb.rows[(chg, mult)]], allowed[emb.rows[(chg, mult)]].any(axis=0)
+                    importance = []
+                    for v in rest:
+                        v = np.asarray(v, dtype=float)
+                        denom = E - (v ** 2) @ D_s[:, cols]
+                        denom = np.where(np.abs(denom) < 1e-4, np.copysign(1e-4, denom), denom)
+                        importance.append(np.sum(((v @ r_s[:, cols]) / denom) ** 2))
+                order = np.argsort(importance)[::-1]
+                pool[start:] = [rest[i] for i in order]
+                print(f"frag {frag}, chg {chg}, mult {mult}: pool reordered by first-order importance "
+                      f"(largest {importance[order[0]]:.2e}, {len(rest)} remaining)")
+
     def solve(dens):
         n_states = [count_states(drop_empty_sectors(states[frag])) for frag in range(2)]
         H1, H2 = get_xr_H(ints, dens, xr_order, monomer_charges, target_multiplicity)
+        last.H1 = H1
         # an int target_state allows excitonic.fci to use the sparse eigensolver
         mask = product_basis_mask(dens, monomer_charges, target_charge, target_multiplicity)
         E, vecs = get_xr_states_from_H(H1, H2, target_state=target_states if len(target_states) > 1 else target_states[0], basis_mask=mask)
@@ -224,7 +294,102 @@ def optimize_states(max_iter, xr_order, states, additional_states, ints, build_d
                       f"dens eigvals {np.array2string(eigvals[keep], precision=2)}, "
                       f"largest discarded {np.max(eigvals[~keep], initial=0.):.2e}")
 
+    def allowed_pairs(emb):
+        """mask of x[p, b]: the sector pairs with the target charge, whose multiplicities can couple to the target"""
+        mask = np.zeros((emb.dim_a, emb.dim_b), dtype=bool)
+        for sec_a, rows in emb.rows.items():
+            for sec_b, cols in emb.cols.items():
+                if sec_a[0] + sec_b[0] == target_charge and multiplicities_couple(sec_a[1], sec_b[1], target_multiplicity):
+                    mask[rows, cols] = True
+        return mask
+
+    def davidson(emb, x0, E0):
+        """lowest (real) eigenpair of H^eff in the allowed sector pairs, starting from x0 (non-symmetric Davidson)"""
+        mask = allowed_pairs(emb)
+        n = int(mask.sum())
+        diag = emb.diagonal()[mask] if davidson_preconditioner else None
+        def apply(v):
+            x = np.zeros(mask.shape)
+            x[mask] = v
+            return emb.sigma(x)[mask]
+        v = x0[mask] / np.linalg.norm(x0[mask])
+        V, W = [v], [apply(v)]
+        theta, u = E0, v
+        for it in range(davidson_max_iter):
+            Vm, Wm = np.array(V).T, np.array(W).T
+            h = Vm.T @ Wm
+            vals, vecs = sp.linalg.eig(h)
+            i = np.argmin(vals.real)
+            theta, y = vals[i].real, np.real(vecs[:, i] * np.conj(vecs[np.argmax(np.abs(vecs[:, i])), i]))
+            y /= np.linalg.norm(Vm @ y)
+            u = Vm @ y
+            r = Wm @ y - theta * u
+            res = np.linalg.norm(r)
+            if res < davidson_tol:
+                break
+            if len(V) >= min(davidson_max_size, n):
+                V, W = [u], [Wm @ y]    # restart with the current Ritz vector
+            if davidson_preconditioner:
+                # diagonal (Davidson) preconditioner, small denominators bounded
+                denom = diag - theta
+                t = -r / np.where(np.abs(denom) < 1e-4, np.copysign(1e-4, denom), denom)
+            else:
+                t = r
+            t = t - np.array(V).T @ (np.array(V) @ t)
+            t -= np.array(V).T @ (np.array(V) @ t)
+            if np.linalg.norm(t) < 1e-12:
+                break
+            t /= np.linalg.norm(t)
+            V.append(t)
+            W.append(apply(t))
+        print(f"Davidson: E = {theta:.10f}, residual {res:.2e} after {it + 1} iterations (dimension {n})")
+        x = np.zeros(mask.shape)
+        x[mask] = u
+        return theta, x
+
+    def davidson_compress(frag, emb, x):
+        """the fragment's new states: dominant eigenvectors of its (perturbed) reduced density matrix per sector"""
+        ys = emb.dimer_terms(x) if dm_perturbation > 0 else []
+        for (chg, mult), rows in emb.rows.items():
+            X = x[rows]
+            rho = X @ X.T
+            for y in ys:
+                rho += dm_perturbation * (y[rows] @ y[rows].T)
+            eigvals, eigvecs = sp.linalg.eigh(rho)
+            order = np.argsort(eigvals)[::-1]
+            eigvals, eigvecs = eigvals[order], eigvecs[:, order]
+            # states with a weight in the (perturbed) density matrix above dens_filter_thresh, at most max_states_per_sector
+            n_keep = max(1, min(max_states_per_sector, int(np.sum(eigvals > dens_filter_thresh))))
+            states[frag][chg][mult] = [eigvecs[:, i].copy() for i in range(n_keep)]
+            print(f"frag {frag}, chg {chg}, mult {mult}: {n_keep} states kept, dens eigvals "
+                  f"{np.array2string(eigvals[:n_keep], precision=2)}, largest discarded "
+                  f"{eigvals[n_keep] if n_keep < len(eigvals) else 0.:.2e}")
+
     energies, reduced_energies = [], []
+    if use_davidson:
+        if xr_order != 0 or len(target_states) > 1:
+            raise NotImplementedError("the Davidson sweeps are implemented for XR[0] and a single target state")
+        for it in range(max_iter):
+            for frag in range(2):
+                print(f"\n###### Davidson sweep {it}, fragment {frag} ######")
+                dens = [build_dens(f, states[f]) for f in range(2)]
+                E, target_vecs, n_states = solve(dens)
+                emb = embedded(frag, dens, last.H1)
+                d = target_vecs[0] if frag == 0 else target_vecs[0].T
+                x0 = emb.states_to_csf(drop_empty_sectors(states[frag]), d)
+                theta, x = davidson(emb, x0, E)
+                energies.append(theta)
+                davidson_compress(frag, emb, x)
+                print(f"History of embedded XR[0] energies (without nuc_rep):", energies)
+            if len(energies) > 2 and abs(energies[-1] - energies[-3]) < conv_thresh:
+                print("Converged!!!")
+                break
+        else:
+            print(f"WARNING: max_iter = {max_iter} reached before convergence")
+        for frag in range(2):
+            states[frag] = drop_empty_sectors(states[frag])
+        return energies, reduced_energies, states
+
     if use_gradients:
         grad_norms = []
         for it in range(max_iter):
@@ -271,6 +436,8 @@ def optimize_states(max_iter, xr_order, states, additional_states, ints, build_d
         dens = [build_dens(frag, states[frag]) for frag in range(2)]
         E, target_vecs, n_states = solve(dens)
         energies.append(E)
+        if pool_order in ("cipsi", "residual"):
+            cipsi_reorder(dens, E, target_vecs[0])
         print(f"state space before compression: {n_states}")
         compress_state_space(target_vecs, n_states)
         print(f"state space after compression: {[count_states(drop_empty_sectors(states[frag])) for frag in range(2)]}")

@@ -47,7 +47,8 @@ def run_xr(displacement, max_iter, xr_order_final=0, xr_order_solver=0, dens_fil
            hummr_input="/home/marco/hummr_tests/scratch/be_631g_fci.inp", basis="6-31G", pool="roots", n_csf_passes=1,
            use_gradients=False, grad_level="herm", grad_conv_thresh=1e-5, selected_cfgs=None, selected_engine="hci",
            hci_epsilon=None, selection_roots=3, field_strength=1e-3, selection_dir=None, streamed=False,
-           memory_budget="auto"):
+           memory_budget="auto", pool_order="given", use_davidson=False, dm_perturbation=1e-3, davidson_tol=1e-5,
+           davidson_preconditioner=True):
     """
     xr_order_final:        XR order (or list of orders) of the final evaluation in the optimized state space
     n_init_states:         number of (lowest) hummr roots per (chg, mult) sector used as initial guess
@@ -83,6 +84,17 @@ def run_xr(displacement, max_iter, xr_order_final=0, xr_order_solver=0, dens_fil
                            memory[, fraction]): as large as the node memory allows, None: 8 GB), see
                            get_xr_result_spin_adapt.resolve_memory_budget
     max_states_per_sector: maximum number of states per sector during the solver iterations
+    pool_order:            "given", "cipsi" or "residual": the remaining pool is reordered after every solve by the
+                           first-order (Epstein-Nesbet, "cipsi", or residual only, "residual") importance from the
+                           embedded XR[0] problem (state_solver_csf.optimize_states, embedded.py)
+    use_davidson:          Davidson sweeps instead of the pool (state_solver_csf.optimize_states): every fragment is
+                           optimized in its complete (selected) CSF space with the other fragment's states fixed
+                           (XR[0], single target state; use pool="none"), with the density-matrix perturbation of
+                           weight dm_perturbation (see state_solver_csf.optimize_states); per sector, the states with
+                           a weight above dens_filter_thresh_solver in the fragment's (perturbed) reduced density
+                           matrix are kept, at most max_states_per_sector
+    davidson_tol:          residual norm at which the Davidson iterations of a sweep step are converged
+    davidson_preconditioner: diagonal preconditioner for the Davidson iterations (diagonal of the embedded Hamiltonian)
     """
     if pool not in ("roots", "csf", "none"):
         raise ValueError(f"unknown pool {pool!r}")
@@ -164,6 +176,11 @@ def run_xr(displacement, max_iter, xr_order_final=0, xr_order_solver=0, dens_fil
     nuc_rep = ints[2]
     E_nuc = sum(nuc_rep[m1,m2] for m1 in range(n_frag) for m2 in range(m1+1))
 
+    def embedded(frag, dens, H1):
+        from embedded import EmbeddedHamiltonian
+        return EmbeddedHamiltonian(frag, ints, dens, dens_builder.engine.fragments[frag_name], monomer_charges,
+                                   H1[1 - frag], target_multiplicity=target_multiplicity)
+
     def build_dens(frag, frag_states, xr_level=xr_order_solver, bra_states=None):
         # both fragments are the same molecule, so they share the hummr instance
         return build_frag_densities(dens_builder, frag_name, frag_states, xr_level, BeN[frag].n_elec_ref, bra_states=bra_states,
@@ -178,7 +195,10 @@ def run_xr(displacement, max_iter, xr_order_final=0, xr_order_solver=0, dens_fil
                                                          max_states_per_sector=max_states_per_sector,
                                                          conv_thresh=conv_thresh, dens_filter_thresh=dens_filter_thresh_solver,
                                                          target_state=target_state, eval_reduced=eval_reduced, exhaust_pool=(pool == "csf"),
-                                                         use_gradients=use_gradients, grad_level=grad_level, grad_conv_thresh=grad_conv_thresh)
+                                                         use_gradients=use_gradients, grad_level=grad_level, grad_conv_thresh=grad_conv_thresh,
+                                                         pool_order=pool_order, embedded=embedded, use_davidson=use_davidson, davidson_tol=davidson_tol,
+                                                         davidson_preconditioner=davidson_preconditioner,
+                                                         dm_perturbation=dm_perturbation)
 
     #########
     # Final evaluation in the optimized state space
@@ -202,15 +222,26 @@ def run_xr(displacement, max_iter, xr_order_final=0, xr_order_solver=0, dens_fil
 
 
 if __name__ == "__main__":
-    # frozen 1s, (2,8) active spaces, gradient based solver at XR[0] starting from the lowest 3 states per sector,
+    # frozen 1s, state space optimization at XR[0] starting from the lowest 8 states per sector,
     # then XR[0], XR[1] and XR[2] in the optimized state space
-    # (pool="csf", n_csf_passes=2, use_gradients=False is the gradient free variant passing through all CSFs)
     # CI spaces: union of the HCI selections (bare, charge-transfer point charges, +-F fields) at eps = 1e-3, solved
     # with HCI in these spaces (hummr's HCIManager); streamed density contractions with an 8 GB cache budget
+    # solver = "davidson": Davidson sweeps in the complete (selected) CSF space of one fragment with the other fragment's
+    #                      states fixed; per sector, the states with a weight above dens_filter_thresh_solver in the
+    #                      (perturbed, dm_perturbation) reduced density matrix are kept; max_iter is the maximum number
+    #                      of sweeps. 6-31G, eps = 1e-3: 1e-8 and 1e-2 keep 22 states per fragment instead of 68 (all
+    #                      states up to max_states_per_sector) with XR[1]/XR[2] within 6e-6/3e-6 Eh of the latter
+    # solver = "cipsi":    passes through all CSFs (pool="csf"), the remaining CSFs reordered by their first-order
+    #                      importance after every solve
+    solver = "davidson"
+    solver_args = {"davidson": dict(pool="none", use_davidson=True, dens_filter_thresh_solver=1e-8, dm_perturbation=1e-2,
+                                     davidson_tol=1e-5),
+                   "cipsi":    dict(pool="csf", pool_order="cipsi", dens_filter_thresh_solver=1e-7)}[solver]
     solver_en, reduced_en, final_en = run_xr(4.5, 50, xr_order_final=[0, 1, 2], n_init_states=8, max_states_per_sector=20,
-                                             eval_reduced=True, hummr_input="/home/marco/hummr_tests/scratch/be_631g_fci_fcore.inp",
-                                             basis="6-31G", pool="csf", use_gradients=False, dens_filter_thresh_solver=1e-7,
-                                             hci_epsilon=1e-3, selected_engine="hci", streamed=True, memory_budget=8e9)
+                                             eval_reduced=True, hummr_input="/home/marco/hummr_tests/scratch/be_ccdz_fci_fcore.inp",
+                                             basis="cc-pvdz", use_gradients=False,
+                                             hci_epsilon=1e-3, selected_engine="hci", streamed=True, memory_budget=8e9,
+                                             **solver_args)
     print("solver energies (enlarged state spaces):  ", solver_en)
     print("solver energies (compressed state spaces):", reduced_en)
     for order, E in final_en.items():
