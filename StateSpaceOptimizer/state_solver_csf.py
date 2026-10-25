@@ -77,7 +77,7 @@ def optimize_states(max_iter, xr_order, states, additional_states, ints, build_d
                     target_charge=0, max_states_per_sector=15, conv_thresh=1e-6, dens_filter_thresh=1e-7, target_state=0, eval_reduced=False,
                     exhaust_pool=False, lin_dep_thresh=1e-6, use_gradients=False, grad_level="herm", grad_conv_thresh=1e-5,
                     pool_order="given", embedded=None, use_davidson=False, davidson_tol=1e-5, davidson_max_iter=100,
-                    davidson_max_size=40, dm_perturbation=1e-3, davidson_preconditioner=True):
+                    davidson_max_size=40, dm_perturbation=1e-3, davidson_preconditioner=True, dm_vectors="right"):
     """
     max_iter:              maximum number of enlarge-diagonalize-compress cycles
     states:                states[frag][chg][mult] = list of CSF vectors (initial guess), modified in place
@@ -122,6 +122,12 @@ def optimize_states(max_iter, xr_order, states, additional_states, ints, build_d
                            the other fragment's states outside its current set (without it, the number of states per
                            sector cannot grow beyond the other fragment's); these directions are the ones XR[1] and
                            XR[2] couple to, so alpha also decides how well the states describe the higher XR orders
+    dm_vectors:            the vectors of the reduced density matrix of the Davidson sweeps: "right" (the right
+                           eigenvector x) or "left_right" (additionally the left eigenvector l of the non-symmetric
+                           H^eff, from a second Davidson with (H^eff)^T: rho = (X X^T + L L^T) / 2 with ||x|| = ||l|| = 1,
+                           and the perturbation alpha/2 sum_t (Y_t Y_t^T + Z_t Z_t^T), Z_t the dimer-term contributions to
+                           (H^eff)^T l); the error of the Ritz value in the truncated space is of the order of the
+                           products of the parts of l and x outside of it
     eval_reduced:          additionally evaluate the energy in the compressed state space (debugging only,
                            requires an additional density and Hamiltonian build per iteration)
     returns the energy histories of the enlarged and of the compressed state spaces (the latter only if eval_reduced)
@@ -139,7 +145,7 @@ def optimize_states(max_iter, xr_order, states, additional_states, ints, build_d
         """target energy, right and left eigenvectors (reshaped to the product dimensions) and H1"""
         if len(target_states) > 1:
             raise NotImplementedError("the gradient based variant is only implemented for a single target state")
-        H1, H2 = get_xr_H(ints, dens, xr_order, monomer_charges, target_multiplicity)
+        H1, H2 = get_xr_H(ints, dens, xr_order, monomer_charges, target_multiplicity, target_charge=target_charge)
         mask = product_basis_mask(dens, monomer_charges, target_charge, target_multiplicity)
         out = struct(log=lambda *args: None)
         E, vec_l, vec_r = excitonic.fci((H1, [[None, H2], [None, None]]), out, timer(), target_state=target_states[0],
@@ -252,7 +258,7 @@ def optimize_states(max_iter, xr_order, states, additional_states, ints, build_d
 
     def solve(dens):
         n_states = [count_states(drop_empty_sectors(states[frag])) for frag in range(2)]
-        H1, H2 = get_xr_H(ints, dens, xr_order, monomer_charges, target_multiplicity)
+        H1, H2 = get_xr_H(ints, dens, xr_order, monomer_charges, target_multiplicity, target_charge=target_charge)
         last.H1 = H1
         # an int target_state allows excitonic.fci to use the sparse eigensolver
         mask = product_basis_mask(dens, monomer_charges, target_charge, target_multiplicity)
@@ -303,15 +309,17 @@ def optimize_states(max_iter, xr_order, states, additional_states, ints, build_d
                     mask[rows, cols] = True
         return mask
 
-    def davidson(emb, x0, E0):
-        """lowest (real) eigenpair of H^eff in the allowed sector pairs, starting from x0 (non-symmetric Davidson)"""
+    def davidson(emb, x0, E0, transpose=False):
+        """lowest (real) eigenpair of H^eff (transpose: (H^eff)^T, i.e. the left eigenvector) in the allowed sector
+        pairs, starting from x0 (non-symmetric Davidson)"""
         mask = allowed_pairs(emb)
         n = int(mask.sum())
         diag = emb.diagonal()[mask] if davidson_preconditioner else None
+        sigma = emb.sigma_T if transpose else emb.sigma
         def apply(v):
             x = np.zeros(mask.shape)
             x[mask] = v
-            return emb.sigma(x)[mask]
+            return sigma(x)[mask]
         v = x0[mask] / np.linalg.norm(x0[mask])
         V, W = [v], [apply(v)]
         theta, u = E0, v
@@ -342,19 +350,20 @@ def optimize_states(max_iter, xr_order, states, additional_states, ints, build_d
             t /= np.linalg.norm(t)
             V.append(t)
             W.append(apply(t))
-        print(f"Davidson: E = {theta:.10f}, residual {res:.2e} after {it + 1} iterations (dimension {n})")
+        print(f"Davidson{' (left)' if transpose else ''}: E = {theta:.10f}, residual {res:.2e} after {it + 1} iterations (dimension {n})")
         x = np.zeros(mask.shape)
         x[mask] = u
         return theta, x
 
-    def davidson_compress(frag, emb, x):
-        """the fragment's new states: dominant eigenvectors of its (perturbed) reduced density matrix per sector"""
-        ys = emb.dimer_terms(x) if dm_perturbation > 0 else []
+    def davidson_compress(frag, emb, x, x_left=None):
+        """the fragment's new states: dominant eigenvectors of its (perturbed) reduced density matrix per sector
+        (of the right eigenvector x, and the left one x_left, if given, see dm_vectors)"""
+        vecs = [(x, False)] if x_left is None else [(x, False), (x_left / np.linalg.norm(x_left), True)]
+        ys = [y for v, tr in vecs for y in (emb.dimer_terms(v, transpose=tr) if dm_perturbation > 0 else [])]
         for (chg, mult), rows in emb.rows.items():
-            X = x[rows]
-            rho = X @ X.T
+            rho = sum(v[rows] @ v[rows].T for v, _ in vecs) / len(vecs)
             for y in ys:
-                rho += dm_perturbation * (y[rows] @ y[rows].T)
+                rho += dm_perturbation / len(vecs) * (y[rows] @ y[rows].T)
             eigvals, eigvecs = sp.linalg.eigh(rho)
             order = np.argsort(eigvals)[::-1]
             eigvals, eigvecs = eigvals[order], eigvecs[:, order]
@@ -369,6 +378,8 @@ def optimize_states(max_iter, xr_order, states, additional_states, ints, build_d
     if use_davidson:
         if xr_order != 0 or len(target_states) > 1:
             raise NotImplementedError("the Davidson sweeps are implemented for XR[0] and a single target state")
+        if dm_vectors not in ("right", "left_right"):
+            raise ValueError(f"unknown dm_vectors {dm_vectors!r}")
         for it in range(max_iter):
             for frag in range(2):
                 print(f"\n###### Davidson sweep {it}, fragment {frag} ######")
@@ -379,7 +390,8 @@ def optimize_states(max_iter, xr_order, states, additional_states, ints, build_d
                 x0 = emb.states_to_csf(drop_empty_sectors(states[frag]), d)
                 theta, x = davidson(emb, x0, E)
                 energies.append(theta)
-                davidson_compress(frag, emb, x)
+                x_left = davidson(emb, x, theta, transpose=True)[1] if dm_vectors == "left_right" else None
+                davidson_compress(frag, emb, x, x_left)
                 print(f"History of embedded XR[0] energies (without nuc_rep):", energies)
             if len(energies) > 2 and abs(energies[-1] - energies[-3]) < conv_thresh:
                 print("Converged!!!")

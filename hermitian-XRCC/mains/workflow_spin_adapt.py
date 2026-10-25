@@ -22,7 +22,7 @@
 #     python [-u] workflow_spin_adapt.py
 
 from get_ints import get_ints
-from get_xr_result_spin_adapt import get_xr_states, build_frag_densities
+from get_xr_result_spin_adapt import get_xr_states, build_frag_densities, check_overlap
 from state_solver_csf import optimize_states, count_states, unit_vector_pool
 import qode.math.tensornet as tensornet
 from qode.util import timer
@@ -48,7 +48,7 @@ def run_xr(displacement, max_iter, xr_order_final=0, xr_order_solver=0, dens_fil
            use_gradients=False, grad_level="herm", grad_conv_thresh=1e-5, selected_cfgs=None, selected_engine="hci",
            hci_epsilon=None, selection_roots=3, field_strength=1e-3, selection_dir=None, streamed=False,
            memory_budget="auto", pool_order="given", use_davidson=False, dm_perturbation=1e-3, davidson_tol=1e-5,
-           davidson_preconditioner=True):
+           davidson_preconditioner=True, dm_vectors="right", overlap_check_order=3):
     """
     xr_order_final:        XR order (or list of orders) of the final evaluation in the optimized state space
     n_init_states:         number of (lowest) hummr roots per (chg, mult) sector used as initial guess
@@ -95,6 +95,13 @@ def run_xr(displacement, max_iter, xr_order_final=0, xr_order_solver=0, dens_fil
                            matrix are kept, at most max_states_per_sector
     davidson_tol:          residual norm at which the Davidson iterations of a sweep step are converged
     davidson_preconditioner: diagonal preconditioner for the Davidson iterations (diagonal of the embedded Hamiltonian)
+    dm_vectors:            "right" or "left_right": eigenvectors of the embedded problem the reduced density matrix of
+                           the Davidson sweeps is built from (see state_solver_csf.optimize_states)
+    overlap_check_order:   for the final state space, the lowest and largest eigenvalues of the product-state overlap S2
+                           with the S expansion up to this order are printed, with warnings for the final XR orders, if
+                           S2 is nearly singular, indefinite or not converged (get_xr_result_spin_adapt.check_overlap);
+                           order 3 costs about as much as one XR[0] Hamiltonian build of the solver, order 4 10 to 35
+                           times more; None: no check
     """
     if pool not in ("roots", "csf", "none"):
         raise ValueError(f"unknown pool {pool!r}")
@@ -102,6 +109,8 @@ def run_xr(displacement, max_iter, xr_order_final=0, xr_order_solver=0, dens_fil
     tensornet.tensorly_backend.initialize_timer()
 
     n_frag = 2
+    # the core projection (get_ints.direct_CoreProj) alone does not retain the orthonormality of the valence orbitals
+    # within a fragment, which get_ints restores by default (orthonormalize_valence=True, Loewdin within each fragment)
     project_core = True
     monomer_charges = [[0, +1, -1], [0, +1, -1]]
     sectors = {0: [1, 3], +1: [2], -1: [2, 4]}   # chg: [mult]
@@ -198,7 +207,7 @@ def run_xr(displacement, max_iter, xr_order_final=0, xr_order_solver=0, dens_fil
                                                          use_gradients=use_gradients, grad_level=grad_level, grad_conv_thresh=grad_conv_thresh,
                                                          pool_order=pool_order, embedded=embedded, use_davidson=use_davidson, davidson_tol=davidson_tol,
                                                          davidson_preconditioner=davidson_preconditioner,
-                                                         dm_perturbation=dm_perturbation)
+                                                         dm_perturbation=dm_perturbation, dm_vectors=dm_vectors)
 
     #########
     # Final evaluation in the optimized state space
@@ -207,7 +216,11 @@ def run_xr(displacement, max_iter, xr_order_final=0, xr_order_solver=0, dens_fil
     # (for several final XR orders, e.g. [1, 2], with the same optimized states; the densities are built once
     #  for the highest order, since they contain all lower ones)
     print("final state space:", [count_states(states[frag]) for frag in range(n_frag)])
-    dens = [build_dens(frag, states[frag], xr_level=max(final_orders)) for frag in range(n_frag)]
+    # (S2^[3] requires the densities of xr_level 1, S2^[4] the ones of xr_level 2)
+    dens_level = max(final_orders + ([overlap_check_order - 2] if overlap_check_order else []))
+    dens = [build_dens(frag, states[frag], xr_level=dens_level) for frag in range(n_frag)]
+    if overlap_check_order:
+        check_overlap(ints, dens, monomer_charges, target_multiplicity, target_charge, overlap_check_order, xr_orders=final_orders)
     final_en = {}
     for order in final_orders:
         E, _ = get_xr_states(ints, dens, order, monomer_charges, target_multiplicity, target_state=target_state, target_charge=target_charge)

@@ -101,7 +101,17 @@ def direct_Sinv(fragments, S):
     Sinv = as_frag_blocked_mat(Sinv, fragments)
     return Sinv
 
-def direct_CoreProj(fragments, S):
+def direct_CoreProj(fragments, S, orthonormalize_valence=True):
+    # Projects the core orbitals of all fragments out of every valence orbital, v' = v - sum_c c (S_cc^-1 S_cv), so that
+    # core and valence are exactly orthogonal (between and within the fragments).  The projection alone does NOT
+    # retain the orthonormality within a fragment: the projected valence orbitals of one fragment overlap as
+    # 1 - S_vc S_cc^-1 S_cv, a deviation of second order in the core-valence overlap with the other fragment (Be2 6-31G,
+    # 1s core: largest deviation 6.6e-3 at 2.5 Angstrom), which XR neglects, since it assumes the identity within the
+    # fragments.  With orthonormalize_valence, the projected valence orbitals are therefore Loewdin orthonormalized
+    # within each fragment (still orthogonal to all cores, as linear combinations of them); for Be2 this changes XR[2]
+    # by -3 to -4 uEh at 4.0 (6-31G) / 4.5 Angstrom (cc-pVDZ), about 25 % of the remaining error there.  Either way the
+    # projected valence orbitals contain the other fragment's core functions, i.e. they are not absolutely localized
+    # anymore.
 
     # Identify absolute indices of core orbitals and dimensions
     if_core = []
@@ -143,22 +153,35 @@ def direct_CoreProj(fragments, S):
                 Right[core[i],j] = Tcv[i,jv]
                 jv += 1
 
+    # Loewdin orthonormalization of the projected valence orbitals within each fragment
+    if orthonormalize_valence:
+        S_proj = Right.T @ S @ Right
+        offset = 0
+        for frag in fragments:
+            valence = [offset + i for i in range(frag.basis.n_spatial_orb) if i not in frag.basis.core]
+            evals, evecs = numpy.linalg.eigh(S_proj[numpy.ix_(valence, valence)])
+            Right[:, valence] = Right[:, valence] @ (evecs / numpy.sqrt(evals)) @ evecs.T
+            offset += frag.basis.n_spatial_orb
+
     # Move back to the fragment-blocked representation
     Left  = as_frag_blocked_mat(Right.T,  fragments)
     Right = as_frag_blocked_mat(Right,    fragments)
 
     return Left, Right
 
-def get_ints(fragments, project_core=True, timings=None, spin_ints=True, backend="psi4", antisymmetrize=True):    # spin_ints=False does not appear to be used ... prefer to remove option
+def get_ints(fragments, project_core=True, timings=None, spin_ints=True, backend="psi4", antisymmetrize=True,
+             orthonormalize_valence=True):    # spin_ints=False does not appear to be used ... prefer to remove option
     # antisymmetrize: only for spin_ints, antisymmetrized spin-orbital V (as required by diagrams derived with V
     #                 antisymmetry) or the plain one (as the spatial V of spin-adapted calculations)
+    # orthonormalize_valence: only with project_core, Loewdin orthonormalization of the projected valence orbitals
+    #                 within each fragment (see direct_CoreProj); False reproduces the plain projection
     # More needs to be done regarding the basis to prevent mismatches with the fragment states
     AO_ints     = AO_integrals(fragments, backend=backend)
     FragMO_ints = fragMO_integrals(AO_ints, [frag.basis.MOcoeffs for frag in fragments], cache=True)     # Cache because multiple calls to each block during biorthogonalization
 
-    ### project the core out of the valence
+    ### project the core out of the valence (and restore the orthonormality within the fragments, see direct_CoreProj)
     if project_core:
-        Left, Right = direct_CoreProj(fragments, FragMO_ints.S)
+        Left, Right = direct_CoreProj(fragments, FragMO_ints.S, orthonormalize_valence)
         FragMO_ints_tmp = bra_transformed(Left,  FragMO_ints,     cache=True)
         FragMO_ints     = ket_transformed(Right, FragMO_ints_tmp, cache=True)
 

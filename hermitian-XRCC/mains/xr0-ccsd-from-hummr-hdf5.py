@@ -69,6 +69,8 @@ target_charge = 0
 target_multiplicity = 1
 displacement = float(sys.argv[1])
 #states       = ["rho/{}.pkl".format(sys.argv[2]), "rho/{}.pkl".format(sys.argv[3])]
+# the core projection (get_ints.direct_CoreProj) alone does not retain the orthonormality of the valence orbitals within
+# a fragment, which get_ints restores by default (orthonormalize_valence=True, Loewdin within each fragment)
 project_core = True
 if len(sys.argv)==5:
     if sys.argv[4]=="no-proj":

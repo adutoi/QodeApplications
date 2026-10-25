@@ -42,6 +42,12 @@ import diagram_lists as D
 # default byte budget of the cached intermediates of one XR Hamiltonian build (see resolve_memory_budget)
 DEFAULT_MEMORY_BUDGET = 8e9
 
+# overlap checks (see check_overlap): warn if the lowest eigenvalue of the product-state overlap S2^[n] in the target
+# block is below S_WARN_THRESH (nearly singular or indefinite, XR[n] then has spurious eigenvalues), or deviates by more
+# than S_CONV_THRESH (relative) from the one of the highest order of the check (overlap expansion not converged at n)
+S_WARN_THRESH = 0.05
+S_CONV_THRESH = 0.2
+
 
 
 def drop_empty_sectors(states):
@@ -159,19 +165,20 @@ def build_frag_densities(dens_builder, frag_name, states, xr_level, n_elec_ref, 
     required by diagrammatic_expansion.
     """
     states = drop_empty_sectors(states)
-    fragment = dens_builder.engine.fragments[frag_name]    # (hummr backend)
-    memory_budget = apply_memory_budget(resolve_memory_budget(memory_budget, fragment.orbitals.shape[1], fragment.n_act,
-                                                              xr_level, states))
+    options = {}
+    if hasattr(dens_builder, "engine"):    # hummr backend (the reference backend of the tests has no such options)
+        fragment = dens_builder.engine.fragments[frag_name]
+        memory_budget = apply_memory_budget(resolve_memory_budget(memory_budget, fragment.orbitals.shape[1], fragment.n_act,
+                                                                  xr_level, states))
+        options = dict(streamed=streamed, memory_budget=memory_budget)
     if bra_states is None:
-        rho = dens_builder.build_densities(frag_name, xr_level, states, states, streamed=streamed,
-                                           memory_budget=memory_budget)
+        rho = dens_builder.build_densities(frag_name, xr_level, states, states, **options)
         bra_states = states
     else:
         bra_states = drop_empty_sectors(bra_states)
         if count_sectors(bra_states) != count_sectors(states):
             raise ValueError("bra and ket states need to have the same (chg, mult) sectors")
-        rho = dens_builder.build_densities(frag_name, xr_level, bra_states, states, streamed=streamed,
-                                           memory_budget=memory_budget)
+        rho = dens_builder.build_densities(frag_name, xr_level, bra_states, states, **options)
     rho['n_states'] = {chg: {mult: len(vecs) for mult, vecs in mult_dict.items()} for chg, mult_dict in states.items()}
     rho['n_states_bra'] = {chg: {mult: len(vecs) for mult, vecs in mult_dict.items()} for chg, mult_dict in bra_states.items()}
     # <bra|ket> per sector, which replaces the Kronecker delta of spectator fragments (e.g. in u100)
@@ -197,7 +204,75 @@ def build_frag_densities(dens_builder, frag_name, states, xr_level, n_elec_ref, 
         rho['bra_bra'] = bra_bra
     return rho
 
-def get_xr_H(ints, dens, xr_order, monomer_charges, target_multiplicity):
+def target_block(dens, dimer_sectors, target_charge, target_multiplicity, key='n_states'):
+    """mask over the dimer-sector ordering of XR_term.dimer_matrix: the product states with the total charge
+    target_charge (None: all), whose multiplicities can couple to target_multiplicity"""
+    return numpy.concatenate([
+        numpy.full(dens[0][key][chg0][mult0] * dens[1][key][chg1][mult1],
+                   (target_charge is None or chg0 + chg1 == target_charge) and multiplicities_couple(mult0, mult1, target_multiplicity))
+        for (chg0, mult0), (chg1, mult1) in dimer_sectors])
+
+def overlap_spectra(ints, dens, monomer_charges, target_multiplicity, target_charge=0, max_order=3):
+    """
+    {n: (lowest, largest eigenvalue)} of the product-state overlap S2 with the S expansion up to order n = 1 ...
+    max_order, in the target block (target_block).  The orders 3 and 4 require the densities of xr_level 1 and 2
+    (build_frag_densities).  Cost (Be2, Davidson-XR[0] states, streamed): S2^[1] + S2^[2] about 1/3 of the XR[0]
+    Hamiltonian build, S2^[3] about as much as the latter (factor 0.5 in 6-31G, 1.4 in cc-pVDZ, growing with the
+    number of orbitals), S2^[4] 10 to 35 times more.
+    """
+    if any(rho.get('rectangular', False) for rho in dens):
+        raise ValueError("the overlap spectra require square densities (bra states = ket states)")
+    if max_order > 4:
+        raise NotImplementedError("the S expansion is implemented up to order 4")
+    symm_ints = ints[0]
+    t = timer()
+    S_blocks = diagrammatic_expansion.blocks(densities=dens, integrals=symm_ints.S, diagrams=S_diagrams,
+                                             contract_cache=precontract(dens, symm_ints.S, t), timings=t, precon_timings=t,
+                                             target_multiplicity=target_multiplicity)
+    frag_sectors = [[(chg, mult) for chg, mult, _ in local_sectors(rho['n_states'], monomer_charges[m])] for m, rho in enumerate(dens)]
+    dimer_sectors = [(sec0, sec1) for sec0 in frag_sectors[0] for sec1 in frag_sectors[1]]
+    mask = target_block(dens, dimer_sectors, target_charge, target_multiplicity)
+    spectra, S2 = {}, None
+    for n in range(1, max_order + 1):
+        terms = {0: D.S0[0], 2: D.S2[1]} if n == 1 else {2: D.S2[n]}    # (the identity with the first order)
+        term = XR_term.dimer_matrix(S_blocks, terms, (0, 1), dimer_sectors, t)[numpy.ix_(mask, mask)]
+        S2 = term if S2 is None else S2 + term
+        eigvals = numpy.linalg.eigvalsh(0.5 * (S2 + S2.T))
+        spectra[n] = (eigvals[0], eigvals[-1])
+    return spectra
+
+def check_overlap(ints, dens, monomer_charges, target_multiplicity, target_charge=0, max_order=3, xr_orders=(1, 2)):
+    """
+    Prints the lowest and largest eigenvalues of the product-state overlap S2^[n], n = 1 ... max_order (overlap_spectra)
+    and warns for the orders xr_orders (XR[n] with n >= 1), whose S2^[n] is nearly singular or indefinite, or whose
+    lowest eigenvalue is not converged (S_WARN_THRESH, S_CONV_THRESH, relative to the one of max_order), and if the
+    product basis itself is nearly linearly dependent (lowest eigenvalue of max_order).  Returns the spectra.
+    """
+    spectra = overlap_spectra(ints, dens, monomer_charges, target_multiplicity, target_charge, max_order)
+    print(f"overlap of the product states (target block): lowest / largest eigenvalue of S2 with the S expansion up to order n")
+    for n, (low, high) in spectra.items():
+        print(f"    n = {n}: {low:9.5f} / {high:9.5f}")
+    ref = spectra[max_order][0]
+    if ref < S_WARN_THRESH:
+        print(f"WARNING: the product basis is nearly linearly dependent or the overlap expansion is not converged at order "
+              f"{max_order} (lowest eigenvalue {ref:.5f})")
+    for n in xr_orders:
+        if n < 1 or n > max_order:
+            continue
+        low = spectra[n][0]
+        if low < S_WARN_THRESH:
+            print(f"WARNING: XR[{n}]: S2^[{n}] is {'indefinite' if low < 0 else 'nearly singular'} (lowest eigenvalue {low:.5f}), "
+                  f"XR[{n}] {'has' if low < 0 else 'may have'} spurious eigenvalues")
+        elif n < max_order and abs(low - ref) > S_CONV_THRESH * abs(ref):
+            print(f"WARNING: XR[{n}]: the lowest eigenvalue of S2^[{n}] ({low:.5f}) deviates by {abs(low - ref) / abs(ref):.0%} "
+                  f"from the one at order {max_order} ({ref:.5f}), the overlap expansion is not converged at XR[{n}]")
+    return spectra
+
+def get_xr_H(ints, dens, xr_order, monomer_charges, target_multiplicity, target_charge=None):
+    """
+    target_charge: if given, XR[1]/[2] warn if the lowest eigenvalue of the inverted S2 in the block of this total
+                   charge (and the multiplicities coupling to target_multiplicity) is below S_WARN_THRESH
+    """
     diag_timer = timer()
     precon_timer = timer()
     matrix_timer = timer()
@@ -281,6 +356,13 @@ def get_xr_H(ints, dens, xr_order, monomer_charges, target_multiplicity):
             numpy.full(S_rho[0]['n_states'][chg0][mult0] * S_rho[1]['n_states'][chg1][mult1],
                        multiplicities_couple(mult0, mult1, target_multiplicity))
             for (chg0, mult0), (chg1, mult1) in dimer_sectors])
+        if target_charge is not None:
+            block = target_block(S_rho, dimer_sectors, target_charge, target_multiplicity)
+            S2_target = S2[numpy.ix_(block, block)]
+            low = numpy.linalg.eigvalsh(0.5 * (S2_target + S2_target.T))[0]
+            if low < S_WARN_THRESH:
+                print(f"WARNING: XR[{xr_order}]: S2^[{xr_order}] is {'indefinite' if low < 0 else 'nearly singular'} "
+                      f"(lowest eigenvalue {low:.5f} in the target block), XR[{xr_order}] {'has' if low < 0 else 'may have'} spurious eigenvalues")
         S2 = S2 + numpy.diag(~coupling * 1.0)
         S2inv = qode.math.precise_numpy_inverse(S2)
 
@@ -338,6 +420,6 @@ def get_xr_states_from_H(H1, H2, target_state=0, basis_mask=None):
     return E, T
 
 def get_xr_states(ints, dens, xr_order, monomer_charges, target_multiplicity, target_state=0, target_charge=0):
-    H1, H2 = get_xr_H(ints, dens, xr_order, monomer_charges, target_multiplicity)
+    H1, H2 = get_xr_H(ints, dens, xr_order, monomer_charges, target_multiplicity, target_charge=target_charge)
     mask = product_basis_mask(dens, monomer_charges, target_charge, target_multiplicity)
     return get_xr_states_from_H(H1, H2, target_state=target_state, basis_mask=mask)

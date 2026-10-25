@@ -163,7 +163,7 @@ class EmbeddedHamiltonian:
             for catalog, integrals, labels in _diagram_sets(ints, frag_order):
                 info = struct(densities=both, integrals=integrals, timings=self.timings,
                               target_multiplicity=target_multiplicity,
-                              contract_cache=struct(rho_S=precontract(both, integrals.S, self.timings),
+                              contract_cache=struct(rho_S=precontract(both, getattr(integrals, "S", integrals), self.timings),
                                                     general=precontract(both, integrals, self.timings)))
                 self._collect(info, catalog, labels, frag_order)
 
@@ -254,15 +254,16 @@ class EmbeddedHamiltonian:
             self.dimer[key] = np.zeros((self.dim_b, value.shape[1]))
         self.dimer[key][self.cols[b_bra], :] += value
 
-    def _open(self, term, trial, T, diagonal):
-        """sigma of one native term: open bra (native bra = A's bra CSFs) or open ket (swapped: native ket)"""
+    def _open(self, term, trial, T, diagonal, transpose=False):
+        """sigma of one native term: open bra (native bra = A's bra CSFs) or open ket (swapped: native ket), for
+        transpose the other side (trial vectors on A's bra CSFs, sigma on its ket CSFs)"""
         name, chg_pair, channel, swapped = term
         if name == "":
             raise ValueError("overlap terms are handled separately")
         n_c, n_a = name.count("c"), name.count("a")
         path = list(channel[4][0]) + list(channel[4][1])
         sigma = self.fragment._engine.contract_density_open(n_c, n_a, channel[3], chg_pair[0], channel[0], chg_pair[1],
-                                                            channel[1], list(trial), not swapped, channel[2], path,
+                                                            channel[1], list(trial), swapped == transpose, channel[2], path,
                                                             diagonal, np.ascontiguousarray(T))
         return np.asarray(sigma) / self.probe._cg_factor(channel)
 
@@ -302,19 +303,32 @@ class EmbeddedHamiltonian:
         self._diagonal = D
         return D
 
-    def dimer_terms(self, x):
-        """the contributions of the individual dimer terms to H^eff x (for the density-matrix perturbation)"""
+    def dimer_terms(self, x, transpose=False):
+        """the contributions of the individual dimer terms to H^eff x (transpose: (H^eff)^T x), for the density-matrix
+        perturbation"""
         out = []
         for (term, a_bra, a_ket, b_ket), T in self.dimer.items():
             y = np.zeros((self.dim_a, self.dim_b))
-            cols = self.cols[b_ket]
-            if term[0] == "":
-                y[self.rows[a_bra]] = x[self.rows[a_ket]][:, cols] @ T.T
-            else:
-                trial = [x[self.rows[a_ket], j] for j in range(cols.start, cols.stop)]
-                y[self.rows[a_bra]] = self._open(term, trial, T, False)
+            self._add_dimer_term(y, x, term, a_bra, a_ket, b_ket, T, transpose)
             out.append(y)
         return out
+
+    def _add_dimer_term(self, y, x, term, a_bra, a_ket, b_ket, T, transpose):
+        """y += (one dimer term of H^eff) x, or its transpose"""
+        cols = self.cols[b_ket]
+        if not transpose:
+            if term[0] == "":
+                y[self.rows[a_bra]] += x[self.rows[a_ket]][:, cols] @ T.T
+                return
+            trial = [x[self.rows[a_ket], j] for j in range(cols.start, cols.stop)]
+            y[self.rows[a_bra]] += self._open(term, trial, T, False)
+            return
+        # (H^eff)^T: from A's bra CSFs and all of the other fragment's states to A's ket CSFs and the states of b_ket
+        if term[0] == "":
+            y[self.rows[a_ket], cols] += x[self.rows[a_bra]] @ T
+            return
+        trial = [x[self.rows[a_bra], j] for j in range(self.dim_b)]
+        y[self.rows[a_ket], cols] += self._open(term, trial, np.swapaxes(T, -1, -2), False, transpose=True)
 
     def sigma(self, x):
         """H^eff x for x[p, b] (A's CSFs x the other fragment's local states)"""
@@ -327,12 +341,21 @@ class EmbeddedHamiltonian:
                 continue
             sigma[rows] += self._open(term, trial, T, True)
         for (term, a_bra, a_ket, b_ket), T in self.dimer.items():
-            cols = self.cols[b_ket]
+            self._add_dimer_term(sigma, x, term, a_bra, a_ket, b_ket, T, False)
+        return sigma
+
+    def sigma_T(self, x):
+        """(H^eff)^T x for x[p, b], e.g. for the left eigenvectors (H^eff is not symmetric at XR[0])"""
+        sigma = x @ np.asarray(self.H1_other)
+        for (term, sec), T in self.monomer.items():
+            rows = self.rows[sec]
             if term[0] == "":
-                sigma[self.rows[a_bra]] += x[self.rows[a_ket]][:, cols] @ T.T
+                sigma[rows] += float(T) * x[rows]
                 continue
-            trial = [x[self.rows[a_ket], j] for j in range(cols.start, cols.stop)]
-            sigma[self.rows[a_bra]] += self._open(term, trial, T, False)
+            trial = [x[rows, j] for j in range(self.dim_b)]
+            sigma[rows] += self._open(term, trial, T, True, transpose=True)
+        for (term, a_bra, a_ket, b_ket), T in self.dimer.items():
+            self._add_dimer_term(sigma, x, term, a_bra, a_ket, b_ket, T, True)
         return sigma
 
     def states_to_csf(self, states_a, d):
