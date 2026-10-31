@@ -188,6 +188,22 @@ def select_spaces(input_file, sectors, n_roots, epsilon, environments, field_str
             selected.setdefault(charge, {})[mult] = union
     return selected
 
+def read_spaces(directory, sectors):
+    """
+    reads the selected CI spaces written by select_spaces (<directory>/union_c<charge>_m<mult>.cfgs), e.g. to reuse
+    them for other geometries of a scan: {charge: {mult: set of CFGs}} for the sectors {charge: [mult, ...]}
+    """
+    directory = Path(directory)
+    selected = {}
+    for charge, mults in sectors.items():
+        for mult in mults:
+            cfgs_file = directory / f"union_c{charge}_m{mult}.cfgs"
+            if not cfgs_file.exists():
+                raise FileNotFoundError(f"no selected CI space {cfgs_file} (run the selection first, e.g. run_xr with "
+                                        f"hci_epsilon and selection_dir={str(directory)!r})")
+            selected.setdefault(charge, {})[mult] = set(cfgs_file.read_text().split())
+    return selected
+
 def n_csfs(cfgs, mult):
     """number of CSFs of the multiplicity in the given CFGs (genealogical, f(N, S) per CFG with N open shells)"""
     from math import comb

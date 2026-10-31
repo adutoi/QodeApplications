@@ -95,6 +95,59 @@ def _spinAnti4half_rule(V):
         return (1/4.) * ((tmp1-numpy.swapaxes(tmp2,2,3)) - numpy.swapaxes(tmp3-numpy.swapaxes(tmp4,2,3),0,1))
     return spinAnti4half
 
+def pair_factors(S, thresh):
+    """
+    {(i, j): (L, R)} for the inter-fragment blocks of S: the corresponding-orbital pairs (singular value decomposition
+    of S_ij) with a singular value above thresh, S_ij ~ L R^T with L = U_K sigma_K (n_i x K) and R = V_K (n_j x K);
+    the factors of S_ji are the swapped ones of S_ij (i < j).  Without any pair above thresh, one pair with a zero
+    singular value is kept (the block vanishes).
+    """
+    def rule(i, j):
+        if i > j:
+            L, R = factors[j, i]
+            return R, L
+        U, s, Vt = numpy.linalg.svd(numpy.array(S[i, j]), full_matrices=False)
+        keep = s > thresh
+        if not keep.any():
+            return numpy.zeros((U.shape[0], 1)), Vt[:1].T
+        return U[:, keep] * s[keep], Vt[keep].T
+    factors = dynamic_array([cached, rule], S.ranges)
+    return factors
+
+def pair_compressed(S, factors):
+    """
+    S with every inter-fragment block S_ij replaced by L R^T of its pair factors (pair_factors); the fragment-diagonal
+    blocks are kept.  As long as the compressed S is used consistently, i.e. also for the biorthogonalization (S^-1,
+    see get_ints), the XR terms are evaluated exactly for an overlap that only couples the leading pairs (Be2 cc-pVDZ:
+    with a compressed S only in the explicit S factors of the diagrams, the order-2 increment of the leakage is off by
+    1e2 to 1e3 uEh, see get_xr_result_spin_adapt.get_leakage_metric_H)
+    """
+    def rule(i, j):
+        if i == j:
+            return numpy.array(S[i, j])
+        L, R = factors[i, j]
+        return L @ R.T
+    return dynamic_array([cached, rule], S.ranges)
+
+def factorized_wrapper(factors, timings):
+    """
+    as tensorly_wrapper for the compressed S (pair_compressed), but the inter-fragment blocks are given as the rank-K
+    products of their pair factors (as qode.math.svd_decomposition does), so that the contractions of the diagrams
+    with explicit S factors run over the K pairs instead of the orbitals (ordered by the tensornet heuristic)
+    """
+    def wrapper(rule):
+        def wrap_it(i, j):
+            timings.start()
+            if i == j:
+                Z = tens_wrap(rule(i, j))
+            else:
+                L, R = factors[i, j]
+                Z = tens_wrap(numpy.ascontiguousarray(L.T))("k", 0) @ tens_wrap(numpy.ascontiguousarray(R.T))("k", 1)
+            timings.record("1e integrals SVD")
+            return Z
+        return wrap_it
+    return wrapper
+
 def direct_Sinv(fragments, S):
     S = as_raw_mat(S, fragments)
     Sinv = precise_numpy_inverse(S)
@@ -170,11 +223,16 @@ def direct_CoreProj(fragments, S, orthonormalize_valence=True):
     return Left, Right
 
 def get_ints(fragments, project_core=True, timings=None, spin_ints=True, backend="psi4", antisymmetrize=True,
-             orthonormalize_valence=True):    # spin_ints=False does not appear to be used ... prefer to remove option
+             orthonormalize_valence=True, pair_thresh=None):    # spin_ints=False does not appear to be used ... prefer to remove option
     # antisymmetrize: only for spin_ints, antisymmetrized spin-orbital V (as required by diagrams derived with V
     #                 antisymmetry) or the plain one (as the spatial V of spin-adapted calculations)
     # orthonormalize_valence: only with project_core, Loewdin orthonormalization of the projected valence orbitals
     #                 within each fragment (see direct_CoreProj); False reproduces the plain projection
+    # pair_thresh:    if given, the inter-fragment overlap (after the core projection) is restricted to the
+    #                 corresponding-orbital pairs with a singular value above pair_thresh (pair_compressed), both in the
+    #                 returned symmetric S and in the S^-1 of the biorthogonalization (T, U, V are not compressed); the
+    #                 inter-fragment blocks of the symmetric S are then rank-K products (factorized_wrapper), and the
+    #                 pair factors are returned with it as S_factors (precontract_pairs.py, only for spin_ints=False)
     # More needs to be done regarding the basis to prevent mismatches with the fragment states
     AO_ints     = AO_integrals(fragments, backend=backend)
     FragMO_ints = fragMO_integrals(AO_ints, [frag.basis.MOcoeffs for frag in fragments], cache=True)     # Cache because multiple calls to each block during biorthogonalization
@@ -185,9 +243,15 @@ def get_ints(fragments, project_core=True, timings=None, spin_ints=True, backend
         FragMO_ints_tmp = bra_transformed(Left,  FragMO_ints,     cache=True)
         FragMO_ints     = ket_transformed(Right, FragMO_ints_tmp, cache=True)
 
+    ### restrict the inter-fragment overlap to the leading orbital pairs
+    if pair_thresh is not None:
+        S_factors = pair_factors(FragMO_ints.S, pair_thresh)
+        FragMO_ints = struct(fragments=FragMO_ints.fragments, S=pair_compressed(FragMO_ints.S, S_factors),
+                             T=FragMO_ints.T, U=FragMO_ints.U, V=FragMO_ints.V, full=FragMO_ints)
+
     ### biorthogonalize everything without regard to core or valence
     Sinv = direct_Sinv(fragments, FragMO_ints.S)
-    BiFragMO_ints = bra_transformed(Sinv, FragMO_ints, cache=True)
+    BiFragMO_ints = bra_transformed(Sinv, FragMO_ints.full if pair_thresh is not None else FragMO_ints, cache=True)
     # the half-transformed V_half, symmetrized under the electron swap (see electron_swap_symmetrized)
     BiFragMO_ints = struct(fragments=BiFragMO_ints.fragments, S=BiFragMO_ints.S, T=BiFragMO_ints.T, U=BiFragMO_ints.U, V=BiFragMO_ints.V,
                            V_half=dynamic_array([cached, electron_swap_symmetrized(BiFragMO_ints.V_half)], BiFragMO_ints.V.ranges))
@@ -222,6 +286,9 @@ def get_ints(fragments, project_core=True, timings=None, spin_ints=True, backend
             U = wrap(FragMO_ints.U,   [cached, tensorly_wrapper(timings)]),
             V = wrap(FragMO_ints.V,   [cached, tensorly_wrapper2(timings)])
         )
+        if pair_thresh is not None:
+            FragMO_ints_wrapped.S = wrap(FragMO_ints.S, [cached, factorized_wrapper(S_factors, timings)])
+            FragMO_ints_wrapped.S_factors = S_factors
         BiFragMO_ints_wrapped = struct(
             S      = wrap(BiFragMO_ints.S, [cached, tensorly_wrapper(timings)]),
             T      = wrap(BiFragMO_ints.T, [cached, tensorly_wrapper(timings)]),

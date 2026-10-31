@@ -43,6 +43,7 @@ from state_screening import orthogonalize
 from qode.util import struct, timer
 import excitonic
 
+import pickle
 import numpy as np
 import scipy as sp
 
@@ -73,11 +74,58 @@ def unit_vector_pool(states, n_passes=1, csf_indices=None):
             pool.setdefault(chg, {})[mult] = list(unit_vectors) * n_passes
     return pool
 
+def save_states(path, states, csf_layout, **info):
+    """
+    writes the fragment states states[frag][chg][mult] (lists of CSF vectors) together with the CSF layout of their
+    space ({chg: {mult: [(cfg, pos, dim)]}}, dens_provider.csf_layout) and optional info (e.g. the geometry), so that
+    load_states can map them onto another (selected) CSF space
+    """
+    with open(path, "wb") as f:
+        pickle.dump({"states": [{chg: {mult: [np.asarray(v, dtype=float) for v in vecs] for mult, vecs in by_mult.items()}
+                                 for chg, by_mult in frag_states.items()} for frag_states in states],
+                     "csf_layout": csf_layout, "info": info}, f)
+
+def load_states(path, csf_layout, thresh=1e-8):
+    """
+    reads the states written by save_states and maps them onto the CSF space with csf_layout via their CFGs (the
+    CSFs of a CFG do not depend on the rest of the space; CFGs missing in the new space are dropped, new ones get zero
+    coefficients), then orthonormalizes them per sector (vectors with a norm below thresh after the mapping are
+    dropped). Returns (states[frag][chg][mult], info).
+    """
+    with open(path, "rb") as f:
+        data = pickle.load(f)
+    old_layout = data["csf_layout"]
+    states = []
+    for frag_states in data["states"]:
+        mapped = {}
+        for chg, by_mult in frag_states.items():
+            for mult, vecs in by_mult.items():
+                if chg not in csf_layout or mult not in csf_layout[chg]:
+                    continue
+                old = {cfg: (pos, dim) for cfg, pos, dim in old_layout[chg][mult]}
+                new_layout = csf_layout[chg][mult]
+                n_new = sum(dim for _, _, dim in new_layout)
+                out = []
+                for vec in vecs:
+                    v = np.zeros(n_new)
+                    for cfg, pos, dim in new_layout:
+                        if cfg in old:
+                            v[pos:pos + dim] = vec[old[cfg][0]:old[cfg][0] + dim]
+                    for u in out:
+                        v -= (u @ v) * u
+                    if np.linalg.norm(v) > thresh:
+                        out.append(v / np.linalg.norm(v))
+                if out:
+                    mapped.setdefault(chg, {})[mult] = out
+        states.append(mapped)
+    return states, data["info"]
+
 def optimize_states(max_iter, xr_order, states, additional_states, ints, build_dens, monomer_charges, target_multiplicity,
                     target_charge=0, max_states_per_sector=15, conv_thresh=1e-6, dens_filter_thresh=1e-7, target_state=0, eval_reduced=False,
                     exhaust_pool=False, lin_dep_thresh=1e-6, use_gradients=False, grad_level="herm", grad_conv_thresh=1e-5,
                     pool_order="given", embedded=None, use_davidson=False, davidson_tol=1e-5, davidson_max_iter=100,
-                    davidson_max_size=40, dm_perturbation=1e-3, davidson_preconditioner=True, dm_vectors="right"):
+                    davidson_max_size=40, dm_perturbation=1e-3, davidson_preconditioner=True, dm_vectors="right",
+                    state_weights=None):
     """
     max_iter:              maximum number of enlarge-diagonalize-compress cycles
     states:                states[frag][chg][mult] = list of CSF vectors (initial guess), modified in place
@@ -128,6 +176,9 @@ def optimize_states(max_iter, xr_order, states, additional_states, ints, build_d
                            and the perturbation alpha/2 sum_t (Y_t Y_t^T + Z_t Z_t^T), Z_t the dimer-term contributions to
                            (H^eff)^T l); the error of the Ritz value in the truncated space is of the order of the
                            products of the parts of l and x outside of it
+    state_weights:         if given (a list of two dicts), state_weights[frag][chg][mult] is set to the weights of the final
+                           states in the reduced density matrix of their last compression (perturbed for the Davidson
+                           sweeps), in the order of the states, e.g. to truncate the state space further afterwards
     eval_reduced:          additionally evaluate the energy in the compressed state space (debugging only,
                            requires an additional density and Hamiltonian build per iteration)
     returns the energy histories of the enlarged and of the compressed state spaces (the latter only if eval_reduced)
@@ -296,6 +347,8 @@ def optimize_states(max_iter, xr_order, states, additional_states, ints, build_d
                 if len(new_C) > 0:
                     new_C = orthogonalize(new_C, eps=dens_filter_thresh)
                 states[frag][chg][mult] = [vec for vec in new_C]
+                if state_weights is not None:
+                    state_weights[frag].setdefault(chg, {})[mult] = eigvals[keep][:len(new_C)]
                 print(f"frag {frag}, chg {chg}, mult {mult}: {len(new_C)} of {C.shape[0]} states kept, "
                       f"dens eigvals {np.array2string(eigvals[keep], precision=2)}, "
                       f"largest discarded {np.max(eigvals[~keep], initial=0.):.2e}")
@@ -359,17 +412,22 @@ def optimize_states(max_iter, xr_order, states, additional_states, ints, build_d
         """the fragment's new states: dominant eigenvectors of its (perturbed) reduced density matrix per sector
         (of the right eigenvector x, and the left one x_left, if given, see dm_vectors)"""
         vecs = [(x, False)] if x_left is None else [(x, False), (x_left / np.linalg.norm(x_left), True)]
-        ys = [y for v, tr in vecs for y in (emb.dimer_terms(v, transpose=tr) if dm_perturbation > 0 else [])]
+        rhos = {sec: sum(v[rows] @ v[rows].T for v, _ in vecs) / len(vecs) for sec, rows in emb.rows.items()}
+        if dm_perturbation > 0:
+            # the dimer-term contributions one at a time (all of them at once: one dim_a x dim_b array per term)
+            for v, tr in vecs:
+                for y in emb.dimer_terms(v, transpose=tr):
+                    for sec, rows in emb.rows.items():
+                        rhos[sec] += dm_perturbation / len(vecs) * (y[rows] @ y[rows].T)
         for (chg, mult), rows in emb.rows.items():
-            rho = sum(v[rows] @ v[rows].T for v, _ in vecs) / len(vecs)
-            for y in ys:
-                rho += dm_perturbation / len(vecs) * (y[rows] @ y[rows].T)
-            eigvals, eigvecs = sp.linalg.eigh(rho)
+            eigvals, eigvecs = sp.linalg.eigh(rhos[(chg, mult)])
             order = np.argsort(eigvals)[::-1]
             eigvals, eigvecs = eigvals[order], eigvecs[:, order]
             # states with a weight in the (perturbed) density matrix above dens_filter_thresh, at most max_states_per_sector
             n_keep = max(1, min(max_states_per_sector, int(np.sum(eigvals > dens_filter_thresh))))
             states[frag][chg][mult] = [eigvecs[:, i].copy() for i in range(n_keep)]
+            if state_weights is not None:
+                state_weights[frag].setdefault(chg, {})[mult] = eigvals[:n_keep]
             print(f"frag {frag}, chg {chg}, mult {mult}: {n_keep} states kept, dens eigvals "
                   f"{np.array2string(eigvals[:n_keep], precision=2)}, largest discarded "
                   f"{eigvals[n_keep] if n_keep < len(eigvals) else 0.:.2e}")
@@ -383,6 +441,7 @@ def optimize_states(max_iter, xr_order, states, additional_states, ints, build_d
         for it in range(max_iter):
             for frag in range(2):
                 print(f"\n###### Davidson sweep {it}, fragment {frag} ######")
+                dens = emb = None    # (the previous densities and H^eff are released before building the new ones)
                 dens = [build_dens(f, states[f]) for f in range(2)]
                 E, target_vecs, n_states = solve(dens)
                 emb = embedded(frag, dens, last.H1)

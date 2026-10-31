@@ -295,8 +295,11 @@ def dimer_matrix(
     timings,
     bra_det=False,
     ket_det=False,
+    symmetric=False,
 ):
     # This code is restricted specifically to dimer (sub)systems
+    # symmetric: the matrix is symmetric (e.g. the order-k terms of S2 between the same bra and ket states), so only the
+    #            blocks with bra offset <= ket offset are evaluated and the others are filled with their transposes
     rho1, rho2 = (
         op_blocks.densities[m]
         for m in subsys_indices
@@ -360,6 +363,8 @@ def dimer_matrix(
                     Iend = Ibeg + rho1['n_states_bra'][bra_chg1][bra_mult1] * rho2['n_states_bra'][bra_chg2][bra_mult2]
                     Jbeg = ket_offsets[ket_key]
                     Jend = Jbeg + rho1['n_states'][ket_chg1][ket_mult1] * rho2['n_states'][ket_chg2][ket_mult2]
+                    if symmetric and Ibeg > Jbeg:
+                        continue
 
                     result = Matrix[Ibeg:Iend, Jbeg:Jend]
 
@@ -384,5 +389,13 @@ def dimer_matrix(
 
             if release is not None:
                 release(subsys_indices[0], (bra_sec1, ket_sec1))
+
+    if symmetric:
+        if Matrix.shape[0] != Matrix.shape[1] or bra_offsets != ket_offsets:
+            raise ValueError("dimer_matrix: symmetric requires the same bra and ket sectors")
+        # (the blocks with bra offset < ket offset lie in the upper triangle; the diagonal blocks are evaluated
+        #  completely, their lower triangles are replaced as well)
+        upper = numpy.triu(numpy.ones(Matrix.shape, dtype=bool))
+        Matrix = numpy.where(upper, Matrix, Matrix.T)
 
     return Matrix

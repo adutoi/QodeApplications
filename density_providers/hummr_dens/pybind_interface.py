@@ -19,6 +19,7 @@
 from __future__ import annotations
 
 import os
+from functools import lru_cache
 from pathlib import Path
 from typing import Dict, Mapping, Optional, Sequence
 
@@ -203,7 +204,10 @@ def write_hummr_input(
 
 def cg_factor(channel):
     """the CG coefficient <S_J S_J K q|S_I S_I> of a channel (mult_bra, mult_ket, rank2, ...), see to_cg_convention"""
-    mult_bra, mult_ket, rank2 = channel[:3]
+    return _cg_factor(*channel[:3])
+
+@lru_cache(maxsize=None)    # (the sympy CG coefficients are slow)
+def _cg_factor(mult_bra, mult_ket, rank2):
     S_I, S_J = Rational(mult_bra - 1, 2), Rational(mult_ket - 1, 2)
     k, q = Rational(rank2, 2), S_I - S_J
     return float(CG(S_J, S_J, k, q, S_I, S_I).doit())
@@ -530,6 +534,34 @@ class HummrXRFragment:
         """
         return self._engine.compute_density_sector(n_c, n_a, restr_ca, bra_sector[0], bra_sector[1], ket_sector[0],
                                                    ket_sector[1], list(bra_vecs), list(ket_vecs))
+
+    def transformed_contracted_sector(self, n_c, n_a, restr_ca, bra_sector, ket_sector, bra_vecs, ket_vecs, factors,
+                                      t_slot, tensor, chunk_bytes):
+        """
+        transformed_density_sector with the slots j of t_slot (flags) contracted with tensor (these slots in slot
+        order, then the free axes) instead of a matrix: {channel: ndarray (bra, ket, K of the other slots..., free
+        entries of tensor flattened)}
+        """
+        tensor = np.ascontiguousarray(tensor, dtype=float)
+        n_t = sum(bool(t) for t in t_slot)
+        g = int(np.prod(tensor.shape[n_t:]))
+        return self._engine.compute_transformed_contracted_sector(n_c, n_a, restr_ca, bra_sector[0], bra_sector[1],
+                                                                 ket_sector[0], ket_sector[1], list(bra_vecs),
+                                                                 list(ket_vecs), [np.asarray(f, dtype=float) for f in factors],
+                                                                 [bool(t) for t in t_slot], tensor.reshape(-1), g,
+                                                                 int(chunk_bytes))
+
+    def transformed_density_sector(self, n_c, n_a, restr_ca, bra_sector, ket_sector, bra_vecs, ket_vecs, factors,
+                                   chunk_bytes):
+        """
+        density_sector with factors[j] (n_act x K_j) contracted into slot j (operator order) of every channel,
+        without forming the densities over all orbitals: {channel: ndarray (bra, ket, K_0, ..., K_{N-1})}; the
+        intermediates are formed for at most chunk_bytes at a time
+        """
+        return self._engine.compute_transformed_density_sector(n_c, n_a, restr_ca, bra_sector[0], bra_sector[1],
+                                                              ket_sector[0], ket_sector[1], list(bra_vecs),
+                                                              list(ket_vecs), [np.asarray(f, dtype=float) for f in factors],
+                                                              int(chunk_bytes))
 
     def compute_densities(
         self,

@@ -311,9 +311,9 @@ print("build H1")
 
 H1 = []
 for m in [0,1]:
-    H1 += [  XR_term.monomer_matrix(ST_blocks_symm, {1: ST1[0]}, m, monomer_sectors, matrix_timings) \
-           + XR_term.monomer_matrix(SU_blocks_symm, {1: SU1[0]}, m, monomer_sectors, matrix_timings) \
-           + XR_term.monomer_matrix(SV_blocks_symm, {1: SV1[0]}, m, monomer_sectors, matrix_timings) ]
+    H1 += [  XR_term.monomer_matrix(ST_blocks_bior, {1: ST1[0]}, m, monomer_sectors, matrix_timings) \
+           + XR_term.monomer_matrix(SU_blocks_bior, {1: SU1[0]}, m, monomer_sectors, matrix_timings) \
+           + XR_term.monomer_matrix(SV_blocks_bior, {1: SV1[0]}, m, monomer_sectors, matrix_timings) ]
     #print(XR_term.monomer_matrix(ST_blocks_symm, {1: ST1[0]}, m, monomer_sectors, matrix_timings)[0,0])
     #print(XR_term.monomer_matrix(SU_blocks_symm, {1: SU1[0]}, m, monomer_sectors, matrix_timings)[0,0])
     #print(XR_term.monomer_matrix(SV_blocks_symm, {1: SV1[0]}, m, monomer_sectors, matrix_timings)[0,0])

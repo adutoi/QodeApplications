@@ -15,6 +15,7 @@
 #    You should have received a copy of the GNU General Public License
 #    along with QodeApplications.  If not, see <http://www.gnu.org/licenses/>.
 #
+from functools import lru_cache
 from sympy import sqrt, S as Sym
 from sympy.physics.wigner import wigner_6j
 
@@ -36,6 +37,7 @@ def _triangle_allowed(j1, j2, j3):
     )
 
 
+@lru_cache(maxsize=None)    # (integer arguments; the sympy Wigner symbols are slow)
 def recoupling_factor(
     bra_mult1,
     bra_mult2,

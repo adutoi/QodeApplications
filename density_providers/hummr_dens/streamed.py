@@ -46,6 +46,14 @@ from dens_util import adjoint_name
 from spin_tensors import reversal, cg2
 
 STREAMED_MIN_OPS = 4    # types with at least this many operators are streamed, the others kept explicitly
+CACHED_DENSITY_FRACTION = 0.25    # largest explicit density channel (of the cache) built at once, see _prefer_cached, _chunked
+CHUNK_MEMO_SIZE = 4               # requests whose results for the other channels _chunked keeps
+CHUNK_CHANNELS_GUESS = 4          # channels per sector pair assumed by _chunked before the first chunk
+# contract_transformed: the operand contracted by hummr as well (_fused), if its free part has at most FUSED_MAX_G
+# entries (e.g. one-electron integrals on two slots: Be2 cc-pVTZ 0.3 s instead of 0.9 s per call); a larger free part
+# makes the intermediates per block-0 index larger than the density rows (V with free indices: up to 10 times slower)
+FUSED = True
+FUSED_MAX_G = 8
 
 
 class StreamedDensityType:
@@ -57,8 +65,68 @@ class StreamedDensityType:
 def _letters():
     return iter("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
 
+def _matrix_chain(operands, out_labels):
+    """
+    the contraction of one tensor with matrices that each replace one of its labels by a new one (e.g. the
+    transformation of a density into the pair basis, hermitian-XRCC/pair_basis.py), matrix by matrix from the last
+    axis of the tensor on, so that the largest step needs no copy of the tensor; None for other patterns
+    """
+    (tensor, labels), matrices = operands[0], operands[1:]
+    labels = list(labels)
+    if len(matrices) < 2 or len(set(labels)) != len(labels) or any(m.ndim != 2 for m, _ in matrices):
+        return None
+    replaced = {}
+    for m, (a, b) in matrices:
+        if a not in labels or a in out_labels or b in labels or b in replaced.values() or a in replaced:
+            return None
+        replaced[a] = b
+    if sorted(map(str, [replaced.get(l, l) for l in labels])) != sorted(map(str, out_labels)):
+        return None
+    for axis in reversed(range(len(labels))):
+        for m, (a, b) in matrices:
+            if a == labels[axis]:
+                tensor = np.moveaxis(np.tensordot(tensor, m, axes=([axis], [0])), -1, axis)
+                labels[axis] = b
+    return np.ascontiguousarray(np.transpose(tensor, [labels.index(l) for l in out_labels]))
+
+class _SlotMatrix(np.ndarray):
+    """marks the matrices of contract_transformed (kept by the slicing of _add_term)"""
+
+def _marked_slots(orb_labels, operands):
+    """({slot label: matrix}, {slot label: new label}, other operands) of the marked 2D matrices on density slots
+    (contract_transformed), None without any"""
+    matrices, new_labels, others = {}, {}, []
+    for array, labels in operands:
+        if isinstance(array, _SlotMatrix) and array.ndim == 2 and labels[0] in orb_labels and labels[0] not in matrices:
+            matrices[labels[0]] = np.ascontiguousarray(np.asarray(array))
+            new_labels[labels[0]] = labels[1]
+        else:
+            others.append((np.asarray(array), labels))
+    return (matrices, new_labels, others) if matrices else None
+
+def _slot_matrices(orb_labels, operands, out):
+    """
+    ([matrix of slot j], [new label of slot j]) if every density slot (orb_labels, all contracted) is contracted
+    with exactly one matrix of its own, which replaces it by a new label of the output (the transformation into the
+    pair basis), otherwise None
+    """
+    if any(isinstance(l, int) for l in orb_labels) or len(operands) != len(orb_labels):
+        return None
+    by_label = {}
+    for array, labels in operands:
+        if np.ndim(array) != 2 or len(labels) != 2 or labels[0] not in orb_labels or labels[1] not in out:
+            return None
+        by_label[labels[0]] = (np.ascontiguousarray(array), labels[1])
+    if len(by_label) != len(orb_labels):
+        return None
+    return [by_label[l][0] for l in orb_labels], [by_label[l][1] for l in orb_labels]
+
 def contract_labelled(operands, out_labels):
     """einsum over [(array, labels)] with arbitrary hashable labels, output in the order of out_labels"""
+    if len(operands) > 2:
+        result = _matrix_chain(operands, out_labels)
+        if result is not None:
+            return result
     mapping, letters = {}, _letters()
     def letter(label):
         if label not in mapping:
@@ -94,6 +162,9 @@ class StreamedDensities:
         if memory_budget is not None:
             fragment._engine.set_density_cache_limit(int(memory_budget / 2))
         self._cache, self._cache_bytes = OrderedDict(), 0
+        self._chunk_memo, self._n_channels = OrderedDict(), {}    # see _chunked
+        self._eye = None                                          # identity of the active space (_two_stage)
+        self._transform_memo, self._transform_bytes = OrderedDict(), 0    # see _transformed
         self.native = set()    # names of the types hummr computes (lowering and self-adjoint) up to xr_level
         for level in range(xr_level + 1):
             for name, n_c, n_a, restr in HummrForXRMain.xr_density_strings(level):
@@ -117,6 +188,33 @@ class StreamedDensities:
         labels = [0, 1] + list(rho_labels) + [l for _, ls in operands for l in ls]
         out = sorted({l for l in labels if isinstance(l, int)})
         return self._full(name, tuple(chg_pair), tuple(channel), (0, 1), list(rho_labels), operands, out, False)
+
+    def contract_transformed(self, name, chg_pair, channel, rho_labels, matrices, operands):
+        """
+        contract with the slots of rho_labels in matrices ({label: (F (n_mo x K), new label)}) contracted with F as
+        well, the K columns under the new label (the label itself for a free slot); the large types are evaluated by
+        hummr's transformation (all slots, the others with the identity, _two_stage) and then contracted with the
+        operands (see transform_fits for the size)
+        """
+        rho = [("pair", l) if l in matrices else l for l in rho_labels]
+        ops = [(np.asarray(F).view(_SlotMatrix), [("pair", l), new]) for l, (F, new) in matrices.items()] + list(operands)
+        labels = [0, 1] + list(rho_labels) + [l for _, ls in ops for l in ls]
+        out = sorted({l for l in labels if isinstance(l, int)})
+        return self._full(name, tuple(chg_pair), tuple(channel), (0, 1), rho, ops, out, False)
+
+    def transform_fits(self, name, chg_pair, channel, dims):
+        """the transformed density (dims per slot, e.g. K or n_act) of all channels of the sector pair fits into
+        CACHED_DENSITY_FRACTION of the cache (contract_transformed)"""
+        if self.memory_budget is None or len(name) < STREAMED_MIN_OPS:
+            return self.memory_budget is not None
+        bra_sector, ket_sector = (chg_pair[0], channel[0]), (chg_pair[1], channel[1])
+        try:
+            bra_vecs, ket_vecs = self._sector_states(bra_sector, ket_sector, False)
+        except KeyError:
+            return False
+        n_channels = self._n_channels.get((name, channel[3], bra_sector, ket_sector, False), CHUNK_CHANNELS_GUESS)
+        return 8 * len(bra_vecs) * len(ket_vecs) * int(np.prod(dims)) * n_channels \
+               <= CACHED_DENSITY_FRACTION * self.memory_budget
 
     # ------------------------------------------------------------------------------------------------------------
     # reversed channels
@@ -255,21 +353,182 @@ class StreamedDensities:
         elif len(name) < STREAMED_MIN_OPS:
             rho = self.active_small[swapped][name][chg_pair][channel]
         else:
-            if self.kernel and not self._prefer_cached(orb_labels, operands):
+            marked = _marked_slots(orb_labels, operands)
+            if marked is not None:
+                return self._two_stage(name, chg_pair, channel, state_labels, orb_labels, marked, out, swapped)
+            if self.kernel and not self._prefer_cached(orb_labels, operands, chg_pair, channel, swapped):
                 result = self._kernel(name, chg_pair, channel, state_labels, orb_labels, operands, out, swapped)
                 if result is not None:
                     self.calls["kernel"] += 1
                     return result
             self.calls["explicit"] += 1
-            rho = self._native(name, channel[3], (chg_pair[0], channel[0]), (chg_pair[1], channel[1]), swapped)[channel]
+            bra_sector, ket_sector = (chg_pair[0], channel[0]), (chg_pair[1], channel[1])
+            factors = _slot_matrices(orb_labels, operands, out)
+            if factors is not None and self.memory_budget is not None:
+                return self._transformed(name, channel, bra_sector, ket_sector, state_labels, orb_labels, factors, out,
+                                         swapped)
+            if self._too_large(name, bra_sector, ket_sector, swapped):
+                return self._chunked(name, channel, bra_sector, ket_sector, state_labels, orb_labels, operands, out, swapped)
+            rho = self._native(name, channel[3], bra_sector, ket_sector, swapped)[channel]
         return contract_labelled([(rho, list(state_labels) + list(orb_labels))] + list(operands), out)
 
-    def _prefer_cached(self, orb_labels, operands):
+    def _sector_states(self, bra_sector, ket_sector, swapped):
+        bra, ket = (self.ket, self.bra) if swapped else (self.bra, self.ket)
+        try:
+            return bra[bra_sector[0]][bra_sector[1]], ket[ket_sector[0]][ket_sector[1]]
+        except KeyError:
+            raise KeyError(f"no states between {bra_sector} and {ket_sector}")
+
+    def _too_large(self, name, bra_sector, ket_sector, swapped):
+        """one channel of the explicit density of the sector pair exceeds CACHED_DENSITY_FRACTION of the cache"""
+        if self.memory_budget is None:
+            return False
+        bra_vecs, ket_vecs = self._sector_states(bra_sector, ket_sector, swapped)
+        return 8 * len(bra_vecs) * len(ket_vecs) * self.n_act ** len(name) > CACHED_DENSITY_FRACTION * self.memory_budget
+
+    def _two_stage(self, name, chg_pair, channel, state_labels, orb_labels, marked, out, swapped):
+        """contract_transformed for an active density of a large type: hummr's transformation of the marked slots
+        (the others with the identity, skipped by hummr), then the contraction with the other operands"""
+        matrices, new_labels, others = marked
+        if self._eye is None or self._eye.shape[0] != self.n_act:
+            self._eye = np.eye(self.n_act)
+        t_labels = [l for l in orb_labels if l not in matrices]
+        if FUSED and len(others) == 1 and t_labels and set(t_labels) <= set(others[0][1]) \
+                and all(l in out for l in others[0][1] if l not in t_labels) and len(set(others[0][1])) == len(others[0][1]) \
+                and others[0][0].size <= FUSED_MAX_G * self.n_act ** len(t_labels):
+            return self._fused(name, chg_pair, channel, state_labels, orb_labels, matrices, new_labels, t_labels,
+                               others[0], out, swapped)
+        mats = [matrices.get(l, self._eye) for l in orb_labels]
+        news = [new_labels.get(l, l) for l in orb_labels]
+        inner = list(state_labels) + news
+        self._n_channels.setdefault((name, channel[3], (chg_pair[0], channel[0]), (chg_pair[1], channel[1]), swapped),
+                                    CHUNK_CHANNELS_GUESS)
+        rho = self._transformed(name, channel, (chg_pair[0], channel[0]), (chg_pair[1], channel[1]), state_labels,
+                                orb_labels, (mats, news), inner, swapped)
+        return contract_labelled([(rho, inner)] + others, out) if others else np.transpose(rho, [inner.index(l) for l in out])
+
+    def _fused(self, name, chg_pair, channel, state_labels, orb_labels, matrices, new_labels, t_labels, operand, out,
+               swapped):
+        """
+        _two_stage with the operand contracted by hummr as well (HummrXRFragment.transformed_contracted_sector): the
+        slots of t_labels are never formed over the orbitals in the product part; all channels of the sector pair at
+        once, the other channels kept (_chunk_memo)
+        """
+        array, labels = operand
+        free = [l for l in labels if l not in t_labels]
+        T = np.ascontiguousarray(np.transpose(array, [list(labels).index(l) for l in t_labels + free]))
+        mats = [matrices.get(l, self._eye) for l in orb_labels]
+        bra_sector, ket_sector = (chg_pair[0], channel[0]), (chg_pair[1], channel[1])
+        signature = (tuple((m.shape, hash(m.tobytes())) for m in mats), T.shape, hash(T.tobytes()))
+        key = ("fused", name, channel[3], bra_sector, ket_sector, swapped, tuple(state_labels), tuple(orb_labels),
+               tuple(new_labels.get(l) for l in orb_labels), tuple(free), tuple(out), signature)
+        memo = self._chunk_memo.get(key)
+        if memo is not None and channel in memo[1]:
+            self._chunk_memo.move_to_end(key)
+            return memo[1].pop(channel)
+        bra_vecs, ket_vecs = self._sector_states(bra_sector, ket_sector, swapped)
+        data = self.fragment.transformed_contracted_sector(name.count("c"), name.count("a"), channel[3], bra_sector,
+                                                           ket_sector, bra_vecs, ket_vecs, mats,
+                                                           [l in t_labels for l in orb_labels], T,
+                                                           CACHED_DENSITY_FRACTION * self.memory_budget)
+        self._n_channels[(name, channel[3], bra_sector, ket_sector, swapped)] = len(data)
+        free_shape = T.shape[len(t_labels):]
+        labels_out = list(state_labels) + [new_labels[l] for l in orb_labels if l in matrices] + free
+        perm = [labels_out.index(l) for l in out]
+        results = {}
+        for ch, a in data.items():
+            a = self._to_cg(name, ch, np.asarray(a))
+            a = a.reshape(a.shape[:-1] + tuple(free_shape))
+            results[ch] = np.ascontiguousarray(np.transpose(a, perm))
+        result = results.pop(channel)
+        if results:
+            self._chunk_memo[key] = ([T], results)
+            while len(self._chunk_memo) > CHUNK_MEMO_SIZE:
+                self._chunk_memo.popitem(last=False)
+        return result
+
+    def _transformed(self, name, channel, bra_sector, ket_sector, state_labels, orb_labels, factors, out, swapped):
+        """
+        the contraction with one matrix per slot (_slot_matrices, e.g. the transformation into the pair basis,
+        hermitian-XRCC/pair_basis.py) by hummr directly (HummrXRFragment.transformed_density_sector: no density over
+        all orbitals, intermediates within CACHED_DENSITY_FRACTION of the cache), for all channels of the sector
+        pair at once.  The transformed densities (slot order, CG convention) are kept in an LRU cache of at most
+        CACHED_DENSITY_FRACTION of the provider cache (at least the last sector pair), keyed by the density and the
+        matrices only, so that all pre-contractions with the same slots in the pair basis share them.
+        """
+        matrices, new_labels = factors
+        signature = tuple((m.shape, hash(np.ascontiguousarray(m).tobytes())) for m in matrices)    # (small matrices)
+        key = (name, channel[3], bra_sector, ket_sector, swapped, signature)
+        data = self._transform_memo.get(key)
+        if data is not None:
+            self._transform_memo.move_to_end(key)
+        else:
+            bra_vecs, ket_vecs = self._sector_states(bra_sector, ket_sector, swapped)
+            raw = self.fragment.transformed_density_sector(name.count("c"), name.count("a"), channel[3], bra_sector,
+                                                           ket_sector, bra_vecs, ket_vecs, matrices,
+                                                           CACHED_DENSITY_FRACTION * self.memory_budget)
+            self._n_channels[(name, channel[3], bra_sector, ket_sector, swapped)] = len(raw)
+            data = {ch: self._to_cg(name, ch, np.asarray(array)) for ch, array in raw.items()}
+            raw = None
+            self._transform_memo[key] = data
+            self._transform_bytes += sum(a.nbytes for a in data.values())
+            while self._transform_bytes > CACHED_DENSITY_FRACTION * self.memory_budget and len(self._transform_memo) > 1:
+                self._transform_bytes -= sum(a.nbytes for a in self._transform_memo.popitem(last=False)[1].values())
+        labels = list(state_labels) + list(new_labels)
+        # (a copy: the callers may scale the result in place)
+        return np.ascontiguousarray(np.transpose(data[channel], [labels.index(l) for l in out]))
+
+    def _chunked(self, name, channel, bra_sector, ket_sector, state_labels, orb_labels, operands, out, swapped):
+        """
+        the explicit contraction for a density too large for the cache (_too_large): built for chunks of the bra
+        states (all channels of a chunk within CACHED_DENSITY_FRACTION of the cache, not cached), contracted right
+        away for all channels hummr returns with the chunk; the results of the other channels are kept (_chunk_memo, last few
+        requests), since the same contraction is usually requested for all channels of the sector pair
+        """
+        signature = tuple((array.__array_interface__["data"][0], array.shape, array.strides, tuple(labels))
+                          for array, labels in operands)
+        key = (name, channel[3], bra_sector, ket_sector, swapped, tuple(state_labels), tuple(orb_labels), tuple(out), signature)
+        memo = self._chunk_memo.get(key)
+        if memo is not None and channel in memo[1]:
+            self._chunk_memo.move_to_end(key)
+            return memo[1].pop(channel)
+        bra_vecs, ket_vecs = self._sector_states(bra_sector, ket_sector, swapped)
+        # (all channels of a chunk within CACHED_DENSITY_FRACTION of the cache; their number is known after the first
+        #  chunk of a sector pair, before that at most CHUNK_CHANNELS_GUESS are assumed)
+        sector_key = (name, channel[3], bra_sector, ket_sector, swapped)
+        per_bra = 8 * len(ket_vecs) * self.n_act ** len(name)
+        parts, b0 = {}, 0
+        while b0 < len(bra_vecs):
+            n_channels = self._n_channels.get(sector_key, CHUNK_CHANNELS_GUESS)
+            chunk = max(1, int(CACHED_DENSITY_FRACTION * self.memory_budget // (per_bra * n_channels)))
+            data = self.fragment.density_sector(name.count("c"), name.count("a"), channel[3], bra_sector, ket_sector,
+                                                bra_vecs[b0:b0 + chunk], ket_vecs)
+            self._n_channels[sector_key] = len(data)
+            b0 += chunk
+            for ch in list(data):
+                rho = self._to_cg(name, ch, np.asarray(data.pop(ch)))
+                parts.setdefault(ch, []).append(contract_labelled([(rho, list(state_labels) + list(orb_labels))]
+                                                                  + list(operands), out))
+                rho = None
+        axis = list(out).index(state_labels[0])
+        results = {ch: (p[0] if len(p) == 1 else np.concatenate(p, axis=axis)) for ch, p in parts.items()}
+        result = results.pop(channel)
+        if results:
+            # (the operands are kept with the results, so that their memory, i.e. the data pointers of the key, cannot
+            #  be reused by other arrays meanwhile)
+            self._chunk_memo[key] = ([array for array, _ in operands], results)
+            while len(self._chunk_memo) > CHUNK_MEMO_SIZE:
+                self._chunk_memo.popitem(last=False)
+        return result
+
+    def _prefer_cached(self, orb_labels, operands, chg_pair, channel, swapped):
         """
         With a memory budget, contractions whose output is about as large as the density (e.g. two free density
         indices and two free axes of the tensor, the 4-index intermediates of XR[2]) use the cached explicit
         densities (_native), which then serve all such contractions of the sector pair, instead of rebuilding the
-        density in every call (as hummr does for them, see contractChannel).
+        density in every call (as hummr does for them, see contractChannel), unless one channel of the density of the
+        sector pair exceeds CACHED_DENSITY_FRACTION of the cache (the cache keeps at least the last one, and the
+        contraction copies it once more; Be2 cc-pVTZ, 20 x 20 states: 2.3 GB per ccaa channel)
         """
         if self.memory_budget is None or len(operands) != 1:
             return False
@@ -277,7 +536,12 @@ class StreamedDensities:
         n_act = self.fragment.n_act
         free_t = [axis for axis, label in enumerate(t_labels) if label not in orb_labels]
         out_size = n_act ** sum(isinstance(l, int) for l in orb_labels) * int(np.prod([tensor.shape[a] for a in free_t]))
-        return out_size * n_act >= n_act ** len(orb_labels)
+        if out_size * n_act < n_act ** len(orb_labels):
+            return False
+        try:
+            return not self._too_large("x" * len(orb_labels), (chg_pair[0], channel[0]), (chg_pair[1], channel[1]), swapped)
+        except KeyError:
+            return False
 
     def _kernel(self, name, chg_pair, channel, state_labels, orb_labels, operands, out, swapped):
         """the active contraction done by hummr directly, None if the pattern is not supported"""

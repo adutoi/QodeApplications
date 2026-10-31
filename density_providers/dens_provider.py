@@ -30,7 +30,9 @@ class DensBackend:
             #engine.configure()
 
             # frags should be [frag_name, input_file, roots, xr_level] or
-            # [frag_name, input_file, roots, xr_level, selected CFGs {chg: {mult: CFGs}}] (selected CI spaces)
+            # [frag_name, input_file, roots, xr_level, selected CFGs {chg: {mult: CFGs}}] (selected CI spaces) or
+            # [..., selected CFGs or None, extra_sectors]: extra_sectors(fragment engine) -> {chg: [mult]} sectors
+            # hummr has to be initialized with in addition (e.g. for splitting the states, strong_split.py)
             ret = []
             for frag in frags:
                 frag_engine = self.engine.add_fragment(
@@ -73,7 +75,13 @@ class DensBackend:
                 # The extra (intermediate) sectors are only needed by hummr itself (their CSF spaces), they are
                 # dropped from the returned states, i.e. they enter neither the densities nor the XR basis.
                 roots = frag[2]
-                states = frag_engine.get_states(frag_engine.with_intermediate_sectors(roots))
+                requested = frag_engine.with_intermediate_sectors(roots)
+                if len(frag) > 5 and frag[5] is not None:
+                    requested = {chg: dict(by_mult) for chg, by_mult in requested.items()}
+                    for chg, mults in frag[5](frag_engine).items():
+                        for mult in mults:
+                            requested.setdefault(chg, {}).setdefault(mult, 1)
+                states = frag_engine.get_states(requested)
                 states = {chg: {mult: vecs for mult, vecs in by_mult.items() if mult in roots.get(chg, {})}
                           for chg, by_mult in states.items() if chg in roots}
 

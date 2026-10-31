@@ -19,6 +19,8 @@ import re    # regular expressions
 import numpy
 from qode.util.dynamic_array import dynamic_array
 from .coupl_fac import diagram_couplings
+from .fold_pairs import fold_proxy
+from .pair_slots import pair_proxy
 
 ####
 # In this file is all the book keeping stuff for getting the right arrays to the diagram contraction
@@ -74,6 +76,10 @@ def build_diagram(contraction, Dchgs, permutations):
                         Xk = X
                     else:  # spin-adapted workflow: density channels (rank, path) and access views per fragment
                         Xk = X.with_channels(channels)
+                    # overlap-connected slots in the pair basis (pair_slots.py), otherwise an S factor folded into
+                    # a pre-contraction (fold_pairs.py)
+                    Xp = pair_proxy(Xk, contraction, supersys_info)
+                    Xk = fold_proxy(Xk, contraction, supersys_info) if Xp is Xk else Xp
                     # accumulate all allowed combinations of multiplicities and rank with corresponding prefactor
                     result += (
                         prefactor

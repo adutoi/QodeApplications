@@ -122,11 +122,12 @@ def probe_densities(fragment, real, xr_level):
 
 
 def _diagram_sets(ints, frag_order):
-    """(diagram catalog, integrals, labels) of the XR[0] Hamiltonian (get_xr_H, xr_order 0)"""
+    """(diagram catalog, integrals, labels) of the XR[0] Hamiltonian (get_xr_H, xr_order 0: biorthogonal integrals
+    for the monomer and the dimer terms)"""
     symm, bior, _ = ints
     if frag_order == 1:
-        return [(ST_diagrams, struct(S=symm.S, T=symm.T), D.ST1[0]), (SU_diagrams, struct(S=symm.S, U=symm.U), D.SU1[0]),
-                (SV_diagrams, struct(S=symm.S, V=symm.V), D.SV1[0])]
+        return [(ST_diagrams, struct(S=symm.S, T=bior.T), D.ST1[0]), (SU_diagrams, struct(S=symm.S, U=bior.U), D.SU1[0]),
+                (SV_diagrams, struct(S=symm.S, V=bior.V), D.SV1[0])]
     return [(ST_diagrams, struct(S=symm.S, T=bior.T), D.ST2[0]), (SU_diagrams, struct(S=symm.S, U=bior.U), D.SU2[0]),
             (SV_diagrams, struct(S=symm.S, V=bior.V), D.SV2[0])]
 
@@ -305,13 +306,11 @@ class EmbeddedHamiltonian:
 
     def dimer_terms(self, x, transpose=False):
         """the contributions of the individual dimer terms to H^eff x (transpose: (H^eff)^T x), for the density-matrix
-        perturbation"""
-        out = []
+        perturbation (generator, one dim_a x dim_b array at a time)"""
         for (term, a_bra, a_ket, b_ket), T in self.dimer.items():
             y = np.zeros((self.dim_a, self.dim_b))
             self._add_dimer_term(y, x, term, a_bra, a_ket, b_ket, T, transpose)
-            out.append(y)
-        return out
+            yield y
 
     def _add_dimer_term(self, y, x, term, a_bra, a_ket, b_ket, T, transpose):
         """y += (one dimer term of H^eff) x, or its transpose"""
