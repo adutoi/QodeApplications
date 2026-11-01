@@ -105,8 +105,10 @@ def run_xr(displacement, max_iter, xr_order_final=0, xr_order_solver=0, dens_fil
                            overlap S_AB, computed from the orbitals of the hummr input before anything else) exceeds
                            bridge_sigma_thresh.  With K > 0 the final evaluation is the bridge only: its energies E(n)
                            for the orders n of xr_order_final (weak orders, n <= 2; the normal XR evaluation, the overlap
-                           truncation and check are skipped).  Implemented for K <= 1 (more pairs above the threshold are
-                           refused).  Implies pair_rotation (with
+                           truncation and check are skipped).  Implemented for K <= 3 (more pairs above the threshold are
+                           refused; bridge_mode "glued" only for K = 1).  The strong pairs are the K largest sigma; with a
+                           degenerate pair at the boundary (e.g. K = 2 in Be2, one of the two pi pairs) the result depends
+                           on the split within the degenerate pairs (the SVD's choice).  Implies pair_rotation (with
                            selected CI spaces "first", and the selected spaces extended by strong_split.split_closure):
                            hummr is initialized with the sectors needed to split the states by the occupation of the K
                            strong orbitals (strong_split.required_sectors, not part of the XR basis), and the rotated
@@ -292,10 +294,10 @@ def run_xr(displacement, max_iter, xr_order_final=0, xr_order_solver=0, dens_fil
             bridge_strong = int((early[5] > bridge_sigma_thresh).sum())
             print(f"bridge_strong auto: {bridge_strong} pair(s) with sigma above {bridge_sigma_thresh} (largest sigma "
                   f"{np.array2string(early[5][::-1][:3], precision=4)})")
-            if bridge_strong > 1:
+            if bridge_strong > 3:
                 raise NotImplementedError(f"{bridge_strong} corresponding-orbital pairs have sigma above {bridge_sigma_thresh}; "
-                                          "the bridge is implemented for one strong pair (bridge_strong=1 or a larger "
-                                          "bridge_sigma_thresh)")
+                                          "the bridge is implemented for up to three strong pairs (bridge_strong <= 3 or a "
+                                          "larger bridge_sigma_thresh)")
     if bridge_strong > 0 and leakage_metric_order is not None:
         raise ValueError("the bridge replaces the final evaluation; leakage_metric_order is not used with it")
     if bridge_strong > 0 and not pair_rotation:
@@ -336,7 +338,8 @@ def run_xr(displacement, max_iter, xr_order_final=0, xr_order_solver=0, dens_fil
     if bridge_strong > 0:
         from strong_split import required_sectors
         if selected_cfgs is None:
-            split_sectors = lambda engine: required_sectors(engine, sectors, bridge_strong, glue=bridge_out is not None)
+            split_sectors = lambda engine: required_sectors(engine, sectors, bridge_strong,
+                                                            glue=bridge_out is not None and bridge_mode in ("glued", "both"))
         # (selected spaces: the splitting works in a hummr instance of its own after the optimization, see below)
     (mo_coeffs, hummr_states) = dens_builder.init_backend([[frag_name, hummr_input, roots, max(final_orders + [xr_order_solver]
                                                                                             + ([2] if leakage_metric_order is not None else [])),
@@ -521,9 +524,10 @@ def run_xr(displacement, max_iter, xr_order_final=0, xr_order_solver=0, dens_fil
                 total = sum(w.values())
                 vacant = [path for path in w if all(occ == 0 for _, occ, _ in path)][0]
                 i = int(np.argmin(w[vacant]))                       # the state with the largest weight on the strong orbitals
-                label = lambda path: "".join(str(occ) for _, occ, _ in path) + f"/{path[-1][2]}"
+                # (occupations of the strong orbitals, the last one first / multiplicities of the weak parts after each)
+                label = lambda path: "".join(str(occ) for _, occ, _ in path) + "/" + ",".join(str(m) for _, _, m in path)
                 print(f"strong split fragment {frag}, sector ({chg:+d}, {mult}): norm sum rule {np.abs(total - 1).max():.1e}; "
-                      f"state {i} (occupations of the strong orbitals / multiplicity of the weak part): "
+                      f"state {i} (occupations of the strong orbitals, the last first / multiplicities of the weak parts): "
                       + ", ".join(f"{label(path)} {w[path][i]:.4f}" for path in sorted(w)))
         # orthonormal bases of the weak parts per weak sector; their densities rho_W (the densities of the weak parts are
         # X_bra^T rho_W X_ket, strong_split.part_density) are built on demand by the bridge assembly, so that they do
@@ -539,8 +543,10 @@ def run_xr(displacement, max_iter, xr_order_final=0, xr_order_solver=0, dens_fil
                   "1e-6, 1e-4, 1e-3) x the largest:",
                   {sec: tuple(int((sv > t * sv[0]).sum()) for t in (1e-12, 1e-8, 1e-6, 1e-4, 1e-3))
                    for sec, sv in sorted(weak_bases[frag].spectra.items()) if len(sv) and sv[0] > 0})
-        if bridge_strong != 1:
-            raise NotImplementedError("the bridge assembly is implemented for bridge_strong = 1")
+        if not 1 <= bridge_strong <= 3:
+            raise NotImplementedError(f"the bridge assembly is implemented for bridge_strong = 1 ... 3, not {bridge_strong}")
+        if bridge_strong > 1 and bridge_mode in ("glued", "both"):
+            raise NotImplementedError("the glued bridge (option A) is implemented for bridge_strong = 1")
         nmax_b = max(final_orders)
         if nmax_b > 2:
             raise NotImplementedError(f"the bridge is implemented up to the weak order 2, not {nmax_b}")
@@ -562,7 +568,8 @@ def run_xr(displacement, max_iter, xr_order_final=0, xr_order_solver=0, dens_fil
             # intermediates of their XR builds are released before the mixed terms (which use neither)
             assemblies = []
             for run_ints, run_sigma, orders in runs:
-                assembly = BridgeAssembly(split_states, weak_bases, weak_dens, run_ints, n_core + n_act - 1, sigma[-1], nmax_b,
+                strong_mos = [n_core + n_act - bridge_strong + i for i in range(bridge_strong)]
+                assembly = BridgeAssembly(split_states, weak_bases, weak_dens, run_ints, strong_mos, sigma[-bridge_strong:], nmax_b,
                                           hummr_frag._n_act_elec + hummr_frag._input_charge, pair_slots=leakage_pair_slots,
                                           v_thresh=bridge_v_thresh)
                 mats = assembly.compute(products, n_core=n_core, n_act=n_act, orders=orders)
@@ -602,7 +609,7 @@ def run_xr(displacement, max_iter, xr_order_final=0, xr_order_solver=0, dens_fil
                 w_n = np.linalg.eigvals(np.linalg.solve(out["S"][:n + 1].sum(0), H[:n + 1].sum(0)))
                 w_n = w_n[np.abs(w_n.imag) < 1e-8].real
                 bridge_en[n] = (w_n.min() if len(w_n) else np.nan) + E_nuc
-                print(f"final bridge (K = 1) XR[{n}] energy: {bridge_en[n]}")
+                print(f"final bridge (K = {bridge_strong}) XR[{n}] energy: {bridge_en[n]}")
         assembly = weak_dens = mats = None
         # the bridge is the final evaluation (its orders: those of xr_order_final)
         final_en = {ev: bridge_en[ev] for ev in final_orders if ev in bridge_en}
@@ -766,7 +773,7 @@ if __name__ == "__main__":
                                              states_in=None, states_out=None,   # e.g. "states_3.0.pkl": read / write the optimized states
                                              overlap_min_eigval=0.15, overlap_max_weight=1e-4, overlap_reoptimize=False,
                                              overlap_check_order=3,
-                                             hci_epsilon=1e-3,
+                                             hci_epsilon=1e-3, selection_dir="selection_be_ccdz_fci_fcore_1e-03_4.5",
                                              # (with HCI spaces, e.g. hci_epsilon=1e-3, the orbitals are rotated first and
                                              # the weak parts get a hummr instance of their own, see bridge_closure_thresh)
                                              bridge_strong=1, bridge_out="bridge_ccdz_3.0.npz", bridge_mode="factorized",

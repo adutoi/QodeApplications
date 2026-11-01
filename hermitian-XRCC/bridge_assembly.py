@@ -17,20 +17,22 @@
 #
 
 """
-Assembly of the exact-bridge ansatz from the spin-adapted ingredients (step 5), K = 1 strong pair: the overlap.
+Assembly of the exact-bridge ansatz from the spin-adapted ingredients (step 5), K strong pairs: the overlap.
 
-A fragment state is |Psi_I S_I> = sum_parts [w_I(part)^{S_w} x s(occ)^{s}]^{S_I} (strong_split.py: weak part w first,
-the strong configuration s of spin s = 0 (occ 0, 2) or 1/2 (occ 1) second, the strong creators left of the weak part).
+A fragment state is |Psi_I S_I> = sum_parts [w_I(part)^{S_w} x s(c)^{s}]^{S_I} (strong_split.py: weak part w first,
+the coupled strong configuration c of spin s second (bridge_tables.StrongConfigs; for K = 1 s = 0 for the occupations
+0, 2 and 1/2 for 1), the strong creators left of the weak part; for K > 1 the sequentially coupled components of the
+splitting are recoupled to this form, StrongConfigs.recouple).
 For a product state, coupled A first to the total spin S (here the singlet), the strong creators of B are moved to the
-left of the weak part of A (sign (-1)^{N(w_A) occ_B}) and the spins are recoupled (9j)
+left of the weak part of A (sign (-1)^{N(w_A) n(c_B)}) and the spins are recoupled (9j)
 
     [[w_A s_A]^{S_A} [w_B s_B]^{S_B}]^S = sum_{S_w S_s} [S_A S_B S_w S_s]^{1/2} {S_wA s_A S_A; S_wB s_B S_B; S_w S_s S}
                                            [[w_A w_B]^{S_w} [s_A s_B]^{S_s}]^S,
 
 into a weak dimer state (XR's coupled product of the weak bases, A first) and a bridge state (bridge_tables.py).  The
-overlap operator of the corresponding-orbital basis factorizes, S = T_B (x) S_w, T_B the exact one of the strong pair
+overlap operator of the corresponding-orbital basis factorizes, S = T_B (x) S_w, T_B the exact one of the strong pairs
 (even, spin scalar, on the bridge) and S_w the one of the weak pairs, whose order-k terms are XR's own overlap terms
-(get_xr_result_spin_adapt.overlap_terms) between the weak bases with the strong pair removed from the inter-fragment S.
+(get_xr_result_spin_adapt.overlap_terms) between the weak bases with the strong pairs removed from the inter-fragment S.
 For S = 0, S_w = S_s, and
 
     S^(k)[P, P'] = sum c_P(parts) c_P'(parts') t_B[b, b'](S_s) S_w^(k)[(w_A w_B), (w'_A w'_B)](S_w = S_s).
@@ -48,7 +50,7 @@ from get_ints import tensorly_wrapper, pair_compressed, factorized_wrapper
 from get_xr_result_spin_adapt import S_term_blocks
 import XR_term
 import diagram_lists as D
-from bridge_tables import BridgeTables
+from bridge_tables import BridgeTables, occupation, spin2
 from strong_split import WEAK_BASIS_RTOL
 
 
@@ -59,10 +61,11 @@ def ninej2(*args2):
 
 
 def weak_overlap_ints(ints, strong_mo):
-    """ints with the strong pair (MO index strong_mo on both fragments) removed from the inter-fragment blocks of the
-    symmetric S (the S of the weak overlap series; in the corresponding-orbital basis S_AB is diagonal).  For a
-    pair-compressed S (get_ints with pair_thresh) the weak S is the product of the pair factors without the strong pair,
-    returned as S_factors (precontract_pairs.precontract_S, diagrams/pair_slots.py)"""
+    """ints with the strong pairs (MO indices strong_mo, a number or a list, on both fragments) removed from the
+    inter-fragment blocks of the symmetric S (the S of the weak overlap series; in the corresponding-orbital basis S_AB
+    is diagonal).  For a pair-compressed S (get_ints with pair_thresh) the weak S is the product of the pair factors
+    without the strong pairs, returned as S_factors (precontract_pairs.precontract_S, diagrams/pair_slots.py)"""
+    strong_mo = list(np.atleast_1d(strong_mo))
     S = ints[0].S
     factors = getattr(ints[0], "S_factors", None)
     if factors is None:
@@ -76,10 +79,14 @@ def weak_overlap_ints(ints, strong_mo):
         return (struct(S=wrap(S_raw, [cached, tensorly_wrapper(timer())])),) + tuple(ints[1:])
     def weak_factors(i, j):
         L, R = factors[i, j]
-        # the strong pair is the factor column on the strong orbital (unit vectors in the corresponding orbitals)
-        on_strong = np.abs(L[strong_mo]) * np.abs(R[strong_mo]) > 0.5 * np.linalg.norm(L, axis=0) * np.linalg.norm(R, axis=0)
-        if on_strong.sum() != 1:
-            raise RuntimeError(f"weak_overlap_ints: no unique strong pair among the pair factors of S[{i}, {j}]")
+        # a strong pair is the factor column on its strong orbital (unit vectors in the corresponding orbitals)
+        norms = np.linalg.norm(L, axis=0) * np.linalg.norm(R, axis=0)
+        on_strong = np.zeros(L.shape[1], dtype=bool)
+        for mo in strong_mo:
+            col = np.abs(L[mo]) * np.abs(R[mo]) > 0.5 * norms
+            if col.sum() != 1:
+                raise RuntimeError(f"weak_overlap_ints: no unique strong pair (MO {mo}) among the pair factors of S[{i}, {j}]")
+            on_strong |= col
         keep = ~on_strong
         if not keep.any():
             return np.zeros((L.shape[0], 1)), R[:, :1]
@@ -101,10 +108,6 @@ def product_states(states, target_mult=1):
                     for iB in range(len(states[1][kB[0]][kB[1]])):
                         out.append((kA, iA, kB, iB))
     return out
-
-
-def _spin2_config(occ):
-    return 1 if occ == 1 else 0
 
 
 def active_integrals(ints, n_core, n_act):
@@ -130,33 +133,38 @@ def active_integrals(ints, n_core, n_act):
 
 class BridgeAssembly(object):
     """
-    order-resolved overlap S^(k) and Hamiltonian H^(k) (k = 0 ... nmax, weak orders) of the singlet product states, K = 1
+    order-resolved overlap S^(k) and Hamiltonian H^(k) (k = 0 ... nmax, weak orders) of the singlet product states, K
+    strong pairs
         split:        per fragment {(chg, mult): {path: (sector, parts)}} (strong_split.StrongSplit)
         bases:        per fragment strong_split.WeakBasis
         weak_dens:    per fragment the densities of the weak bases (build_frag_densities, xr_level 2 for the
                       Hamiltonian, with add_extra_densities)
         ints:         the integrals in the corresponding-orbital basis
-        strong_mo:    MO index of the strong orbital (the same on both fragments), sigma its overlap
+        strong_mo:    MO indices of the K strong orbitals (increasing; the same on both fragments; a number for K = 1),
+                      sigma their overlaps
         n_val:        active electrons of the neutral fragment (N of a sector of charge chg: n_val - chg)
     The weak dimer matrices are built only for the pairs of weak sectors the product states reach, one weak spin S_w at a
     time (combined with the bridge tables and released before the next one).
     """
     def __init__(self, split, bases, weak_dens, ints, strong_mo, sigma, nmax, n_val, pair_slots=2.5, v_thresh=None):
         self.split, self.bases, self.nmax, self.n_val = split, bases, nmax, n_val
-        self.tables = BridgeTables(sigma)
-        self.TB = self.tables.table(0, 0, ((), ()), ())                   # {(bridge, bridge'): t}
+        self.strong_mo = [int(x) for x in np.atleast_1d(strong_mo)]
+        self.K = len(self.strong_mo)
+        self.tables = BridgeTables(sigma if self.K > 1 else float(np.atleast_1d(sigma)[0]), self.K)
+        self.TB = self.tables.reduced(self.tables.TB)                       # {(bridge, bridge'): t}, on demand
         self.ints, self.ints_w, self.weak_dens = ints, weak_overlap_ints(ints, strong_mo), weak_dens
         self.n_states = [rho['n_states'] if rho is not None else None for rho in weak_dens]
         self.pair_slots = pair_slots        # (for a pair-compressed S, see get_leakage_metric_H, leakage_pair_slots)
         self.v_thresh = v_thresh            # factorized V of the order-2 bior terms (leakage_v_thresh[2]), None: complete V
     def components(self, f, sector, i):
-        """[(occ, S2_w, weak sector, coefficients over the weak basis of that sector)] of state i of a parent sector"""
+        """[(strong configuration, S2_w, weak sector, coefficients over the weak basis of that sector)] of state i of a
+        parent sector"""
         out = []
         for path in self.split[f][sector]:
             if (sector, path) in self.bases[f].coef:
                 wsec, X = self.bases[f].coef[sector, path]
-                (_, occ, mult_w), = path
-                out.append((occ, mult_w - 1, wsec, X[:, i]))
+                for label, r in self.tables.configs.recouple(path, sector[1] - 1):
+                    out.append((label, wsec[1] - 1, wsec, X[:, i] if r == 1.0 else r * X[:, i]))
         return out
     def _expansion(self, products):
         """[(P, (S2_s, bridge state), (weak sector A, weak sector B), c, x_A, x_B)]: the product states in the recoupled
@@ -164,41 +172,37 @@ class BridgeAssembly(object):
         out = []
         for P, (kA, iA, kB, iB) in enumerate(products):
             S2A, S2B = kA[1] - 1, kB[1] - 1
-            for occA, S2wA, wsecA, xA in self.components(0, kA, iA):
-                for occB, S2wB, wsecB, xB in self.components(1, kB, iB):
-                    sA, sB = _spin2_config(occA), _spin2_config(occB)
-                    sign = (-1) ** ((self.n_val - wsecA[0]) * occB)
+            for cA, S2wA, wsecA, xA in self.components(0, kA, iA):
+                for cB, S2wB, wsecB, xB in self.components(1, kB, iB):
+                    sA, sB = spin2(cA), spin2(cB)
+                    sign = (-1) ** ((self.n_val - wsecA[0]) * occupation(cB))
                     for S2s in range(abs(sA - sB), sA + sB + 1, 2):
                         if not abs(S2wA - S2wB) <= S2s <= S2wA + S2wB:          # singlet: S_w = S_s
                             continue
                         nj = ninej2(S2wA, sA, S2A, S2wB, sB, S2B, S2s, S2s, 0)
                         if nj != 0.0:
                             c = sign * np.sqrt((S2A + 1) * (S2B + 1)) * (S2s + 1) * nj
-                            out.append((P, (S2s, (occA, occB, S2s)), (wsecA, wsecB), c, xA, xB))
+                            out.append((P, (S2s, (cA, cB, S2s)), (wsecA, wsecB), c, xA, xB))
         return out
     def strong_table(self, n_core, n_act):
         """scalar bridge table of T_B X_b, X_b the terms of H with all indices on the strong orbitals (frozen core folded
-        in, active_integrals), in the coupled bridge basis"""
+        in, active_integrals), in the coupled bridge basis (on demand)"""
         M, V = active_integrals(self.ints, n_core, n_act)
-        s, sp, frags = n_act - 1, self.tables.space, ("A", "B")
-        X = np.zeros((sp.dim, sp.dim))
-        for f1, f2 in itertools.product(range(2), repeat=2):
-            X += M[f1, f2][s, s] * sum(sp.op(frags[f1], sg, "c") @ sp.op(frags[f2], sg, "a") for sg in (0, 1))
-        for fs in itertools.product(range(2), repeat=4):
-            p, q, r, t = (frags[f] for f in fs)
-            v = V[fs][s, s, s, s]
+        sp, frags, K = self.tables.space, ("A", "B"), self.K
+        s0 = n_act - K                                              # the strong orbitals are the last K active ones
+        legs = [(f, i) for f in range(2) for i in range(K)]
+        X = 0 * sp.eye()
+        for (f1, i), (f2, j) in itertools.product(legs, repeat=2):
+            m = M[f1, f2][s0 + i, s0 + j]
+            if m != 0.0:
+                X = X + m * sum(sp.op(frags[f1], sg, "c", i) @ sp.op(frags[f2], sg, "a", j) for sg in (0, 1))
+        for (fp, ip), (fq, iq), (fr, ir), (ft, it) in itertools.product(legs, repeat=4):
+            v = V[fp, fq, fr, ft][s0 + ip, s0 + iq, s0 + ir, s0 + it]
             if v != 0.0:
-                X += 0.5 * v * sum(sp.op(p, s1, "c") @ sp.op(q, s2, "c") @ sp.op(t, s2, "a") @ sp.op(r, s1, "a")
-                                   for s1 in (0, 1) for s2 in (0, 1))
-        O = self.tables.TB @ X
-        table = {}
-        for b in self.tables.basis:
-            for k in self.tables.basis:
-                if b[2] == k[2]:
-                    val = self.tables.vectors[b, b[2]] @ O @ self.tables.vectors[k, k[2]]
-                    if abs(val) > 1e-14:
-                        table[b, k] = val
-        return table
+                p, q, r, t = frags[fp], frags[fq], frags[fr], frags[ft]
+                X = X + 0.5 * v * sum(sp.op(p, s1, "c", ip) @ sp.op(q, s2, "c", iq) @ sp.op(t, s2, "a", it)
+                                      @ sp.op(r, s1, "a", ir) for s1 in (0, 1) for s2 in (0, 1))
+        return self.tables.reduced(self.tables.TB @ X)
     def compute(self, products, hamiltonian=True, n_core=None, n_act=None, orders=None):
         """{"S": [S^(k)], "H_weak": [H^(k)] of the terms without strong-orbital indices (E_core S^(k) contained),
         "H_strong": [H^(k)] of the terms with only strong-orbital indices (with n_core, n_act)}; orders: the weak
@@ -450,6 +454,8 @@ class GluedAssembly(object):
     def __init__(self, splitter, split, bases, states, build_rect, ints, strong_mo, sigma, nmax, n_val):
         self.splitter, self.bases, self.states, self.nmax, self.n_val = splitter, bases, states, nmax, n_val
         self.helper = BridgeAssembly(split, bases, [None, None], ints, strong_mo, sigma, nmax, n_val)
+        if self.helper.K != 1:
+            raise NotImplementedError("the glued bridge (option A) is implemented for one strong pair")
         self.build_rect, self.ints = build_rect, ints
         self._glue = {}
     def glue_matrix(self, chg, mult, occ, mult_w):
@@ -462,7 +468,7 @@ class GluedAssembly(object):
         return None if part is None else part[1]
     def _bra_expansion(self, products):
         """[(P, (sector A, glued vector A), (sector B, glued vector B), c)] of T_B Phi_P"""
-        TB, out = self.helper.TB, []
+        TB, out = self.helper.tables.table(0, 0, ((), ()), ()), []
         for P, (S2s, b), (wA, wB), c, xA, xB in self.helper._expansion(products):
             WA = self.bases[0].basis[wA[0]][wA[1]].T @ xA                     # the weak parts as CSF vectors
             WB = self.bases[1].basis[wB[0]][wB[1]].T @ xB
@@ -470,8 +476,9 @@ class GluedAssembly(object):
             for (b2, b1), t in TB.items():
                 if b1 != b or t == 0.0:
                     continue
-                occA, occB, _ = b2
-                sA, sB = _spin2_config(occA), _spin2_config(occB)
+                cA, cB, _ = b2
+                occA, occB = occupation(cA), occupation(cB)
+                sA, sB = spin2(cA), spin2(cB)
                 sign = (-1) ** ((self.n_val - wA[0]) * occB)
                 for S2A in range(abs(S2wA - sA), S2wA + sA + 1, 2):
                     S2B = S2A                                                    # singlet

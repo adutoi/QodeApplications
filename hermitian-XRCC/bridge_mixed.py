@@ -17,7 +17,7 @@
 #
 
 """
-The terms of H with legs on the strong and on the weak orbitals (option B of the exact-bridge ansatz, K = 1).
+The terms of H with legs on the strong and on the weak orbitals (option B of the exact-bridge ansatz, K strong pairs).
 
 A term (with k weak overlap factors of (1/k!) :X^k:, X = sum_i sigma_i sum_spin (a+_{A i} a~_{B i} + a+_{B i} a~_{A i}),
 and the H legs, normal-ordered without contractions; the contractions of an overlap annihilator with an H creator, the
@@ -66,6 +66,7 @@ class ByteLRU(object):
             return 0
         return sum(v.nbytes for v in value.values()) if isinstance(value, dict) else value.nbytes
 from spin_tensors import cg2, decompose, _adjoint_leg
+from bridge_tables import occupation
 
 # spin-orbital legs as spherical legs: c_alpha = c_{+1/2}, c_beta = c_{-1/2}, a_alpha = -at_{-1/2}, a_beta = at_{+1/2}
 SPHERICAL = {("c", 0): (1, 1.0), ("c", 1): (-1, 1.0), ("a", 0): (-1, -1.0), ("a", 1): (1, 1.0)}
@@ -149,25 +150,25 @@ def _parity(perm):
     return sign
 
 
-def mixed_topologies(nmax, include_all=False):
+def mixed_topologies(nmax, include_all=False, K=1):
     """
     [(m, weight, legs, spin_groups, (kind, integral legs))]: the terms with legs on the strong and on the weak orbitals,
     with k overlap factors and delta moves, weak order m = k + number of delta moves <= nmax.  A leg is
-    (sub, kind, label, frag): sub "b" (bridge, frag of the strong orbital), "A"/"B" (weak; label: the orbital index
-    variable; the S legs i0, i1, the H legs p, q, r, s).  integral legs: per H leg (label or None, fragment of the
-    original orbital, strong); spin_groups: pairs of legs with the same spin.
+    (sub, kind, label, frag): sub "b" (bridge; frag: (fragment, strong orbital 0 ... K-1)), "A"/"B" (weak; label: the
+    orbital index variable; the S legs i0, i1, the H legs p, q, r, s).  integral legs: per H leg (label or None,
+    fragment of the original orbital, strong orbital or None); spin_groups: pairs of legs with the same spin.
     """
     out = []
     terms = (("M", 1.0, [("c", "p"), ("a", "q")], [(0, 1)]),
              ("G", 0.5, [("c", "p"), ("c", "q"), ("a", "s"), ("a", "r")], [(0, 3), (1, 2)]))
-    classes = [("s", "A"), ("s", "B"), ("w", "A"), ("w", "B")]
+    classes = [("s", f, i) for f in "AB" for i in range(K)] + [("w", "A"), ("w", "B")]
     other = {"A": "B", "B": "A"}
     for kind, factor, hlegs, hgroups in terms:
         for cls in itertools.product(classes, repeat=len(hlegs)):
-            n_s = sum(1 for c, _ in cls if c == "s")
+            n_s = sum(1 for c in cls if c[0] == "s")
             if not include_all and (n_s == 0 or n_s == len(hlegs)):
                 continue
-            weak_creators = [j for j, ((k, _), (c, _)) in enumerate(zip(hlegs, cls)) if k == "c" and c == "w"]
+            weak_creators = [j for j, ((k, _), c) in enumerate(zip(hlegs, cls)) if k == "c" and c[0] == "w"]
             for n_delta in range(len(weak_creators) + 1):
                 for moved in itertools.combinations(weak_creators, n_delta):
                     for k in range(nmax - n_delta + 1):
@@ -178,11 +179,12 @@ def mixed_topologies(nmax, include_all=False):
                                 groups.append((2 * t, 2 * t + 1))
                             off = len(legs)
                             ints = []
-                            for j, ((lk, lab), (c, f)) in enumerate(zip(hlegs, cls)):
-                                if c == "s":
-                                    legs.append(("b", lk, None, f)); ints.append((None, f, True))
+                            for j, ((lk, lab), c) in enumerate(zip(hlegs, cls)):
+                                f = c[1]
+                                if c[0] == "s":
+                                    legs.append(("b", lk, None, (f, c[2]))); ints.append((None, f, c[2]))
                                 else:
-                                    legs.append((other[f] if j in moved else f, lk, lab, None)); ints.append((lab, f, False))
+                                    legs.append((other[f] if j in moved else f, lk, lab, None)); ints.append((lab, f, None))
                             groups += [(off + a, off + b) for a, b in hgroups]
                             delta_labels = [hlegs[j][1] for j in moved]
                             out.append((k + n_delta, factor / np.prod(range(1, k + 1)) if k else factor, legs, groups,
@@ -290,9 +292,9 @@ DENSE_MIN_STRUCTURES, DENSE_MIN_REBUILT = 3, 8
 class MixedEvaluator(object):
     """
     order-resolved H^(m) of the mixed terms (mixed_topologies) of the singlet product states
-        assembly:   bridge_assembly.BridgeAssembly (expansion of the product states, bridge tables, n_val)
+        assembly:   bridge_assembly.BridgeAssembly (expansion of the product states, bridge tables, n_val, K)
         weak_ops:   [WeakOperators] of the fragments;  M, G: bridge_assembly.active_integrals;  sigma: increasing, the
-                    strong pair last (the weak pair j of the active orbital index j)
+                    K strong pairs last (the weak pair j of the active orbital index j)
         orders:     the weak orders m evaluated (default all, the others are zero)
         memory_budget: bytes (as for the XR builds); 1/8 for the cached (open and contracted) densities and the W,
                     1/32 for the intermediates formed at a time.  A fragment's density of more than 1/512 per path is
@@ -308,7 +310,8 @@ class MixedEvaluator(object):
     """
     def __init__(self, assembly, weak_ops, M, G, sigma, n_act, nmax, memory_budget=8e9, orders=None):
         self.asm, self.ops, self.M, self.G, self.nmax = assembly, weak_ops, M, G, nmax
-        self.n_act, self.n_w, self.sw = n_act, n_act - 1, np.asarray(sigma[:n_act - 1])
+        self.K = assembly.K
+        self.n_act, self.n_w, self.sw = n_act, n_act - self.K, np.asarray(sigma[:n_act - self.K])
         # the weak pairs that couple (sigma above a pair threshold, zero otherwise): with fewer than all, the S slots of
         # the per-structure routes run over these only (hummr skips the others, the open densities are sliced)
         keep = np.flatnonzero(self.sw != 0.0)
@@ -319,15 +322,48 @@ class MixedEvaluator(object):
         self._dens = ByteLRU(memory_budget / 16)
         self._fcache = ByteLRU(memory_budget / 32)
         self._wcache = ByteLRU(memory_budget / 32)
-        self._tb = {}
-    def _bridge(self, lb, b, M2b, bk, M2k):
-        key = (lb, b, M2b, bk, M2k)
-        if key not in self._tb:
-            X = self.tables.TB
-            for (f, kind), spin in lb:
-                X = X @ self.space.op(f, spin, kind)
-            self._tb[key] = self.tables.vectors[b, M2b] @ X @ self.tables.vectors[bk, M2k]
-        return self._tb[key]
+        self._bra_ops = ByteLRU(memory_budget / 32)       # (bridge legs, bra states, M, ket states, M') -> bridge factors
+        self._vtb_cache, self._tb_blocks = {}, {}
+    def _bridge_block(self, lb, bras, M2b, kets, M2k):
+        """<b M2b| T_B (bridge legs lb) |k M2k> (bras, kets), cached: per sector (n_alpha, n_beta) of the bra states the
+        rows v T_B with the legs applied as dense sector blocks (bridge_tables.BridgeSpace.row_block), times the ket
+        vectors of the sector reached"""
+        def make():
+            sp = self.space
+            T = np.zeros((len(bras), len(kets)))
+            ket_sec = [sp.sector_of(occupation(k[0]) + occupation(k[1]), M2k) for k in kets]
+            by_sec = {}
+            for r, b in enumerate(bras):
+                by_sec.setdefault(sp.sector_of(occupation(b[0]) + occupation(b[1]), M2b), []).append(r)
+            for sec, rows in by_sec.items():
+                if sp.sector_dets(sec) is None:
+                    continue
+                R, cur = np.array([self._vtb(bras[r], M2b, sec) for r in rows]), sec
+                for ((f, i), kind), spin in lb:
+                    blk = sp.row_block(sp.so(f, spin, i), kind, cur)
+                    if blk is None:
+                        R = None
+                        break
+                    cur, B = blk
+                    R = R @ B
+                if R is None:
+                    continue
+                cols = [c for c, ks in enumerate(ket_sec) if ks == cur]
+                if cols:
+                    idx = sp.sector_dets(cur)
+                    Kv = np.array([self.tables.vectors[kets[c], M2k][idx] for c in cols])
+                    T[np.ix_(rows, cols)] = R @ Kv.T
+            return T
+        return self._bra_ops.get((lb, bras, M2b, kets, M2k), make)
+    def _vtb(self, b, M2, sec):
+        """v T_B of the bridge state b (2M = M2) on its sector"""
+        key = (b, M2)
+        if key not in self._vtb_cache:
+            if sec not in self._tb_blocks:
+                self._tb_blocks[sec] = self.space.block(self.tables.TB, sec, sec)
+            idx = self.space.sector_dets(sec)
+            self._vtb_cache[key] = self.tables.vectors[b, M2][idx] @ self._tb_blocks[sec]
+        return self._vtb_cache[key]
     def _density(self, f, kinds, bsec, ksec):
         return self._dens.get((f, kinds, bsec, ksec), lambda: _layout_density(self.ops[f], kinds, bsec, ksec, self.n_w))
     def _weights(self, top):
@@ -341,10 +377,10 @@ class MixedEvaluator(object):
             # the legs are in operator order (p, q, s, r), G[p, q, r, s]: axes brought into the leg order
             p, q, s_, r = ints
             I = self.G[fr[p[1]], fr[q[1]], fr[r[1]], fr[s_[1]]].transpose(0, 1, 3, 2)
-        I = I[tuple(self.n_act - 1 if strong else slice(0, self.n_w) for _, _, strong in ints)]
+        I = I[tuple(slice(0, self.n_w) if strong is None else self.n_w + strong for _, _, strong in ints)]
         letters = {"p": "p", "q": "q", "r": "r", "s": "s"}
         S_letters = {"i0": "ij", "i1": "kl"}            # (on A, on B): sum_i sigma_i on both fragments
-        ops, specs = [I], ["".join(letters[lab] for lab, _, strong in ints if not strong)]
+        ops, specs = [I], ["".join(letters[lab] for lab, _, strong in ints if strong is None)]
         for d in dlabels:
             ops.append(self.sw); specs.append(letters[d])
         H_out = "".join(letters[legs[j][2]] for sub in "AB" for j in order if legs[j][0] == sub
@@ -372,7 +408,7 @@ class MixedEvaluator(object):
     def _structures(self, select):
         """{structure key: structure data with J per weak order}"""
         structs = {}
-        for top in mixed_topologies(self.nmax, include_all=select is not None):
+        for top in mixed_topologies(self.nmax, include_all=select is not None, K=self.K):
             if (select is not None and not select(top)) or top[0] not in self.orders:
                 continue
             m, _, legs, sgroups = top[:4]
@@ -392,46 +428,70 @@ class MixedEvaluator(object):
             J = structs[key]["J"]
             J[m] = J[m] + self._weights(top) if m in J else self._weights(top)
         return structs
-    def _coefficients(self, key, st, bkey, kkey):
-        """{(path A, path B): coefficient} of the structure between the bridge x weak states bkey, kkey (cached by the
-        spins, the bridge states and the ket charge parity of A)"""
-        S2s, b, wA, wB = bkey
-        S2k, bk, wAk, wBk = kkey
-        ckey = (key, S2s, b, wA[1], wB[1], S2k, bk, wAk[1], wBk[1], (self.asm.n_val - wAk[0]) % 2)
+    def _coefficient_block(self, key, st, Lb, Lk, quad):
+        """{(path A, path B): coefficients (bra keys Lb, ket keys Lk)} of the structure between the bridge x weak states
+        of one quad (weak sectors (A, A', B, B')), keys (2 S_s, bridge state, ...): per spin assignment and ket projection,
+        the bridge factors of all bridge states are one matrix (_bridge_block), the weak and CG factors a scalar per
+        pair of density paths (cached by the structure, the bridge states, the spins and the ket charge parity of A)"""
+        wA, wAk, wB, wBk = quad
+        ckey = (key, tuple(b[:2] for b in Lb), tuple(k[:2] for k in Lk), wA[1], wB[1], wAk[1], wBk[1],
+                (self.asm.n_val - wAk[0]) % 2)
         if ckey in self._coef:
             return self._coef[ckey]
-        legs, blocks = st["legs"], st["blocks"]
+        blocks = st["blocks"]
         pA, pB = len(blocks["A"]) % 2, len(blocks["B"]) % 2
-        sign_states = st["eps"] * (-1) ** (((pA + pB) % 2) * (bk[0] + bk[1]) + pB * (self.asm.n_val - wAk[0]))
+        occ_k = np.array([occupation(k[1][0]) + occupation(k[1][1]) for k in Lk])
+        sign_k = st["eps"] * (-1.0) ** (((pA + pB) % 2) * occ_k + pB * (self.asm.n_val - wAk[0]))
         S2A, S2B, S2Ak, S2Bk = wA[1] - 1, wB[1] - 1, wAk[1] - 1, wBk[1] - 1
         acc = {}
-        for QA, QB, Qb, lA, lB, lb in st["spins"]:
-            for M2wk in range(-S2k, S2k + 1, 2):
-                cgk0 = cg2(S2k, M2wk, S2k, -M2wk, 0, 0)
-                for M2Ak in range(-S2Ak, S2Ak + 1, 2):
-                    M2Bk = M2wk - M2Ak
-                    if abs(M2Bk) > S2Bk:
-                        continue
-                    cgk = cgk0 * cg2(S2Ak, M2Ak, S2Bk, M2Bk, S2k, M2wk)
-                    if cgk == 0.0:
-                        continue
-                    M2A, M2B, M2b = M2Ak + QA, M2Bk + QB, -M2wk + Qb
-                    M2w = M2A + M2B
-                    if abs(M2A) > S2A or abs(M2B) > S2B or abs(M2w) > S2s or M2b != -M2w:
-                        continue
-                    cgb = cg2(S2s, M2w, S2s, -M2w, 0, 0) * cg2(S2A, M2A, S2B, M2B, S2s, M2w)
-                    if cgb == 0.0:
-                        continue
-                    tb = self._bridge(lb, b, M2b, bk, -M2wk)
-                    if tb == 0.0:
-                        continue
-                    cA = weak_components(lA, S2A, S2Ak, M2A, M2Ak)
-                    cB = weak_components(lB, S2B, S2Bk, M2B, M2Bk)
-                    pref = sign_states * cgk * cgb * tb
-                    for qA, xa in cA:
-                        for qB, xb in cB:
-                            acc[qA, qB] = acc.get((qA, qB), 0.0) + pref * xa * xb
-        out = {k: v for k, v in acc.items() if v != 0.0}
+        for S2s in sorted({b[0] for b in Lb}):
+            rows = [i for i, b in enumerate(Lb) if b[0] == S2s]
+            bras = tuple(Lb[i][1] for i in rows)
+            for S2k in sorted({k[0] for k in Lk}):
+                cols = [i for i, k in enumerate(Lk) if k[0] == S2k]
+                kets = tuple(Lk[i][1] for i in cols)
+                block = np.ix_(rows, cols)
+                for QA, QB, Qb, lA, lB, lb in st["spins"]:
+                    for M2wk in range(-S2k, S2k + 1, 2):
+                        M2w, M2b = M2wk + QA + QB, -M2wk + Qb
+                        if abs(M2w) > S2s or M2b != -M2w:
+                            continue
+                        cgk0 = cg2(S2k, M2wk, S2k, -M2wk, 0, 0)
+                        cgw = cg2(S2s, M2w, S2s, -M2w, 0, 0)
+                        weak = {}
+                        for M2Ak in range(-S2Ak, S2Ak + 1, 2):
+                            M2Bk = M2wk - M2Ak
+                            if abs(M2Bk) > S2Bk:
+                                continue
+                            cgk = cgk0 * cg2(S2Ak, M2Ak, S2Bk, M2Bk, S2k, M2wk)
+                            if cgk == 0.0:
+                                continue
+                            M2A, M2B = M2Ak + QA, M2Bk + QB
+                            if abs(M2A) > S2A or abs(M2B) > S2B:
+                                continue
+                            cgb = cgw * cg2(S2A, M2A, S2B, M2B, S2s, M2w)
+                            if cgb == 0.0:
+                                continue
+                            cA = weak_components(lA, S2A, S2Ak, M2A, M2Ak)
+                            cB = weak_components(lB, S2B, S2Bk, M2B, M2Bk)
+                            for qA, xa in cA:
+                                for qB, xb in cB:
+                                    weak[qA, qB] = weak.get((qA, qB), 0.0) + cgk * cgb * xa * xb
+                        weak = {q: x for q, x in weak.items() if x != 0.0}
+                        if not weak:
+                            continue
+                        T = self._bridge_block(lb, bras, M2b, kets, -M2wk)
+                        if not T.any():
+                            continue
+                        for q, x in weak.items():
+                            if q not in acc:
+                                acc[q] = np.zeros((len(Lb), len(Lk)))
+                            acc[q][block] += x * T
+        out = {}
+        for q, A in acc.items():
+            A *= sign_k[None, :]
+            if A.any():
+                out[q] = A
         self._coef[ckey] = out
         return out
     @staticmethod
@@ -478,6 +538,10 @@ class MixedEvaluator(object):
             if self._held_at != (wA, wAk):
                 self._held, self._held_at = {}, (wA, wAk)
             dN = (wAk[0] - wA[0], wBk[0] - wB[0])
+            # the bra and ket keys of the quad (pairs: all of their combinations, the bra key outer)
+            Lb, Lk = list(dict.fromkeys(b for b, _ in pairs)), list(dict.fromkeys(k for _, k in pairs))
+            if len(pairs) != len(Lb) * len(Lk):
+                raise RuntimeError("MixedEvaluator: the pairs of a quad are not all combinations of its bra and ket keys")
             Y = {}
             for (kinds, mask), keys in by_kinds.items():
                 keys = [k for k in keys if structs[k]["dN"] == dN]
@@ -487,13 +551,12 @@ class MixedEvaluator(object):
                 C, wid = {}, {}
                 for key in keys:
                     st = structs[key]
-                    for pi, (bkey, kkey) in enumerate(pairs):
-                        if bkey[1][0] + bkey[1][1] != kkey[1][0] + kkey[1][1] + st["docc"]:
-                            continue
-                        for (qA, qB), c in self._coefficients(key, st, bkey, kkey).items():
-                            for m in st["J"]:
-                                w = wid.setdefault((key, m), len(wid))
-                                row = C.setdefault((pi, m, qA, qB), {})
+                    for (qA, qB), A in self._coefficient_block(key, st, Lb, Lk, (wA, wAk, wB, wBk)).items():
+                        ws = [wid.setdefault((key, m), len(wid)) for m in st["J"]]
+                        ib, ik = np.nonzero(A)
+                        for i, k, c in zip(ib.tolist(), ik.tolist(), A[ib, ik].tolist()):
+                            for m, w in zip(st["J"], ws):
+                                row = C.setdefault((i * len(Lk) + k, m, qA, qB), {})
                                 row[w] = row.get(w, 0.0) + c
                 if not C:
                     continue

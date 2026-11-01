@@ -68,28 +68,33 @@ def required_sectors(fragment, sectors, n_strong, glue=False):
 
 def split_closure(selected, n_strong=1):
     """
-    the selected CI spaces {chg: {mult: CFGs}} extended by the CFGs the splitting reaches (with the strong orbital last,
-    CFG strings of 0/1/2 per active orbital): a CFG with the strong orbital singly occupied gives the strong-empty CFG
-    in the sectors (chg + 1, mult -+ 1) of the weak part chi^1, a doubly occupied one the strong-empty CFG in
-    (chg + 2, mult) of chi^2, wherever the open shells allow the multiplicity.  The weak parts of the selected states
-    then lie in the selected spaces of their sectors (XR sectors, e.g. the neutral weak parts of the anion states, and
-    the extra sectors of the splitting), i.e. the splitting is exact.  The new CFGs have the strong orbital empty, so
-    they do not reach further ones.
+    the selected CI spaces {chg: {mult: CFGs}} extended by the CFGs the splitting reaches (with the n_strong strong
+    orbitals last, CFG strings of 0/1/2 per active orbital), the strong orbitals emptied one after the other (the last
+    one first, as StrongSplit): a CFG with the strong orbital singly occupied gives the CFG with that orbital empty in the
+    sectors (chg + 1, mult -+ 1) of the weak part chi^1, a doubly occupied one in (chg + 2, mult) of chi^2, wherever the
+    open shells allow the multiplicity; an empty one stays.  The weak parts of the selected states (and the intermediate
+    parts of the recursive splitting) then lie in the selected spaces of their sectors (XR sectors, e.g. the neutral
+    weak parts of the anion states, and the extra sectors of the splitting), i.e. the splitting is exact.
     """
-    if n_strong != 1:
-        raise NotImplementedError("split_closure is implemented for one strong orbital")
     out = {chg: {mult: set(cfgs) for mult, cfgs in by_mult.items()} for chg, by_mult in selected.items()}
+    def reach(chg, mult, cfg, positions):
+        if not positions:
+            return
+        p, rest = positions[0], positions[1:]
+        if cfg[p] == "0":
+            reach(chg, mult, cfg, rest)
+            return
+        weak = cfg[:p] + "0" + cfg[p + 1:]
+        n_open = weak.count("1")
+        targets = [(chg + 1, mult - 1), (chg + 1, mult + 1)] if cfg[p] == "1" else [(chg + 2, mult)]
+        for c, m in targets:
+            if m >= 1 and n_open >= m - 1 and (n_open - m + 1) % 2 == 0:
+                out.setdefault(c, {}).setdefault(m, set()).add(weak)
+                reach(c, m, weak, rest)
     for chg, by_mult in selected.items():
         for mult, cfgs in by_mult.items():
             for cfg in cfgs:
-                if cfg[-1] == "0":
-                    continue
-                weak = cfg[:-1] + "0"
-                n_open = weak.count("1")
-                targets = [(chg + 1, mult - 1), (chg + 1, mult + 1)] if cfg[-1] == "1" else [(chg + 2, mult)]
-                for c, m in targets:
-                    if m >= 1 and n_open >= m - 1 and (n_open - m + 1) % 2 == 0:
-                        out.setdefault(c, {}).setdefault(m, set()).add(weak)
+                reach(chg, mult, cfg, [len(cfg) - 1 - j for j in range(n_strong)])
     return out
 
 
@@ -109,7 +114,7 @@ def state_closure(states, layout, n_strong=1, thresh=1e-8):
                 V = np.asarray(vecs, dtype=float)
                 for cfg, pos, dim in layout[chg][mult]:
                     kept.setdefault(chg, {}).setdefault(mult, set()).add(cfg)
-                    if cfg[-1] != "0" and (V[:, pos:pos + dim] ** 2).sum(axis=1).max() > thresh:
+                    if cfg[-n_strong:] != "0" * n_strong and (V[:, pos:pos + dim] ** 2).sum(axis=1).max() > thresh:
                         populated.setdefault(chg, {}).setdefault(mult, set()).add(cfg)
     closure = split_closure(populated, n_strong)
     for chg, by_mult in closure.items():
