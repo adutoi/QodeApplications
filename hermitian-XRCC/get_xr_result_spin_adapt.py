@@ -149,6 +149,7 @@ def apply_memory_budget(memory_budget, n_frag=2):
     hummr instance) this is B/4 + 2 x B/4 + B/4. Returns the budget of one density provider.
     """
     precontract_module.set_large_cache_limit(memory_budget / 4)
+    precontract_module.set_small_cache_limit(memory_budget / 8)
     return memory_budget / n_frag
 
 def build_frag_densities(dens_builder, frag_name, states, xr_level, n_elec_ref, bra_states=None, streamed=False,

@@ -33,60 +33,66 @@ class DensBackend:
             # [frag_name, input_file, roots, xr_level, selected CFGs {chg: {mult: CFGs}}] (selected CI spaces) or
             # [..., selected CFGs or None, extra_sectors]: extra_sectors(fragment engine) -> {chg: [mult]} sectors
             # hummr has to be initialized with in addition (e.g. for splitting the states, strong_split.py)
-            ret = []
-            for frag in frags:
-                frag_engine = self.engine.add_fragment(
-                    frag[0],
-                    xr_level=frag[3],
-                )
+            return [self.add_fragment(frag) for frag in frags]
 
-                """
-                input_file = be.prepare_input(
-                    scratch_dir="scratch",
-                    filename="Be.inp",
+    def add_fragment(self, frag):
+        """
+        initializes one more fragment frag (see init_backend; e.g. after the state optimization, a fragment of the same
+        molecule in other CI spaces) and returns [mo_coeffs, states]
+        """
+        if self.backend == "hummr":
+            frag_engine = self.engine.add_fragment(
+                frag[0],
+                xr_level=frag[3],
+            )
 
-                    calc_type="CASSCF",
-                    charge=0,
-                    multiplicities=[1, 3],
+            """
+            input_file = be.prepare_input(
+                scratch_dir="scratch",
+                filename="Be.inp",
 
-                    orb_guess="/home/marco/hummr_tests/Be_mos.C0",
+                calc_type="CASSCF",
+                charge=0,
+                multiplicities=[1, 3],
 
-                    ints="RI",
-                    basis="6-31G",
-                    aux_basis="def2-JK",
+                orb_guess="/home/marco/hummr_tests/Be_mos.C0",
 
-                    n_electrons=4,
-                    n_orbitals=9,
-                    nroots=[4, 2],
+                ints="RI",
+                basis="6-31G",
+                aux_basis="def2-JK",
 
-                    ci_solver="FCI",
-                    max_iter=0,
-                    orb_step="SuperCIPTDIIS",
-                    switch_orb_step="DIIS",
+                n_electrons=4,
+                n_orbitals=9,
+                nroots=[4, 2],
 
-                    geometry=["Be 0 0 0"],
-                )
-                """
+                ci_solver="FCI",
+                max_iter=0,
+                orb_step="SuperCIPTDIIS",
+                switch_orb_step="DIIS",
 
-                mo_coeffs = frag_engine.initialize(frag[1])
-                if len(frag) > 4 and frag[4] is not None:
-                    frag_engine.set_selected_cfgs(frag[4])
+                geometry=["Be 0 0 0"],
+            )
+            """
 
-                # The extra (intermediate) sectors are only needed by hummr itself (their CSF spaces), they are
-                # dropped from the returned states, i.e. they enter neither the densities nor the XR basis.
-                roots = frag[2]
-                requested = frag_engine.with_intermediate_sectors(roots)
-                if len(frag) > 5 and frag[5] is not None:
-                    requested = {chg: dict(by_mult) for chg, by_mult in requested.items()}
-                    for chg, mults in frag[5](frag_engine).items():
-                        for mult in mults:
-                            requested.setdefault(chg, {}).setdefault(mult, 1)
-                states = frag_engine.get_states(requested)
-                states = {chg: {mult: vecs for mult, vecs in by_mult.items() if mult in roots.get(chg, {})}
-                          for chg, by_mult in states.items() if chg in roots}
+            mo_coeffs = frag_engine.initialize(frag[1])
+            if len(frag) > 4 and frag[4] is not None:
+                frag_engine.set_selected_cfgs(frag[4])
 
-                ret.append([mo_coeffs, states])
-            return ret
+            # The extra (intermediate) sectors are only needed by hummr itself (their CSF spaces), they are
+            # dropped from the returned states, i.e. they enter neither the densities nor the XR basis.
+            roots = frag[2]
+            requested = frag_engine.with_intermediate_sectors(roots)
+            if len(frag) > 5 and frag[5] is not None:
+                requested = {chg: dict(by_mult) for chg, by_mult in requested.items()}
+                for chg, mults in frag[5](frag_engine).items():
+                    for mult in mults:
+                        requested.setdefault(chg, {}).setdefault(mult, 1)
+            states = frag_engine.get_states(requested)
+            states = {chg: {mult: vecs for mult, vecs in by_mult.items() if mult in roots.get(chg, {})}
+                      for chg, by_mult in states.items() if chg in roots}
+
+            return [mo_coeffs, states]
+        raise NotImplementedError
 
     def build_densities(
             self,

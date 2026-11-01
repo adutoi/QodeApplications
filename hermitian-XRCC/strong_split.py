@@ -66,11 +66,64 @@ def required_sectors(fragment, sectors, n_strong, glue=False):
     return {chg: sorted(ms) for chg, ms in out.items()}
 
 
+def split_closure(selected, n_strong=1):
+    """
+    the selected CI spaces {chg: {mult: CFGs}} extended by the CFGs the splitting reaches (with the strong orbital last,
+    CFG strings of 0/1/2 per active orbital): a CFG with the strong orbital singly occupied gives the strong-empty CFG
+    in the sectors (chg + 1, mult -+ 1) of the weak part chi^1, a doubly occupied one the strong-empty CFG in
+    (chg + 2, mult) of chi^2, wherever the open shells allow the multiplicity.  The weak parts of the selected states
+    then lie in the selected spaces of their sectors (XR sectors, e.g. the neutral weak parts of the anion states, and
+    the extra sectors of the splitting), i.e. the splitting is exact.  The new CFGs have the strong orbital empty, so
+    they do not reach further ones.
+    """
+    if n_strong != 1:
+        raise NotImplementedError("split_closure is implemented for one strong orbital")
+    out = {chg: {mult: set(cfgs) for mult, cfgs in by_mult.items()} for chg, by_mult in selected.items()}
+    for chg, by_mult in selected.items():
+        for mult, cfgs in by_mult.items():
+            for cfg in cfgs:
+                if cfg[-1] == "0":
+                    continue
+                weak = cfg[:-1] + "0"
+                n_open = weak.count("1")
+                targets = [(chg + 1, mult - 1), (chg + 1, mult + 1)] if cfg[-1] == "1" else [(chg + 2, mult)]
+                for c, m in targets:
+                    if m >= 1 and n_open >= m - 1 and (n_open - m + 1) % 2 == 0:
+                        out.setdefault(c, {}).setdefault(m, set()).add(weak)
+    return out
+
+
+def state_closure(states, layout, n_strong=1, thresh=1e-8):
+    """
+    split_closure restricted to the CFGs the states actually populate: the CFGs of layout (the selected spaces of the
+    states, {chg: {mult: [(cfg, pos, dim)]}}) plus the strong-empty CFGs reached from the CFGs with a weight above
+    thresh (largest weight sum over the CSFs of the CFG of any state of any fragment); the weak parts lose at most the
+    weight of the dropped CFGs (visible in the norm sum rule of the splitting).  states: [states[chg][mult]] per fragment
+    """
+    populated, kept = {}, {}
+    for st in states:
+        for chg, by_mult in st.items():
+            for mult, vecs in by_mult.items():
+                if not len(vecs):
+                    continue
+                V = np.asarray(vecs, dtype=float)
+                for cfg, pos, dim in layout[chg][mult]:
+                    kept.setdefault(chg, {}).setdefault(mult, set()).add(cfg)
+                    if cfg[-1] != "0" and (V[:, pos:pos + dim] ** 2).sum(axis=1).max() > thresh:
+                        populated.setdefault(chg, {}).setdefault(mult, set()).add(cfg)
+    closure = split_closure(populated, n_strong)
+    for chg, by_mult in closure.items():
+        for mult, cfgs in by_mult.items():
+            kept.setdefault(chg, {}).setdefault(mult, set()).update(cfgs)
+    return kept
+
+
 class StrongSplit(object):
     """splitting of the states of one fragment (hummr fragment, all sectors involved initialized) by the occupation of
-    the strong active orbitals (indices, the last ones)"""
-    def __init__(self, fragment, strong):
-        self.fragment = fragment
+    the strong active orbitals (indices, the last ones); selected: the CI spaces are selected ones extended by
+    split_closure, so a sector without CFGs receives no weak parts (instead of being refused)"""
+    def __init__(self, fragment, strong, selected=False):
+        self.fragment, self.selected = fragment, selected
         self.strong = sorted(strong, reverse=True)                  # the last one first
         self.layout = fragment.csf_layout()
     def dim(self, chg, mult):
@@ -80,7 +133,7 @@ class StrongSplit(object):
         (its parts would be lost silently; see required_sectors)"""
         if chg in self.layout and mult in self.layout[chg] and self.dim(chg, mult) > 0:
             return True
-        if mult in self.fragment.multiplicities(chg):
+        if mult in self.fragment.multiplicities(chg) and not self.selected:
             raise RuntimeError(f"sector (charge {chg}, multiplicity {mult}) is needed for the splitting but not "
                                f"initialized in hummr (request it in get_states, see required_sectors)")
         return False
@@ -165,10 +218,11 @@ class WeakBasis(object):
         for parent, parts in split.items():
             for path, (sector, chi) in parts.items():
                 stacks.setdefault(sector, []).append(chi)
-        self.basis = {}
+        self.basis, self.spectra = {}, {}
         for (chg, mult), chis in stacks.items():
             A = np.vstack(chis)
             _, sv, Vt = np.linalg.svd(A, full_matrices=False)
+            self.spectra[chg, mult] = sv
             keep = sv > rtol * sv[0] if len(sv) and sv[0] > 0 else np.zeros(len(sv), dtype=bool)
             if keep.any():
                 self.basis.setdefault(chg, {})[mult] = Vt[keep]
@@ -179,7 +233,7 @@ class WeakBasis(object):
                     W = self.basis[sector[0]][sector[1]]
                     self.coef[parent, path] = (sector, W @ chi.T)
                     dev = np.abs(W.T @ self.coef[parent, path][1] - chi.T).max()
-                    if dev > 1e-10 * max(1.0, np.abs(chi).max()):
+                    if dev > max(1e-10, 10 * rtol) * max(1.0, np.abs(chi).max()):
                         raise RuntimeError(f"weak part {parent} {path} not spanned by the weak basis ({dev:.1e})")
     def states(self):
         """{chg: {mult: [basis vectors]}} (the input of build_frag_densities)"""

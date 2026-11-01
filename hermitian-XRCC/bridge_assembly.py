@@ -141,13 +141,14 @@ class BridgeAssembly(object):
     The weak dimer matrices are built only for the pairs of weak sectors the product states reach, one weak spin S_w at a
     time (combined with the bridge tables and released before the next one).
     """
-    def __init__(self, split, bases, weak_dens, ints, strong_mo, sigma, nmax, n_val, pair_slots=2.5):
+    def __init__(self, split, bases, weak_dens, ints, strong_mo, sigma, nmax, n_val, pair_slots=2.5, v_thresh=None):
         self.split, self.bases, self.nmax, self.n_val = split, bases, nmax, n_val
         self.tables = BridgeTables(sigma)
         self.TB = self.tables.table(0, 0, ((), ()), ())                   # {(bridge, bridge'): t}
         self.ints, self.ints_w, self.weak_dens = ints, weak_overlap_ints(ints, strong_mo), weak_dens
         self.n_states = [rho['n_states'] if rho is not None else None for rho in weak_dens]
         self.pair_slots = pair_slots        # (for a pair-compressed S, see get_leakage_metric_H, leakage_pair_slots)
+        self.v_thresh = v_thresh            # factorized V of the order-2 bior terms (leakage_v_thresh[2]), None: complete V
     def components(self, f, sector, i):
         """[(occ, S2_w, weak sector, coefficients over the weak basis of that sector)] of state i of a parent sector"""
         out = []
@@ -231,7 +232,7 @@ class BridgeAssembly(object):
                           if k in orders else None for k in range(self.nmax + 1)]}
             if hamiltonian:
                 weak["H_weak"] = weak_hamiltonian_terms(self.weak_dens, pairs, self.ints_w[0], int_sets, S2w + 1, self.nmax,
-                                                        orders, self.pair_slots)
+                                                        orders, self.pair_slots, self.v_thresh)
             tables = {"S": self.TB, "H_weak": self.TB}
             if hamiltonian and n_core is not None:
                 weak["H_strong"], tables["H_strong"] = weak["S"], strong_table
@@ -266,7 +267,7 @@ import diagrammatic_expansion
 import XR_term
 import diagram_lists as D
 from diagrams import ST_diagrams, SU_diagrams, SV_diagrams
-from precontract_pairs import precontract_S
+from precontract_pairs import precontract_S, V_factorized_blocks
 from get_ints import tens_wrap
 
 
@@ -302,9 +303,13 @@ EXTRA_DIAGRAMS = {"T": {2: ["s01s01t01"]},
                   "V": {1: ["s01v0011"], 2: ["s01s01v0001", "s01s01v0010", "s01s01v0111", "s01s01v1011", "s01s01v0011"]}}
 
 
-def weak_hamiltonian_terms(weak_dens, dimer_sectors, ints_w, int_sets, target_multiplicity, nmax, orders=None, pair_slots=2.5):
+def weak_hamiltonian_terms(weak_dens, dimer_sectors, ints_w, int_sets, target_multiplicity, nmax, orders=None, pair_slots=2.5,
+                           v_thresh=None):
     """[H_w^(m)] (m = 0 ... nmax, those not in orders None) of the weak dimer in the ordering of XR_term.dimer_matrix
-    over dimer_sectors; ints_w: the weak overlap (weak_overlap_ints), in the pair basis if it has pair factors"""
+    over dimer_sectors; ints_w: the weak overlap (weak_overlap_ints), in the pair basis if it has pair factors;
+    v_thresh: the order-2 diagrams of the bior V terms with the factorized V (V_factorized_precontract), as
+    leakage_v_thresh[2] in the normal XR (Be2 cc-pVTZ: their pre-contractions over all orbital pairs of the other
+    fragment, 1 GB per channel, are the peak memory of the bridge otherwise)"""
     t = timer()
     orders = range(nmax + 1) if orders is None else orders
     S_w = ints_w.S
@@ -318,6 +323,10 @@ def weak_hamiltonian_terms(weak_dens, dimer_sectors, ints_w, int_sets, target_mu
                                                                    diagrams=diagrams, contract_cache=cache, timings=t,
                                                                    precon_timings=t, target_multiplicity=target_multiplicity)
                 blocks[cls, name]._supersys_info.pair_slots = pair_slots
+    if v_thresh is not None and 2 in orders and ("bior", "V") in blocks:
+        blocks["bior", "V2"] = V_factorized_blocks(weak_dens, struct(S=S_w, V=int_sets["bior"][2]), SV_diagrams, cache, t, t,
+                                                   target_multiplicity, v_thresh)
+        blocks["bior", "V2"]._supersys_info.pair_slots = pair_slots
     out = []
     for m in range(nmax + 1):
         if m not in orders:
@@ -331,7 +340,8 @@ def weak_hamiltonian_terms(weak_dens, dimer_sectors, ints_w, int_sets, target_mu
             for name, _, X1, X2 in kinds:
                 if (cls, name) in blocks:
                     terms = {1: X1[0], 2: X2[0]} if k == 0 else {2: X2[k] + EXTRA_DIAGRAMS[name].get(k, [])}
-                    H = H + XR_term.dimer_matrix(blocks[cls, name], terms, (0, 1), dimer_sectors, t)
+                    block = blocks.get((cls, name + "2"), blocks[cls, name]) if k == 2 else blocks[cls, name]
+                    H = H + XR_term.dimer_matrix(block, terms, (0, 1), dimer_sectors, t)
         out.append(H)
     return out
 
@@ -343,11 +353,24 @@ EXTRA_DENSITY_TYPES = (("aaa", 0, 3, (0,)), ("aaaa", 0, 4, (0,)), ("caaaa", 1, 4
 
 def add_extra_densities(fragment, basis, rho):
     """adds the types of EXTRA_DENSITY_TYPES (and their adjoint partners) between the weak basis vectors to the density
-    dictionary rho of the weak bases (in place); they only connect weak sectors whose charges differ by n_a - n_c"""
+    dictionary rho of the weak bases (in place); they only connect weak sectors whose charges differ by n_a - n_c.
+    With streamed densities (rho holds a streamed provider), the large ones (aaaa, caaaa: at least STREAMED_MIN_OPS
+    operators) are streamed by that provider like the large XR types, i.e. only their contractions with the integrals
+    are formed (built explicitly in the full MO space they took 23 GB in Be2 cc-pVTZ, killed: caaaa between the charge
+    +2 and the anion weak parts, 30^5 entries per state pair and channel); the small aaa is built explicitly and also
+    given to the provider as an active density (the core terms of caaaa)"""
     from hummr_dens.pybind_interface import wrap_dens_and_build_transpose
+    from hummr_dens.streamed import StreamedDensityType, STREAMED_MIN_OPS
+    adjoint = lambda name: "".join("c" if x == "a" else "a" for x in reversed(name))
+    provider = next((v.provider for v in rho.values() if isinstance(v, StreamedDensityType)), None)
     states = basis.states()
     dens_inp = {}
     for name, n_c, n_a, restrs in EXTRA_DENSITY_TYPES:
+        if provider is not None and n_c + n_a >= STREAMED_MIN_OPS:
+            provider.native.add(name)
+            rho[name] = StreamedDensityType(provider, name)
+            rho[adjoint(name)] = StreamedDensityType(provider, adjoint(name))
+            continue
         for chg_k, by_mult_k in states.items():
             chg_b = chg_k + n_a - n_c
             for mult_b, bra in states.get(chg_b, {}).items():
@@ -359,7 +382,15 @@ def add_extra_densities(fragment, basis, rho):
                                                                      list(bra), list(ket)).items():
                             dens_inp.setdefault(name, {}).setdefault((chg_b, chg_k), {})[channel] = np.asarray(data)
     if dens_inp:
-        extra = wrap_dens_and_build_transpose(dens_inp, n_core=fragment.n_core, n_mo=fragment.orbitals.shape[1])
+        if provider is None:
+            extra = wrap_dens_and_build_transpose(dens_inp, n_core=fragment.n_core, n_mo=fragment.orbitals.shape[1])
+        else:
+            extra, active = wrap_dens_and_build_transpose(dens_inp, n_core=fragment.n_core, n_mo=fragment.orbitals.shape[1],
+                                                          keep_active=True)
+            for small in {id(d): d for d in provider.active_small.values()}.values():
+                for name, by_chg in active.items():
+                    for chg_pair, by_channel in by_chg.items():
+                        small.setdefault(name, {}).setdefault(chg_pair, {}).update(by_channel)
         for name, by_chg in extra.items():
             for chg_pair, by_channel in by_chg.items():
                 rho.setdefault(name, {}).setdefault(chg_pair, {}).update(by_channel)

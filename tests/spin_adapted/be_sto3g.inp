@@ -1,0 +1,24 @@
+General
+  CalcType CASSCF
+  Charge 0
+  Mult 1 3
+  OrbGuess core
+  Ints RI
+  Basis STO-3G
+  AuxBasis def2-JK
+  ExportJSON False
+End
+
+CASSCF
+  NEl 4
+  NOrb 5
+  NRoots 3 1
+  CISolver FCI
+  MaxIter 0
+  OrbStep SuperCIPTDIIS
+  SwitchOrbStep DIIS
+End
+
+Geom
+  Be 0 0 0
+End

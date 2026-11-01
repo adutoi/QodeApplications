@@ -296,6 +296,14 @@ def wrap_dens_and_build_transpose(dens_inp, n_core=0, n_mo=None, overlaps=None, 
              if keep_active else None
     dens_np = embed_frozen_core(dens_cg, n_core, n_mo, overlaps, consume=True)
     del dens_cg
+    if keep_active and n_core > 0:
+        # the active densities as views of the embedded ones (the core terms only enter the blocks with a core
+        # index), instead of a second copy (Be2 cc-pVTZ bridge: about 5 GB of explicit cca/caa of the weak bases)
+        for name, by_chg in active.items():
+            for cp, by_channel in by_chg.items():
+                for channel, x in by_channel.items():
+                    block = (slice(None), slice(None)) + (slice(n_core, n_core + x.shape[2]),) * (x.ndim - 2)
+                    by_channel[channel] = dens_np[name][cp][channel][block]
 
     dens_out = {}
     if parts != "reversed":
@@ -516,16 +524,19 @@ class HummrXRFragment:
         )
 
     def contract_density_sector(self, n_c, n_a, restr_ca, bra_sector, ket_sector, bra_vecs, ket_vecs, channel,
-                                slot_axis, tensor):
+                                slot_axis, tensor, slot_orbitals=None):
         """
         contraction of one channel of these active densities (stretched elements, as hummr returns them) with
         tensor: slot s (operator order) is contracted with axis slot_axis[s] of tensor or free (-1); result
-        (bra, ket, free slots in slot order, free axes of tensor in axis order), without building the density
+        (bra, ket, free slots in slot order, free axes of tensor in axis order), without building the density.
+        slot_orbitals: per slot None or the active orbitals a free slot is restricted to (hummr skips the others,
+        their entries of the result are zero)
         """
         path = list(channel[4][0]) + list(channel[4][1])
+        restrict = [] if slot_orbitals is None else [[int(o) for o in orbs] if orbs is not None else [] for orbs in slot_orbitals]
         return self._engine.contract_density_sector(n_c, n_a, restr_ca, bra_sector[0], bra_sector[1], ket_sector[0],
                                                     ket_sector[1], list(bra_vecs), list(ket_vecs), channel[2], path,
-                                                    list(slot_axis), np.ascontiguousarray(tensor, dtype=float))
+                                                    list(slot_axis), np.ascontiguousarray(tensor, dtype=float), restrict)
 
     def density_sector(self, n_c, n_a, restr_ca, bra_sector, ket_sector, bra_vecs, ket_vecs):
         """

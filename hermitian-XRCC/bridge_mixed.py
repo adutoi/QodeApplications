@@ -244,10 +244,11 @@ def _layout_density(op, kinds, bsec, ksec, n_w):
             for path, rho in red.items()}
 
 
-def _contracted_density(op, kinds, roles, J, path, bsec, ksec, n_w):
+def _contracted_density(op, kinds, roles, J, path, bsec, ksec, n_w, keep=None):
     """F (bra, ket, weak orbital of every S slot (layout order), axes of J after the H slots): the layout density
     (path) of the strings with these leg kinds, its H slots contracted with the first axes of J (weak orbitals) inside
-    hummr, without forming the density; None if the strings vanish"""
+    hummr, without forming the density; None if the strings vanish.  keep: the weak orbitals of the S slots (the
+    coupling pairs), hummr skips the others and F has only these on the S slots"""
     from hummr_dens.pybind_interface import cg_factor
     L = len(kinds)
     n_c = kinds.count("c"); n_a = L - n_c
@@ -264,11 +265,15 @@ def _contracted_density(op, kinds, roles, J, path, bsec, ksec, n_w):
         axis.append(h if r[0] == "H" else -1)
         h += r[0] == "H"
     channel = (b[1], k[1], path[1][-1] if path[1] else 0, 0, path)
+    S_orbs = list(range(n_w)) if keep is None else [int(o) for o in keep]
+    restrict = [S_orbs if r[0] == "S" else None for r in roles] if keep is not None else None
     F = op.fragment.contract_density_sector(nc, na, 0, b, k, list(op.vectors(b)), list(op.vectors(k)), channel,
-                                            axis if lowering else axis[::-1], J)
+                                            axis if lowering else axis[::-1], J,
+                                            None if restrict is None else (restrict if lowering else restrict[::-1]))
     F = np.asarray(F) / cg_factor(channel)
     n_S, n_free = L - n_H, J.ndim - n_H
-    F = F[(slice(None), slice(None)) + (slice(0, n_w),) * n_S]
+    for ax in range(n_S):
+        F = np.take(F, S_orbs, axis=2 + ax)          # (the weak orbitals, or only the coupling ones, of the S slots)
     if not lowering:
         # hummr's slots are the adjoint's: reversed layout order, bra and ket swapped
         F = F.transpose([1, 0] + [2 + n_S - 1 - j for j in range(n_S)] + [2 + n_S + j for j in range(n_free)])
@@ -304,6 +309,10 @@ class MixedEvaluator(object):
     def __init__(self, assembly, weak_ops, M, G, sigma, n_act, nmax, memory_budget=8e9, orders=None):
         self.asm, self.ops, self.M, self.G, self.nmax = assembly, weak_ops, M, G, nmax
         self.n_act, self.n_w, self.sw = n_act, n_act - 1, np.asarray(sigma[:n_act - 1])
+        # the weak pairs that couple (sigma above a pair threshold, zero otherwise): with fewer than all, the S slots of
+        # the per-structure routes run over these only (hummr skips the others, the open densities are sliced)
+        keep = np.flatnonzero(self.sw != 0.0)
+        self.keep = keep if len(keep) < self.n_w else None
         self.space, self.tables = assembly.tables.space, assembly.tables
         self.orders = set(range(nmax + 1) if orders is None else orders)
         self.chunk_bytes, self.open_bytes, self.dense_bytes = memory_budget / 32, memory_budget / 512, memory_budget / 32
@@ -341,6 +350,12 @@ class MixedEvaluator(object):
         H_out = "".join(letters[legs[j][2]] for sub in "AB" for j in order if legs[j][0] == sub
                         and legs[j][2] not in S_letters)
         return weight * np.einsum(",".join(specs) + "->" + H_out, *ops)
+    def _on_pairs(self, D, slots):
+        """the layout density D (bra, ket, slots) with its S slots (slots[j] == "S") on the coupling pairs only"""
+        for j, t in enumerate(slots):
+            if t == "S":
+                D = np.take(D, self.keep, axis=2 + j)
+        return D
     def _full_weights(self, key, st, m):
         """W (all weak slots of A, then of B, in layout order) of the structure: J x the S factors
         sigma_i delta(i_A, i_B) (formed when needed, cached)"""
@@ -348,8 +363,9 @@ class MixedEvaluator(object):
             roles = st["roles"]
             S_letters = {"i0": "ij", "i1": "kl"}
             ops, specs = [st["J"][m]], ["".join(r[1] for f in (0, 1) for r in roles[f] if r[0] == "H")]
+            sw = self.sw if self.keep is None else self.sw[self.keep]      # (the S axes on the coupling pairs only)
             for t in sorted({r[1] for r in roles[0] + roles[1] if r[0] == "S"}):
-                ops.append(np.diag(self.sw)); specs.append(S_letters[t])
+                ops.append(np.diag(sw)); specs.append(S_letters[t])
             out = "".join(S_letters[r[1]][f] if r[0] == "S" else r[1] for f in (0, 1) for r in roles[f])
             return np.einsum(",".join(specs) + "->" + out, *ops).reshape(-1)
         return self._wcache.get((key, m), make)
@@ -448,9 +464,12 @@ class MixedEvaluator(object):
             for kkey in groups:
                 quads.setdefault((bkey[2], kkey[2], bkey[3], kkey[3]), []).append((bkey, kkey))
         structs = self._structures(select)
+        # the structures of one contraction: the same weak leg kinds (and, with coupling pairs restricted, the same S
+        # slots, so that the S axes of the open densities and of W run over the coupling pairs only)
         by_kinds = {}
         for key, st in structs.items():
-            by_kinds.setdefault(st["kinds"], []).append(key)
+            mask = None if self.keep is None else tuple(tuple(r[0] for r in st["roles"][f]) for f in (0, 1))
+            by_kinds.setdefault((st["kinds"], mask), []).append(key)
         self._coef = {}
         # fragment A's transitions outside, B's inside (as XR_term.dimer_matrix): the large open densities of A are held
         # for all of B's transitions (_held), those of B are left to the cache
@@ -460,7 +479,7 @@ class MixedEvaluator(object):
                 self._held, self._held_at = {}, (wA, wAk)
             dN = (wAk[0] - wA[0], wBk[0] - wB[0])
             Y = {}
-            for kinds, keys in by_kinds.items():
+            for (kinds, mask), keys in by_kinds.items():
                 keys = [k for k in keys if structs[k]["dN"] == dN]
                 if not keys:
                     continue
@@ -489,6 +508,8 @@ class MixedEvaluator(object):
                 rows = [r for r in C if r[2] in DA and r[3] in DB]
                 if not rows:
                     continue
+                if mask is not None:
+                    DA, DB = ({q: self._on_pairs(D, mask[f]) for q, D in Df.items()} for f, Df in ((0, DA), (1, DB)))
                 Wlist = [self._full_weights(k, structs[k], m) for k, m in wid]
                 if len(Wlist) * Wlist[0].nbytes <= self.chunk_bytes:
                     Wlist = np.stack(Wlist)
@@ -562,6 +583,7 @@ class MixedEvaluator(object):
         # (dense: the open density of f, fetched once for all structures of this call, all of the same leg kinds)
         Df = self._held_density(f, kinds_f, secs[f]) if dense else None
         Dperm = {}          # (path, H slots of f) -> the open density with the H slots last, contiguous (bra ket S, H)
+        Dg_pairs = {}       # (path, slots of g) -> the other fragment's density with its S slots on the coupling pairs
         # (sorted by the path and the H slots of f, so only one such copy is held at a time)
         H_of = lambda w: tuple(r[0] for r in structs[wlist[w][0]]["roles"][f])
         for (w, qf, qg), rows in sorted(terms.items(), key=lambda t: (repr(t[0][1]), H_of(t[0][0]))):
@@ -585,7 +607,12 @@ class MixedEvaluator(object):
                     if (qf, H_axes) not in Dperm:
                         Dperm.clear()
                         rest = [a for a in range(D.ndim) if a not in H_axes]
-                        Dperm[qf, H_axes] = np.ascontiguousarray(D.transpose(rest + list(H_axes)))
+                        Dt = D.transpose(rest + list(H_axes))
+                        if self.keep is not None:
+                            # (the S slots, now right after bra and ket, on the coupling pairs only)
+                            for ax in range(len(rest) - 2):
+                                Dt = np.take(Dt, self.keep, axis=2 + ax)
+                        Dperm[qf, H_axes] = np.ascontiguousarray(Dt)
                     Dp = Dperm[qf, H_axes]
                     n_H = len(H_axes)
                     out_shape = Dp.shape[:Dp.ndim - n_H] + J.shape[n_H:]
@@ -594,15 +621,22 @@ class MixedEvaluator(object):
                 F = self._fcache.get((f, key, m, qf, secs[f]), make)
             else:
                 F = self._fcache.get((f, key, m, qf, secs[f]), lambda: _contracted_density(
-                    self.ops[f], kinds[f], roles[f], J, qf, secs[f][0], secs[f][1], self.n_w))
+                    self.ops[f], kinds[f], roles[f], J, qf, secs[f][0], secs[f][1], self.n_w, self.keep))
             if F is None:
                 continue
+            sw = self.sw
+            if self.keep is not None:
+                sw = self.sw[self.keep]
+                g_slots = tuple(r[0] for r in roles[g])
+                if (qg, g_slots) not in Dg_pairs:
+                    Dg_pairs[qg, g_slots] = self._on_pairs(Dg, g_slots)
+                Dg = Dg_pairs[qg, g_slots]
             sf, sg = ("aA", "bB") if f == 0 else ("bB", "aA")
             spec_F = sf + "".join(S_letters[r[1]] for r in roles[f] if r[0] == "S") \
                         + "".join(r[1] for r in roles[g] if r[0] == "H")
             spec_g = sg + "".join(S_letters[r[1]] if r[0] == "S" else r[1] for r in roles[g])
             S_used = [S_letters[r[1]] for r in roles[f] if r[0] == "S"]
-            E = np.einsum(",".join([spec_F, spec_g] + S_used) + "->aAbB", F, Dg, *([self.sw] * len(S_used)),
+            E = np.einsum(",".join([spec_F, spec_g] + S_used) + "->aAbB", F, Dg, *([sw] * len(S_used)),
                           optimize=True)
             for rk, c in rows:
                 Y[rk] = Y[rk] + c * E if rk in Y else c * E

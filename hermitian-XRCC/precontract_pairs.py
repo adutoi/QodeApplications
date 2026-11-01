@@ -439,7 +439,12 @@ class pair_slot_precontract(object):
                 positions, sign = dict(channel[5])[label]
                 canonical = [rho_indices[p] for p in positions]
                 dims = [matrices[l][0].shape[1] if l in matrices else provider.n_act for l in canonical]
-                if provider.transform_fits(rho_type, (chg_i, chg_j), tuple(channel[:5]), dims):
+                # (the fallback below builds the pre-contraction over all orbitals of the folded slots first, e.g.
+                #  ccaa V with n_mo^4 free orbitals, 1 GB per channel in Be2 cc-pVTZ: the transformed density is
+                #  used whenever it is not larger)
+                n_bra, n_ket = provider.sector_sizes((chg_i, chg_j), tuple(channel[:5]))
+                fallback_bytes = 8 * n_bra * n_ket * provider.n_mo ** (len(out) - 2) if other is None else 0
+                if provider.transform_fits(rho_type, (chg_i, chg_j), tuple(channel[:5]), dims, fallback_bytes):
                     mats = {l: F for l, (F, _) in matrices.items()}
                     renamed = {l: new for l, (_, new) in matrices.items()}
                     result = provider.contract_transformed(rho_type, (chg_i, chg_j), tuple(channel[:5]), canonical,

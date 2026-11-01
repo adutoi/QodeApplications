@@ -51,8 +51,9 @@ def run_xr(displacement, max_iter, xr_order_final=0, xr_order_solver=0, dens_fil
            davidson_preconditioner=True, dm_vectors="right", overlap_check_order=4, selected_spaces_dir=None,
            states_in=None, states_out=None, overlap_min_eigval=0.15, overlap_max_weight=1e-5, overlap_reoptimize=True,
            overlap_max_cycles=4, leakage_metric_order=None, leakage_pair_thresh=None, metric_pair_thresh=None,
-           leakage_v_thresh={2: 1e-5}, leakage_pair_slots=2.5, pair_rotation=False, bridge_strong=0, bridge_out=None,
-           bridge_mode="glued", bridge_pair_thresh=None):
+           leakage_v_thresh={2: 1e-5}, leakage_pair_slots=2.5, pair_rotation=False, bridge_strong="auto", bridge_out=None,
+           bridge_mode="factorized", bridge_pair_thresh=None, bridge_closure_thresh=1e-8,
+           bridge_weak_rtol=1e-4, bridge_sigma_thresh=0.9, bridge_v_thresh=None, transform_chunks=True):
     """
     xr_order_final:        XR order (or list of orders) of the final evaluation in the optimized state space
     leakage_metric_order:  if given (2, 3 or 4), the final evaluation also includes the leakage-metric ansatz
@@ -93,23 +94,55 @@ def run_xr(displacement, max_iter, xr_order_final=0, xr_order_solver=0, dens_fil
                            (S_AB diagonal, strongest pairs as the last active orbitals; fragment A rotated by U, B by V
                            of S_AB = U s V^T), with the optimized states transformed exactly to the rotated orbitals
                            (pair_rotation.py; complete CSF spaces only).  XR is invariant under this rotation; it is the
-                           basis of the exact-bridge ansatz
-    bridge_strong:         number K of strong pairs of the exact-bridge ansatz (0: none); implies pair_rotation: hummr
-                           is initialized with the sectors needed to split the states by the occupation of the K strong
-                           orbitals (strong_split.required_sectors, not part of the XR basis), and the rotated final
-                           states are split (strong_split.py; their weights are printed)
-    bridge_out:            with bridge_strong = 1, a file (.npz) for the order-resolved overlap S^(k) (k = 0, 1, 2 in the weak
-                           pairs) of the singlet product states of the final states (bridge_assembly.py), with their
-                           labels (sector A, i_A, sector B, i_B); in factorized mode also the energies E(n) of the weak
-                           orders n = 0, 1, 2 (lowest real eigenvalue of S_n^-1 H_n), returned as final_en["bridge[n]"]
-                           (final_en is then a dict)
+                           basis of the exact-bridge ansatz.  "first": the corresponding orbitals of the SCF orbitals of
+                           the hummr input are computed before anything else and written as the orbital guess of rotated
+                           inputs (directory rotated_<input name>_<displacement>), so that the selection of the CI spaces,
+                           hummr and the state optimization work in them (required for selected spaces; fragment B's
+                           orbitals are the mirror images of A's up to signs, so A's selected spaces serve both, B's
+                           initial roots come from hummr in B's orbitals)
+    bridge_strong:         number K of strong pairs of the exact-bridge ansatz (0: none, normal XR), or "auto": the number of
+                           corresponding-orbital pairs whose overlap sigma (singular value of the core-projected valence
+                           overlap S_AB, computed from the orbitals of the hummr input before anything else) exceeds
+                           bridge_sigma_thresh.  With K > 0 the final evaluation is the bridge only: its energies E(n)
+                           for the orders n of xr_order_final (weak orders, n <= 2; the normal XR evaluation, the overlap
+                           truncation and check are skipped).  Implemented for K <= 1 (more pairs above the threshold are
+                           refused).  Implies pair_rotation (with
+                           selected CI spaces "first", and the selected spaces extended by strong_split.split_closure):
+                           hummr is initialized with the sectors needed to split the states by the occupation of the K
+                           strong orbitals (strong_split.required_sectors, not part of the XR basis), and the rotated
+                           final states are split (strong_split.py; their weights are printed)
+    bridge_sigma_thresh:   the threshold of bridge_strong="auto".  Be2 (XR[2] vs FCI in results_xr_order_states.tex):
+                           XR[2] deviates by more than about 50 uEh below about 3.4 A, where the largest sigma is 0.80
+                           (6-31G), 0.91 (cc-pVDZ) and 0.97 (cc-pVTZ); 0.9 takes the bridge from 3.5 A (cc-pVDZ), 4.2 A
+                           (cc-pVTZ) and 2.8 A (6-31G) on.
+                           Important: increase/tighten the threshold for a small basis!
+    bridge_out:            optional file (.npz) for the order-resolved matrices of the bridge (S, H_weak, H_strong, H_mixed;
+                           with bridge_mode "glued" or "both" also S_A, H_A) of the singlet product states of the final
+                           states (bridge_assembly.py), with their labels (sector A, i_A, sector B, i_B).  The energies
+                           E(n) are the lowest real eigenvalues of S_n^-1 H_n of the factorized matrices
     bridge_mode:           "glued" (T_B on the bra, one rectangular XR build of all terms, bridge_assembly.GluedAssembly: S_A,
                            H_A), "factorized" (bridge tables x weak dimer terms, BridgeAssembly and bridge_mixed.
                            MixedEvaluator: S, H_weak, H_strong, H_mixed) or "both"
+    bridge_closure_thresh: with selected CI spaces, the weak parts are evaluated in a hummr instance of their own whose
+                           spaces add the strong-empty CFGs reached from the CFGs with a weight above this threshold in the
+                           optimized states (strong_split.state_closure; the dropped weight shows in the norm sum rule)
+    bridge_weak_rtol:      the weak parts of every weak sector are spanned by the singular vectors with a singular value
+                           above bridge_weak_rtol times the largest (strong_split.WeakBasis; Be2 cc-pVDZ HCI: 1e-4 keeps
+                           29 of 37 and 21 of 31 neutral vectors, the bridge 28 % faster, the energies within 3e-10 Eh of
+                           1e-12)
     bridge_pair_thresh:    factorized mode: the order-2 terms with the inter-fragment overlap restricted to the
                            corresponding-orbital pairs with a singular value above the threshold (as leakage_pair_thresh
                            for XR[2]: get_ints with pair_thresh, i.e. also in the biorthogonalization, and sigma of the
                            mixed terms; the weak overlap in the pair basis with leakage_pair_slots); orders 0 and 1 exact
+    bridge_v_thresh:       factorized mode: the order-2 bior terms of the weak parts with the factorized V (as leakage_v_thresh
+                           for XR[2], V_factorized_precontract); None: the complete V (Be2 cc-pVTZ: with the factorized V,
+                           the lazy rank factor in the order-2 contractions of the weak dimer let them form a 10 GB
+                           intermediate)
+    transform_chunks:      streamed densities: the densities transformed into the pair basis (pre-contractions with slots in
+                           the pair basis) are built by hummr for chunks of the bra states within the memory budget and
+                           contracted right away (hummr_dens.streamed.TRANSFORM_CHUNKS), instead of all channels of a
+                           sector pair at once (False; then the fallback over all orbitals if they do not fit: Be2 cc-pVTZ
+                           bridge, 40 x 40 weak states, 1 GB per channel, out of memory at 25 GB)
     n_init_states:        number of (lowest) hummr roots per (chg, mult) sector used as initial guess
     pool:                  "roots": the remaining ones of n_pool_roots hummr roots per sector serve as pool of additional
                                     states for the solver (instead of the state screening)
@@ -193,10 +226,29 @@ def run_xr(displacement, max_iter, xr_order_final=0, xr_order_solver=0, dens_fil
     """
     if pool not in ("roots", "csf", "none"):
         raise ValueError(f"unknown pool {pool!r}")
+    import hummr_dens.streamed as streamed_module
+    streamed_module.TRANSFORM_CHUNKS = transform_chunks
     tensornet.initialize_timer()
     tensornet.tensorly_backend.initialize_timer()
 
     n_frag = 2
+    def assemble(mos, core):
+        """the displaced fragments with the MO coefficients mos[m] and the frozen core MOs core (empty for all-electron
+        inputs; projected out of the valence in get_ints, the densities already include the doubly occupied core, see
+        density_providers/hummr_dens embed_frozen_core)"""
+        frags = []
+        for m in range(n_frag):
+            Be = empty()
+            Be.atoms = [["Be", [0, 0, m * displacement]]]    # displaced along z
+            Be.charge = 0
+            Be.n_elec_ref = 4
+            Be.basis = empty()
+            Be.basis.n_spatial_orb = mos[m].shape[1]
+            Be.basis.AOcode = basis
+            Be.basis.core = core
+            Be.basis.MOcoeffs = mos[m]
+            frags.append(Be)
+        return frags
     # the core projection (get_ints.direct_CoreProj) alone does not retain the orthonormality of the valence orbitals
     # within a fragment, which get_ints restores by default (orthonormalize_valence=True, Loewdin within each fragment)
     project_core = True
@@ -223,6 +275,44 @@ def run_xr(displacement, max_iter, xr_order_final=0, xr_order_solver=0, dens_fil
         raise ValueError(f"leakage_metric_order has to be 2, 3 or 4, not {leakage_metric_order}")
     if selected_engine not in ("hci", "fci"):
         raise ValueError(f"unknown selected_engine {selected_engine!r}")
+    selected_run = selected_cfgs is not None or selected_spaces_dir is not None or hci_epsilon is not None
+    # the corresponding orbitals of the orbitals of the hummr input, before anything else (needed for bridge_strong="auto"
+    # and pair_rotation="first")
+    early = None
+    if bridge_strong == "auto" or pair_rotation == "first" or (bridge_strong and selected_run):
+        from pair_rotation import corresponding_rotations, valence_overlap, orbital_file, read_orbitals
+        from hummr_dens.pybind_interface import frozen_core_from_input
+        mo_scf = read_orbitals(orbital_file(hummr_input))
+        n_core_in, n_act_in = frozen_core_from_input(hummr_input, mo_scf.shape[1])[:2]
+        ints_scf = get_ints(assemble([mo_scf, mo_scf], list(range(n_core_in))), True, timer(), spin_ints=False, backend="lible")
+        S_val = valence_overlap(ints_scf, (0, 1), n_core_in, n_act_in)
+        ints_scf = None
+        early = (mo_scf, n_core_in, S_val) + tuple(corresponding_rotations(S_val))
+        if bridge_strong == "auto":
+            bridge_strong = int((early[5] > bridge_sigma_thresh).sum())
+            print(f"bridge_strong auto: {bridge_strong} pair(s) with sigma above {bridge_sigma_thresh} (largest sigma "
+                  f"{np.array2string(early[5][::-1][:3], precision=4)})")
+            if bridge_strong > 1:
+                raise NotImplementedError(f"{bridge_strong} corresponding-orbital pairs have sigma above {bridge_sigma_thresh}; "
+                                          "the bridge is implemented for one strong pair (bridge_strong=1 or a larger "
+                                          "bridge_sigma_thresh)")
+    if bridge_strong > 0 and leakage_metric_order is not None:
+        raise ValueError("the bridge replaces the final evaluation; leakage_metric_order is not used with it")
+    if bridge_strong > 0 and not pair_rotation:
+        pair_rotation = "first" if selected_run else True
+    if selected_run and pair_rotation and pair_rotation != "first":
+        raise ValueError('pair_rotation with selected CI spaces requires pair_rotation="first"')
+    frag_mos = None     # (with pair_rotation="first") the MO coefficients of every fragment in its corresponding orbitals
+    if pair_rotation == "first":
+        from pair_rotation import valence_overlap, rotated_mo_coeffs, rotated_input, mirror_deviation
+        mo_scf, n_core_in, S_val, R_A, R_B, sigma = early
+        frag_mos = [rotated_mo_coeffs(mo_scf, n_core_in, R) for R in (R_A, R_B)]
+        rot_dir = f"rotated_{os.path.splitext(os.path.basename(hummr_input))[0]}_{displacement}"
+        hummr_input_B = rotated_input(hummr_input, frag_mos[1], rot_dir, "B")
+        hummr_input = rotated_input(hummr_input, frag_mos[0], rot_dir, "A")
+        print(f"pair rotation (first): sigma = {np.array2string(sigma[::-1], precision=4)} (strongest first), "
+              f"B's orbitals the mirror images of A's up to signs within {mirror_deviation(S_val, R_A, R_B):.1e}; "
+              f"rotated input {hummr_input}")
     if selected_cfgs is None and selected_spaces_dir is not None:
         selected_cfgs = read_spaces(selected_spaces_dir, sectors)
         print(f"selected CFGs per sector (read from {selected_spaces_dir}):",
@@ -242,15 +332,18 @@ def run_xr(displacement, max_iter, xr_order_final=0, xr_order_solver=0, dens_fil
         # at most as many roots as the selected space has CSFs
         roots = {chg: {mult: min(n, n_csfs(selected_cfgs[chg][mult], mult)) for mult, n in by_mult.items()}
                  for chg, by_mult in roots.items()}
-    pair_rotation = pair_rotation or bridge_strong > 0
     split_sectors = None
     if bridge_strong > 0:
         from strong_split import required_sectors
-        split_sectors = lambda engine: required_sectors(engine, sectors, bridge_strong, glue=bridge_out is not None)
+        if selected_cfgs is None:
+            split_sectors = lambda engine: required_sectors(engine, sectors, bridge_strong, glue=bridge_out is not None)
+        # (selected spaces: the splitting works in a hummr instance of its own after the optimization, see below)
     (mo_coeffs, hummr_states) = dens_builder.init_backend([[frag_name, hummr_input, roots, max(final_orders + [xr_order_solver]
                                                                                             + ([2] if leakage_metric_order is not None else [])),
                                                             selected_cfgs if use_hci else None,
                                                             split_sectors]])[0]
+    if frag_mos is not None and np.abs(mo_coeffs - frag_mos[0]).max() > 1e-12:
+        raise RuntimeError("pair_rotation first: hummr did not keep the rotated orbitals of its input (MaxIter 0?)")
     csf_indices = None
     if selected_cfgs is not None and not use_hci:
         csf_indices = selected_csf_indices(dens_builder.csf_layout(frag_name), selected_cfgs)
@@ -258,8 +351,27 @@ def run_xr(displacement, max_iter, xr_order_final=0, xr_order_solver=0, dens_fil
                         for chg, mult_dict in hummr_states.items()}
         print("selected CSFs per sector:", {chg: {mult: len(idx) for mult, idx in mult_dict.items()} for chg, mult_dict in csf_indices.items()})
 
+    states_per_frag = [hummr_states] * n_frag
+    if frag_mos is not None:
+        # fragment B: the roots of hummr in B's corresponding orbitals (same CI spaces, the same CSF layout), as the
+        # initial states (A's roots are eigenstates in A's orbitals only); this hummr instance is dropped afterwards
+        from hummr_dens.pybind_interface import HummrXRFragment
+        frag_B = HummrXRFragment(xr_level=0)
+        frag_B.initialize(hummr_input_B)
+        if use_hci:
+            frag_B.set_selected_cfgs({chg: {mult: cfgs for mult, cfgs in by_mult.items() if chg in roots and mult in roots[chg]}
+                                      for chg, by_mult in selected_cfgs.items() if chg in roots})
+        states_B = frag_B.get_states(roots if use_hci else frag_B.with_intermediate_sectors(roots))
+        if csf_indices is not None:
+            states_B = {chg: {mult: project_states(vecs, csf_indices[chg][mult], len(vecs)) for mult, vecs in by_mult.items()}
+                        for chg, by_mult in states_B.items() if chg in csf_indices}
+        layout_A, layout_B = dens_builder.csf_layout(frag_name), frag_B.csf_layout()
+        if any(layout_A[chg][mult] != layout_B[chg][mult] for chg in roots for mult in roots[chg]):
+            raise RuntimeError("pair_rotation first: the CSF layouts of the hummr instances of A and B differ")
+        states_per_frag = [hummr_states, {chg: {mult: states_B[chg][mult] for mult in by_mult} for chg, by_mult in roots.items()}]
+        frag_B = states_B = None
     states = [{chg: {mult: [np.array(vec) for vec in vecs[:n_init_states]] for mult, vecs in mult_dict.items()}
-               for chg, mult_dict in hummr_states.items()} for _ in range(n_frag)]
+               for chg, mult_dict in st.items()} for st in states_per_frag]
     if states_in is not None:
         read_states, info = load_states(states_in, dens_builder.csf_layout(frag_name))
         for frag in range(n_frag):
@@ -270,7 +382,7 @@ def run_xr(displacement, max_iter, xr_order_final=0, xr_order_solver=0, dens_fil
         print(f"initial states read from {states_in} ({info}):", [count_states(states[frag]) for frag in range(n_frag)])
     if pool == "roots":
         additional_states = [{chg: {mult: [np.array(vec) for vec in vecs[n_init_states:]] for mult, vecs in mult_dict.items()}
-                              for chg, mult_dict in hummr_states.items()} for _ in range(n_frag)]
+                              for chg, mult_dict in st.items()} for st in states_per_frag]
     elif pool == "csf":
         additional_states = [unit_vector_pool(states[frag], n_passes=n_csf_passes, csf_indices=csf_indices) for frag in range(n_frag)]
     else:
@@ -280,21 +392,7 @@ def run_xr(displacement, max_iter, xr_order_final=0, xr_order_solver=0, dens_fil
     # "Assemble" the supersystem for the displaced fragments and get integrals
     #########
 
-    BeN = []
-    for m in range(n_frag):
-        Be = empty()
-        Be.atoms = [["Be", [0, 0, 0]]]
-        Be.charge = 0
-        Be.n_elec_ref = 4
-        Be.basis = empty()
-        Be.basis.n_spatial_orb = mo_coeffs.shape[1]
-        Be.basis.AOcode = basis
-        # frozen core of the hummr input (empty for all-electron inputs), projected out of the valence in get_ints;
-        # the densities already include the doubly occupied core (density_providers/hummr_dens embed_frozen_core)
-        Be.basis.core = dens_builder.frozen_core(frag_name)
-        Be.basis.MOcoeffs = mo_coeffs
-        for elem,coords in Be.atoms:  coords[2] += m * displacement    # displace along z
-        BeN.append(Be)
+    BeN = assemble(frag_mos or [mo_coeffs] * n_frag, dens_builder.frozen_core(frag_name))
 
     int_timer = timer()
     ints = get_ints(BeN, project_core, int_timer, spin_ints=False, backend="lible")
@@ -316,6 +414,20 @@ def run_xr(displacement, max_iter, xr_order_final=0, xr_order_solver=0, dens_fil
         from embedded import EmbeddedHamiltonian
         return EmbeddedHamiltonian(frag, ints, dens, dens_builder.engine.fragments[frag_name], monomer_charges,
                                    H1[1 - frag], target_multiplicity=target_multiplicity)
+
+    def release_xr_caches(fragment, budget):
+        """drops the cached intermediates of the XR builds (the large pre-contractions, hummr's density engines of
+        fragment) and restores their limits for the builds to come (as build_frag_densities sets them for budget)"""
+        import gc
+        import precontract as precontract_module
+        from get_xr_result_spin_adapt import apply_memory_budget
+        limit = precontract_module.LARGE_CACHE_BYTES
+        precontract_module.set_large_cache_limit(0)
+        precontract_module.set_large_cache_limit(limit)
+        fragment._engine.set_density_cache_limit(0)
+        fragment._engine.set_density_cache_limit(int(apply_memory_budget(budget) / 2))
+        precontract_module.set_large_cache_limit(limit)    # (apply_memory_budget sets it as well)
+        gc.collect()
 
     def build_dens(frag, frag_states, xr_level=xr_order_solver, bra_states=None):
         # both fragments are the same molecule, so they share the hummr instance
@@ -354,10 +466,15 @@ def run_xr(displacement, max_iter, xr_order_final=0, xr_order_solver=0, dens_fil
         save_states(states_out, states, dens_builder.csf_layout(frag_name), displacement=displacement, basis=basis,
                     hummr_input=hummr_input)
         print(f"final states written to {states_out}")
-    if pair_rotation:
+    if pair_rotation == "first":
+        hummr_frag = dens_builder.engine.fragments[frag_name]
+        n_core, n_act = hummr_frag.n_core, hummr_frag.n_act
+        dev = np.abs(valence_overlap(ints, (0, 1), n_core, n_act) - np.diag(sigma)).max()
+        print(f"pair rotation (first): max deviation of S_AB from diag(sigma) {dev:.1e}")
+    elif pair_rotation:
         from pair_rotation import corresponding_rotations, valence_overlap, rotated_mo_coeffs, StateRotation
         if selected_cfgs is not None:
-            raise NotImplementedError("pair_rotation requires the complete CSF spaces (no selected configurations)")
+            raise NotImplementedError('pair_rotation after the optimization requires the complete CSF spaces (use "first")')
         hummr_frag = dens_builder.engine.fragments[frag_name]
         n_core, n_act = hummr_frag.n_core, hummr_frag.n_act
         R_A, R_B, sigma = corresponding_rotations(valence_overlap(ints, (0, 1), n_core, n_act))
@@ -371,12 +488,32 @@ def run_xr(displacement, max_iter, xr_order_final=0, xr_order_solver=0, dens_fil
         dev = np.abs(valence_overlap(ints, (0, 1), n_core, n_act) - np.diag(sigma)).max()
         print(f"pair rotation: sigma = {np.array2string(sigma[::-1], precision=4)} (strongest first, the last active "
               f"orbitals), max deviation of the rotated S_AB from diag(sigma) {dev:.1e}")
-    bridge_en = {}     # final_en["bridge[n]"]: the energies of the exact-bridge ansatz (bridge_out, factorized mode)
+    bridge_en = {}     # {n: E(n)} of the exact-bridge ansatz (factorized mode)
     if bridge_strong > 0:
         from strong_split import StrongSplit
-        splitter = StrongSplit(hummr_frag, range(n_act - bridge_strong, n_act))
+        bridge_states, bridge_frag_name = states, frag_name
+        if selected_cfgs is not None:
+            # selected spaces: the weak parts need the strong-empty CFGs reached from the CFGs the optimized states
+            # populate (above bridge_closure_thresh); they get a hummr instance of their own in the selected spaces
+            # extended by them, into which the states are mapped exactly, so that the spaces of the optimization and of
+            # the final XR evaluation stay the selected ones
+            from strong_split import state_closure
+            from state_solver_csf import map_states
+            layout = dens_builder.csf_layout(frag_name)
+            weak_cfgs = state_closure(states, layout, bridge_strong, bridge_closure_thresh)
+            print(f"splitting closure from the optimized states (weights above {bridge_closure_thresh:.0e}), CFGs "
+                  "per sector (selected before):", {chg: {mult: f"{len(cfgs)} ({len(layout.get(chg, {}).get(mult, []))})"
+                                                          for mult, cfgs in by_mult.items()}
+                                                    for chg, by_mult in sorted(weak_cfgs.items())})
+            bridge_frag_name = frag_name + "_weak"
+            dens_builder.add_fragment([bridge_frag_name, hummr_input, {chg: {mult: 1 for mult in by_mult} for chg, by_mult in weak_cfgs.items()},
+                                       2, weak_cfgs])
+            weak_layout = dens_builder.csf_layout(bridge_frag_name)
+            bridge_states = [map_states(states[frag], layout, weak_layout) for frag in range(n_frag)]
+            hummr_frag = dens_builder.engine.fragments[bridge_frag_name]
+        splitter = StrongSplit(hummr_frag, range(n_act - bridge_strong, n_act), selected=selected_cfgs is not None)
         # {(chg, mult): {path: (sector, weak parts (n_states, dim))}} per fragment (the input of the bridge densities)
-        split_states = [{(chg, mult): splitter(chg, mult, vecs) for chg, by_mult in states[frag].items()
+        split_states = [{(chg, mult): splitter(chg, mult, vecs) for chg, by_mult in bridge_states[frag].items()
                          for mult, vecs in by_mult.items() if len(vecs)} for frag in range(n_frag)]
         for frag in range(n_frag):
             for (chg, mult), parts in sorted(split_states[frag].items()):
@@ -392,60 +529,87 @@ def run_xr(displacement, max_iter, xr_order_final=0, xr_order_solver=0, dens_fil
         # X_bra^T rho_W X_ket, strong_split.part_density) are built on demand by the bridge assembly, so that they do
         # not stay in memory next to the densities of the final evaluation
         from strong_split import WeakBasis
-        weak_bases = [WeakBasis(split_states[frag]) for frag in range(n_frag)]
+        weak_bases = [WeakBasis(split_states[frag], rtol=bridge_weak_rtol) for frag in range(n_frag)]
         def weak_densities(frag, xr_level):
-            return build_dens(frag, weak_bases[frag].states(), xr_level=xr_level)
+            return build_frag_densities(dens_builder, bridge_frag_name, weak_bases[frag].states(), xr_level, BeN[frag].n_elec_ref,
+                                        streamed=streamed, memory_budget=memory_budget)
         print("weak bases (charge: {multiplicity: size}):", [weak_bases[frag].sizes() for frag in range(n_frag)])
+        for frag in range(n_frag):
+            print(f"weak basis fragment {frag}, singular values of the weak parts per sector, number above (1e-12, 1e-8, "
+                  "1e-6, 1e-4, 1e-3) x the largest:",
+                  {sec: tuple(int((sv > t * sv[0]).sum()) for t in (1e-12, 1e-8, 1e-6, 1e-4, 1e-3))
+                   for sec, sv in sorted(weak_bases[frag].spectra.items()) if len(sv) and sv[0] > 0})
+        if bridge_strong != 1:
+            raise NotImplementedError("the bridge assembly is implemented for bridge_strong = 1")
+        nmax_b = max(final_orders)
+        if nmax_b > 2:
+            raise NotImplementedError(f"the bridge is implemented up to the weak order 2, not {nmax_b}")
+        from bridge_assembly import BridgeAssembly, product_states
+        products = product_states(states)
+        from bridge_assembly import add_extra_densities, GluedAssembly
+        out = {}
+        if bridge_mode in ("factorized", "both"):
+            from bridge_assembly import active_integrals
+            from bridge_mixed import WeakOperators, MixedEvaluator
+            weak_dens = [add_extra_densities(hummr_frag, weak_bases[frag], weak_densities(frag, 2)) for frag in range(n_frag)]
+            from get_xr_result_spin_adapt import resolve_memory_budget
+            budget = resolve_memory_budget(memory_budget, hummr_frag.orbitals.shape[1], n_act, 2, weak_bases[0].states())
+            # the order 2 with the overlap restricted to the pairs above bridge_pair_thresh (all of its terms, also
+            # the biorthogonalization and sigma of the mixed terms), the orders 0 and 1 exact
+            runs = [(ints, sigma, None)] if bridge_pair_thresh is None or nmax_b < 2 else \
+                   [(ints, sigma, (0, 1)), (pair_ints(bridge_pair_thresh), np.where(sigma > bridge_pair_thresh, sigma, 0.0), (2,))]
+            # the terms without mixed legs of all runs first, then the densities of the weak bases and the cached
+            # intermediates of their XR builds are released before the mixed terms (which use neither)
+            assemblies = []
+            for run_ints, run_sigma, orders in runs:
+                assembly = BridgeAssembly(split_states, weak_bases, weak_dens, run_ints, n_core + n_act - 1, sigma[-1], nmax_b,
+                                          hummr_frag._n_act_elec + hummr_frag._input_charge, pair_slots=leakage_pair_slots,
+                                          v_thresh=bridge_v_thresh)
+                mats = assembly.compute(products, n_core=n_core, n_act=n_act, orders=orders)
+                for name in ("S", "H_weak", "H_strong"):
+                    mat = np.array(mats[name])
+                    out[name] = mat if name not in out else out[name] + mat
+                assembly.weak_dens = mats = None
+                assemblies.append((assembly, run_ints, run_sigma, orders))
+            weak_dens = None
+            release_xr_caches(hummr_frag, budget)
+            for assembly, run_ints, run_sigma, orders in assemblies:
+                M_act, G_act = active_integrals(run_ints, n_core, n_act)
+                mixed = MixedEvaluator(assembly, [WeakOperators(hummr_frag, weak_bases[frag], assembly.n_val) for frag in range(n_frag)],
+                                       M_act, G_act, run_sigma, n_act, nmax_b, memory_budget=budget,
+                                       orders=orders).compute(products)
+                mixed = np.array(mixed)
+                out["H_mixed"] = mixed if "H_mixed" not in out else out["H_mixed"] + mixed
+                mixed = None
+            assemblies = assembly = None
+        if bridge_mode in ("glued", "both") and selected_cfgs is not None:
+            raise NotImplementedError("the glued bridge (option A) is not implemented for selected CI spaces")
+        if bridge_mode in ("glued", "both"):
+            def build_rect(frag, ket, bra):
+                return build_frag_densities(dens_builder, frag_name, ket, 2, BeN[frag].n_elec_ref, bra_states=bra,
+                                            streamed=streamed, memory_budget=memory_budget)
+            glued = GluedAssembly(splitter, split_states, weak_bases, states, build_rect, ints, n_core + n_act - 1,
+                                  sigma[-1], nmax_b, hummr_frag._n_act_elec + hummr_frag._input_charge).compute(products)
+            out.update(S_A=np.array(glued["S"]), H_A=np.array(glued["H"]))
+            glued = None
         if bridge_out is not None:
-            if bridge_strong != 1:
-                raise NotImplementedError("the bridge assembly is implemented for bridge_strong = 1")
-            from bridge_assembly import BridgeAssembly, product_states
-            products = product_states(states)
-            from bridge_assembly import add_extra_densities, GluedAssembly
-            out = {}
-            if bridge_mode in ("factorized", "both"):
-                from bridge_assembly import active_integrals
-                from bridge_mixed import WeakOperators, MixedEvaluator
-                weak_dens = [add_extra_densities(hummr_frag, weak_bases[frag], weak_densities(frag, 2)) for frag in range(n_frag)]
-                nmax_mixed = int(os.environ.get("BRIDGE_MIXED_NMAX", 2))
-                from get_xr_result_spin_adapt import resolve_memory_budget
-                budget = resolve_memory_budget(memory_budget, hummr_frag.orbitals.shape[1], n_act, 2, weak_bases[0].states())
-                # the order 2 with the overlap restricted to the pairs above bridge_pair_thresh (all of its terms, also
-                # the biorthogonalization and sigma of the mixed terms), the orders 0 and 1 exact
-                runs = [(ints, sigma, None)] if bridge_pair_thresh is None else \
-                       [(ints, sigma, (0, 1)), (pair_ints(bridge_pair_thresh), np.where(sigma > bridge_pair_thresh, sigma, 0.0), (2,))]
-                for run_ints, run_sigma, orders in runs:
-                    assembly = BridgeAssembly(split_states, weak_bases, weak_dens, run_ints, n_core + n_act - 1, sigma[-1], 2,
-                                              hummr_frag._n_act_elec + hummr_frag._input_charge, pair_slots=leakage_pair_slots)
-                    mats = assembly.compute(products, n_core=n_core, n_act=n_act, orders=orders)
-                    M_act, G_act = active_integrals(run_ints, n_core, n_act)
-                    mixed = MixedEvaluator(assembly, [WeakOperators(hummr_frag, weak_bases[frag], assembly.n_val) for frag in range(n_frag)],
-                                           M_act, G_act, run_sigma, n_act, nmax_mixed, memory_budget=budget,
-                                           orders=orders).compute(products)
-                    for name, mat in (("S", mats["S"]), ("H_weak", mats["H_weak"]), ("H_strong", mats["H_strong"]), ("H_mixed", mixed)):
-                        mat = np.array(mat)
-                        out[name] = mat if name not in out else out[name] + mat
-                    assembly = mixed = mats = None
-                weak_dens = None
-            if bridge_mode in ("glued", "both"):
-                def build_rect(frag, ket, bra):
-                    return build_frag_densities(dens_builder, frag_name, ket, 2, BeN[frag].n_elec_ref, bra_states=bra,
-                                                streamed=streamed, memory_budget=memory_budget)
-                glued = GluedAssembly(splitter, split_states, weak_bases, states, build_rect, ints, n_core + n_act - 1,
-                                      sigma[-1], 2, hummr_frag._n_act_elec + hummr_frag._input_charge).compute(products)
-                out.update(S_A=np.array(glued["S"]), H_A=np.array(glued["H"]))
-                glued = None
             np.savez(bridge_out, **out, products=np.array([(kA[0], kA[1], iA, kB[0], kB[1], iB) for kA, iA, kB, iB in products]))
-            print(f"bridge overlap S^(k), k = 0..2, of {len(products)} singlet product states written to {bridge_out}")
-            if "H_mixed" in out:
-                # E(n): the lowest real eigenvalue of S_n^-1 H_n, S_n and H_n summed up to the weak order n
-                H = out["H_weak"] + out["H_strong"] + out["H_mixed"]
-                for n in range(len(H)):
-                    w_n = np.linalg.eigvals(np.linalg.solve(out["S"][:n + 1].sum(0), H[:n + 1].sum(0)))
-                    w_n = w_n[np.abs(w_n.imag) < 1e-8].real
-                    bridge_en[f"bridge[{n}]"] = (w_n.min() if len(w_n) else np.nan) + E_nuc
-                    print(f"final bridge (K = 1) energy, weak order {n}: {bridge_en[f'bridge[{n}]']}")
-            assembly = weak_dens = mats = None
+            print(f"bridge matrices (weak orders 0 ... {nmax_b}) of {len(products)} singlet product states written to {bridge_out}")
+        if "H_mixed" in out:
+            # E(n): the lowest real eigenvalue of S_n^-1 H_n, S_n and H_n summed up to the weak order n
+            H = out["H_weak"] + out["H_strong"] + out["H_mixed"]
+            for n in range(len(H)):
+                w_n = np.linalg.eigvals(np.linalg.solve(out["S"][:n + 1].sum(0), H[:n + 1].sum(0)))
+                w_n = w_n[np.abs(w_n.imag) < 1e-8].real
+                bridge_en[n] = (w_n.min() if len(w_n) else np.nan) + E_nuc
+                print(f"final bridge (K = 1) XR[{n}] energy: {bridge_en[n]}")
+        assembly = weak_dens = mats = None
+        # the bridge is the final evaluation (its orders: those of xr_order_final)
+        final_en = {ev: bridge_en[ev] for ev in final_orders if ev in bridge_en}
+        if isinstance(xr_order_final, int) and xr_order_final in final_en:
+            final_en = final_en[xr_order_final]
+        dens_builder.finalize_all()
+        return [np.real(E) + E_nuc for E in energies], [np.real(E) + E_nuc for E in reduced_energies], final_en
     # the state space of every final order: the complete one, or the one truncated (and reoptimized) by the overlap
     # criterion
     def sector_list(st, frag):
@@ -567,10 +731,8 @@ def run_xr(displacement, max_iter, xr_order_final=0, xr_order_solver=0, dens_fil
             terms_of.pop(id(sub_states), None)    # (5 matrices of the dimer dimension squared, not needed any more)
     release_dens()
     final_en = {ev: final_en[ev] for ev in evaluations}
-    if isinstance(xr_order_final, int) and leakage_metric_order is None and not bridge_en:
+    if isinstance(xr_order_final, int) and leakage_metric_order is None:
         final_en = final_en[xr_order_final]
-    else:
-        final_en.update(bridge_en)
 
     dens_builder.finalize_all()
 
@@ -593,19 +755,22 @@ if __name__ == "__main__":
     solver_args = {"davidson": dict(pool="none", use_davidson=True, dens_filter_thresh_solver=1e-8, dm_perturbation=1e-2,
                                      davidson_tol=1e-5),
                    "cipsi":    dict(pool="csf", pool_order="cipsi", dens_filter_thresh_solver=1e-7)}[solver]
-    # Be2 cc-pVDZ at 3.0 A: Davidson-XR[0] state optimization in the complete (FCI) CSF spaces, final XR[0..2] in the
-    # overlap-truncated state space, and the exact-bridge ansatz (K = 1, factorized) of the optimized states up to the weak
-    # order 2, with the order-2 terms restricted to the corresponding-orbital pairs above 0.1 (results_xr_order_states.tex,
-    # step 5: 11.3 min and 12.6 GB on 8 cores with these states, bridge order 2 within 29 uEh of the exact bridge)
+    # Be2 cc-pVDZ at 3.0 A: Davidson-XR[0] state optimization in the complete (FCI) CSF spaces, then the exact-bridge
+    # ansatz (K = 1, factorized) of the optimized states as the final evaluation, at the weak orders of xr_order_final
+    # (the normal XR evaluation is skipped with bridge_strong > 0; bridge_strong="auto" would pick K from the pair overlaps
+    # sigma > bridge_sigma_thresh), with the order-2 terms restricted to the corresponding-orbital pairs above 0.1
+    # (results_xr_order_states.tex, step 5: bridge order 2 within 29 uEh of the exact bridge)
     solver_en, reduced_en, final_en = run_xr(3.0, 50, xr_order_final=[0, 1, 2], n_init_states=8, max_states_per_sector=20,
                                              eval_reduced=True, hummr_input="/home/marco/hummr_tests/scratch/be_ccdz_fci_fcore.inp",
                                              basis="cc-pvdz", use_gradients=False, streamed=True, memory_budget=8e9,
                                              states_in=None, states_out=None,   # e.g. "states_3.0.pkl": read / write the optimized states
                                              overlap_min_eigval=0.15, overlap_max_weight=1e-4, overlap_reoptimize=False,
-                                             overlap_check_order=4,
-                                             # the bridge requires the complete CSF spaces (pair rotation), no HCI selection
+                                             overlap_check_order=3,
+                                             hci_epsilon=1e-3,
+                                             # (with HCI spaces, e.g. hci_epsilon=1e-3, the orbitals are rotated first and
+                                             # the weak parts get a hummr instance of their own, see bridge_closure_thresh)
                                              bridge_strong=1, bridge_out="bridge_ccdz_3.0.npz", bridge_mode="factorized",
-                                             bridge_pair_thresh=0.1,
+                                             bridge_pair_thresh=0.1, bridge_weak_rtol=1e-3, bridge_closure_thresh=1e-8,
                                              **solver_args)
     print("solver energies (enlarged state spaces):  ", solver_en)
     print("solver energies (compressed state spaces):", reduced_en)

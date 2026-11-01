@@ -32,6 +32,27 @@ LARGE_CACHE_BYTES = 1 << 30
 
 _large = OrderedDict()    # (id(storage), indices) -> (storage, bytes, owner, fragment, transition)
 _large_bytes = 0
+# the intermediates with at most MAX_CACHED_ORB_INDICES orbital indices are cached as well, but above
+# SMALL_UNBOUNDED_BYTES only within SMALL_CACHE_BYTES (least recently used dropped): with many states their three
+# orbital indices are not small any more (Be2 cc-pVTZ bridge, weak bases of about 40 states per sector: 0.3 GB each,
+# growing without bound to an out-of-memory kill)
+SMALL_UNBOUNDED_BYTES = 1 << 20
+SMALL_CACHE_BYTES = 1 << 30
+_small = OrderedDict()    # (id(storage), indices) -> (storage, bytes)
+_small_bytes = 0
+
+def set_small_cache_limit(n_bytes):
+    """byte limit of the cached intermediates with few orbital indices above SMALL_UNBOUNDED_BYTES"""
+    global SMALL_CACHE_BYTES
+    SMALL_CACHE_BYTES = int(n_bytes)
+    _trim_small()
+
+def _trim_small():
+    global _small_bytes
+    while _small and _small_bytes > SMALL_CACHE_BYTES:
+        key, (storage, n_bytes) = _small.popitem(last=False)
+        storage.pop(key[1], None)
+        _small_bytes -= n_bytes
 
 def set_large_cache_limit(n_bytes):
     """byte limit of the cache of the large intermediates (0: not cached, computed for every diagram call)"""
@@ -60,15 +81,22 @@ class cached_if_small(object):
         self.storage = {}
         self.owner, self.fragment = owner, fragment
     def __call__(self, *indices):
-        global _large_bytes
+        global _large_bytes, _small_bytes
         if indices in self.storage:
             key = (id(self.storage), indices)
             if key in _large:
                 _large.move_to_end(key)
+            elif key in _small:
+                _small.move_to_end(key)
             return self.storage[indices]
         result = self.rule(*indices)
         if result is None or len(result.shape) - 2 <= MAX_CACHED_ORB_INDICES:
             self.storage[indices] = result
+            n_bytes = 0 if result is None else 8 * int(numpy.prod(result.shape))
+            if n_bytes > SMALL_UNBOUNDED_BYTES:
+                _small[(id(self.storage), indices)] = (self.storage, n_bytes)
+                _small_bytes += n_bytes
+                _trim_small()
         elif self.owner is not None and LARGE_CACHE_BYTES > 0:
             # indices: (chg_i, chg_j, mult_bra, mult_ket, rank2, restr_ca, path, views)
             key = (id(self.storage), indices)

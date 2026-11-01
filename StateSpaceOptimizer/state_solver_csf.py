@@ -85,6 +85,28 @@ def save_states(path, states, csf_layout, **info):
                                  for chg, by_mult in frag_states.items()} for frag_states in states],
                      "csf_layout": csf_layout, "info": info}, f)
 
+def map_states(states, old_layout, new_layout):
+    """
+    states[chg][mult] (CSF vectors of the space old_layout) on the CSF space new_layout via their CFGs (the CSFs of a
+    CFG do not depend on the rest of the space), without orthonormalization: exact if new_layout contains all CFGs of
+    old_layout (e.g. a selected space and its extension), CFGs missing in new_layout are dropped
+    """
+    out = {}
+    for chg, by_mult in states.items():
+        for mult, vecs in by_mult.items():
+            old = {cfg: (pos, dim) for cfg, pos, dim in old_layout[chg][mult]}
+            new = new_layout[chg][mult]
+            n_new = sum(dim for _, _, dim in new)
+            mapped = []
+            for vec in vecs:
+                v = np.zeros(n_new)
+                for cfg, pos, dim in new:
+                    if cfg in old:
+                        v[pos:pos + dim] = vec[old[cfg][0]:old[cfg][0] + dim]
+                mapped.append(v)
+            out.setdefault(chg, {})[mult] = mapped
+    return out
+
 def load_states(path, csf_layout, thresh=1e-8):
     """
     reads the states written by save_states and maps them onto the CSF space with csf_layout via their CFGs (the

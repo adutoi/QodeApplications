@@ -54,6 +54,18 @@ CHUNK_CHANNELS_GUESS = 4          # channels per sector pair assumed by _chunked
 # makes the intermediates per block-0 index larger than the density rows (V with free indices: up to 10 times slower)
 FUSED = True
 FUSED_MAX_G = 8
+# _two_stage: transformed densities whose channels of a sector pair exceed CACHED_DENSITY_FRACTION of the cache are
+# built for chunks of the bra states and contracted right away (_transformed_chunked), instead of all at once and kept
+# (Be2 cc-pVTZ bridge, ccaa with two slots in the pair basis, 40 x 40 states: 1 GB per channel); with it, the
+# pre-contractions with slots in the pair basis always use the transformed densities (transform_fits)
+TRANSFORM_CHUNKS = True
+TRANSFORM_CHUNK_BYTES = None    # (tests: the bytes per chunk instead of CACHED_DENSITY_FRACTION of the cache)
+# _kernel: hummr's normal-ordering corrections build the rest densities (two operators less) explicitly over all root
+# pairs of the call, about KERNEL_REST_PATHS coupling paths of them at once (Be2 cc-pVTZ bridge, cccaaa between 24 x 24
+# cation states: 3.3 GB per ccaa rest path, 13 GB above the budget per call); the kets are chunked so that they stay
+# within the cache (KERNEL_CHUNK_BYTES for tests; smaller chunks repeat the bra side: 6-31G with single kets 2x slower)
+KERNEL_REST_PATHS = 5
+KERNEL_CHUNK_BYTES = None
 
 
 class StreamedDensityType:
@@ -202,9 +214,10 @@ class StreamedDensities:
         out = sorted({l for l in labels if isinstance(l, int)})
         return self._full(name, tuple(chg_pair), tuple(channel), (0, 1), rho, ops, out, False)
 
-    def transform_fits(self, name, chg_pair, channel, dims):
+    def transform_fits(self, name, chg_pair, channel, dims, alternative_bytes=0):
         """the transformed density (dims per slot, e.g. K or n_act) of all channels of the sector pair fits into
-        CACHED_DENSITY_FRACTION of the cache (contract_transformed)"""
+        CACHED_DENSITY_FRACTION of the cache (contract_transformed), or is not larger than alternative_bytes (the
+        size of the result the caller would build instead)"""
         if self.memory_budget is None or len(name) < STREAMED_MIN_OPS:
             return self.memory_budget is not None
         bra_sector, ket_sector = (chg_pair[0], channel[0]), (chg_pair[1], channel[1])
@@ -212,9 +225,19 @@ class StreamedDensities:
             bra_vecs, ket_vecs = self._sector_states(bra_sector, ket_sector, False)
         except KeyError:
             return False
+        if TRANSFORM_CHUNKS:
+            return True
         n_channels = self._n_channels.get((name, channel[3], bra_sector, ket_sector, False), CHUNK_CHANNELS_GUESS)
-        return 8 * len(bra_vecs) * len(ket_vecs) * int(np.prod(dims)) * n_channels \
-               <= CACHED_DENSITY_FRACTION * self.memory_budget
+        n_bytes = 8 * len(bra_vecs) * len(ket_vecs) * int(np.prod(dims)) * n_channels
+        return n_bytes <= max(CACHED_DENSITY_FRACTION * self.memory_budget, alternative_bytes)
+
+    def sector_sizes(self, chg_pair, channel):
+        """the numbers of bra and ket states of the channel (0, 0 without states)"""
+        try:
+            bra_vecs, ket_vecs = self._sector_states((chg_pair[0], channel[0]), (chg_pair[1], channel[1]), False)
+        except KeyError:
+            return 0, 0
+        return len(bra_vecs), len(ket_vecs)
 
     # ------------------------------------------------------------------------------------------------------------
     # reversed channels
@@ -243,12 +266,21 @@ class StreamedDensities:
         perm, coefs = reversal(name.count("c"), name.count("a"), restr, path_x, q2)
         y_labels = [orb_labels[p] for p in perm]
         y_states = (state_labels[1], state_labels[0])
-        result = 0
+        # (summed in place: _embedded returns a new array with a frozen core, scaled in place then; without one it may
+        # be a view of a cached density and is scaled into a new array)
+        result = None
         for path_y, coef in coefs.items():
-            result = result + coef * ratio * self._embedded(name_y, (chg_pair[1], chg_pair[0]),
-                                                           (mult_a, mult_b, rank2, restr, path_y), y_states,
-                                                           y_labels, operands, out, not swapped)
-        return result
+            term = self._embedded(name_y, (chg_pair[1], chg_pair[0]), (mult_a, mult_b, rank2, restr, path_y), y_states,
+                                  y_labels, operands, out, not swapped)
+            if self.n_core:
+                term *= coef * ratio
+            else:
+                term = (coef * ratio) * term
+            if result is None:
+                result = term
+            else:
+                result += term
+        return 0 if result is None else result
 
     # ------------------------------------------------------------------------------------------------------------
     # frozen core
@@ -335,8 +367,11 @@ class StreamedDensities:
                 out_index.append(slice(None))
                 out_eff.append(l)
         act_labels = [orb_labels[s] for s in slot_of]
-        result[tuple(out_index)] += coef * self._active(name_act, chg_pair, key, state_labels, act_labels, ops,
-                                                        out_eff, swapped)
+        term = self._active(name_act, chg_pair, key, state_labels, act_labels, ops, out_eff, swapped)
+        if coef == 1.0:
+            result[tuple(out_index)] += term            # (the active part: no temporary of the output size)
+        else:
+            result[tuple(out_index)] += coef * term
 
     # ------------------------------------------------------------------------------------------------------------
     # active densities
@@ -403,7 +438,15 @@ class StreamedDensities:
         inner = list(state_labels) + news
         self._n_channels.setdefault((name, channel[3], (chg_pair[0], channel[0]), (chg_pair[1], channel[1]), swapped),
                                     CHUNK_CHANNELS_GUESS)
-        rho = self._transformed(name, channel, (chg_pair[0], channel[0]), (chg_pair[1], channel[1]), state_labels,
+        bra_sector, ket_sector = (chg_pair[0], channel[0]), (chg_pair[1], channel[1])
+        if TRANSFORM_CHUNKS and self.memory_budget is not None and state_labels[0] in out:
+            bra_vecs, ket_vecs = self._sector_states(bra_sector, ket_sector, swapped)
+            per_bra = 8 * len(ket_vecs) * int(np.prod([m.shape[1] for m in mats]))
+            n_channels = self._n_channels[(name, channel[3], bra_sector, ket_sector, swapped)]
+            if per_bra * len(bra_vecs) * n_channels > self._transform_chunk_bytes():
+                return self._transformed_chunked(name, channel, bra_sector, ket_sector, state_labels, mats, news,
+                                                 others, out, swapped)
+        rho = self._transformed(name, channel, bra_sector, ket_sector, state_labels,
                                 orb_labels, (mats, news), inner, swapped)
         return contract_labelled([(rho, inner)] + others, out) if others else np.transpose(rho, [inner.index(l) for l in out])
 
@@ -477,6 +520,64 @@ class StreamedDensities:
         labels = list(state_labels) + list(new_labels)
         # (a copy: the callers may scale the result in place)
         return np.ascontiguousarray(np.transpose(data[channel], [labels.index(l) for l in out]))
+
+    def _transform_chunk_bytes(self):
+        return CACHED_DENSITY_FRACTION * self.memory_budget if TRANSFORM_CHUNK_BYTES is None else TRANSFORM_CHUNK_BYTES
+
+    def _transformed_chunked(self, name, channel, bra_sector, ket_sector, state_labels, mats, news, others, out,
+                             swapped):
+        """
+        _two_stage for a transformed density too large for the cache: hummr's transformation for chunks of the bra
+        states (all channels of a chunk within CACHED_DENSITY_FRACTION of the cache, not cached), contracted with the
+        other operands right away for all channels; the results of the other channels are kept (_chunk_memo), as in
+        _chunked
+        """
+        signature = (tuple((m.shape, hash(m.tobytes())) for m in mats),
+                     tuple((array.__array_interface__["data"][0], array.shape, array.strides, tuple(labels))
+                           for array, labels in others))
+        key = ("transformed", name, channel[3], bra_sector, ket_sector, swapped, tuple(state_labels), tuple(news),
+               tuple(out), signature)
+        memo = self._chunk_memo.get(key)
+        if memo is not None and channel in memo[1]:
+            self._chunk_memo.move_to_end(key)
+            return memo[1].pop(channel)
+        bra_vecs, ket_vecs = self._sector_states(bra_sector, ket_sector, swapped)
+        sector_key = (name, channel[3], bra_sector, ket_sector, swapped)
+        per_bra = 8 * len(ket_vecs) * int(np.prod([m.shape[1] for m in mats]))
+        inner = list(state_labels) + list(news)
+        axis = list(out).index(state_labels[0])
+        results, b0 = {}, 0
+        while b0 < len(bra_vecs):
+            n_channels = self._n_channels.get(sector_key, CHUNK_CHANNELS_GUESS)
+            chunk = max(1, int(self._transform_chunk_bytes() // (per_bra * n_channels)))
+            data = self.fragment.transformed_density_sector(name.count("c"), name.count("a"), channel[3], bra_sector,
+                                                            ket_sector, bra_vecs[b0:b0 + chunk], ket_vecs, mats,
+                                                            CACHED_DENSITY_FRACTION * self.memory_budget)
+            self._n_channels[sector_key] = len(data)
+            for ch in list(data):
+                rho = self._to_cg(name, ch, np.asarray(data.pop(ch)))
+                part = contract_labelled([(rho, inner)] + others, out) if others else \
+                       np.transpose(rho, [inner.index(l) for l in out])
+                rho = None
+                if ch not in results:
+                    # (filled chunk by chunk: no list of parts next to the concatenated result)
+                    shape = list(part.shape)
+                    shape[axis] = len(bra_vecs)
+                    results[ch] = np.empty(shape)
+                index = [slice(None)] * part.ndim
+                index[axis] = slice(b0, b0 + part.shape[axis])
+                results[ch][tuple(index)] = part
+                part = None
+            b0 += chunk
+        result = results.pop(channel)
+        if results:
+            self._chunk_memo[key] = ([array for array, _ in others], results)
+            # (also within the cache in bytes, at least the newest entry: its channels are requested right after)
+            n_bytes = lambda entry: sum(a.nbytes for a in entry[1].values())
+            while len(self._chunk_memo) > 1 and (len(self._chunk_memo) > CHUNK_MEMO_SIZE or
+                                                 sum(map(n_bytes, self._chunk_memo.values())) > self.memory_budget):
+                self._chunk_memo.popitem(last=False)
+        return result
 
     def _chunked(self, name, channel, bra_sector, ket_sector, state_labels, orb_labels, operands, out, swapped):
         """
@@ -566,8 +667,19 @@ class StreamedDensities:
             bra_vecs, ket_vecs = bra[bra_sector[0]][bra_sector[1]], ket[ket_sector[0]][ket_sector[1]]
         except KeyError:
             raise KeyError(f"no states for the density {name} between {bra_sector} and {ket_sector}")
-        result = self.fragment.contract_density_sector(name.count("c"), name.count("a"), channel[3], bra_sector,
-                                                       ket_sector, bra_vecs, ket_vecs, channel, slot_axis, tensor)
+        limit = None if self.memory_budget is None else \
+                self.memory_budget if KERNEL_CHUNK_BYTES is None else KERNEL_CHUNK_BYTES
+        per_ket = 8 * len(bra_vecs) * self.n_act ** (len(name) - 2) * KERNEL_REST_PATHS
+        chunk = len(ket_vecs) if limit is None or len(name) < 4 else max(1, int(limit // per_ket))
+        if chunk >= len(ket_vecs):
+            result = self.fragment.contract_density_sector(name.count("c"), name.count("a"), channel[3], bra_sector,
+                                                           ket_sector, bra_vecs, ket_vecs, channel, slot_axis, tensor)
+        else:
+            # (the result is linear in the kets: their chunks side by side)
+            result = np.concatenate([np.asarray(self.fragment.contract_density_sector(
+                                         name.count("c"), name.count("a"), channel[3], bra_sector, ket_sector, bra_vecs,
+                                         ket_vecs[k0:k0 + chunk], channel, slot_axis, tensor))
+                                     for k0 in range(0, len(ket_vecs), chunk)], axis=1)
         result = np.asarray(result)
         result *= 1.0 / cg                   # CG convention (in place, the array is new)
         labels = list(state_labels) + [l for l in orb_labels if isinstance(l, int)] \
