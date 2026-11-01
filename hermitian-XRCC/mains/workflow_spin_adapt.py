@@ -53,7 +53,7 @@ def run_xr(displacement, max_iter, xr_order_final=0, xr_order_solver=0, dens_fil
            overlap_max_cycles=4, leakage_metric_order=None, leakage_pair_thresh=None, metric_pair_thresh=None,
            leakage_v_thresh={2: 1e-5}, leakage_pair_slots=2.5, pair_rotation=False, bridge_strong="auto", bridge_out=None,
            bridge_mode="factorized", bridge_pair_thresh=None, bridge_closure_thresh=1e-8,
-           bridge_weak_rtol=1e-4, bridge_sigma_thresh=0.9, bridge_v_thresh=None, transform_chunks=True):
+           bridge_weak_rtol=1e-4, bridge_sigma_thresh=0.9, bridge_v_thresh=None, transform_chunks=False):
     """
     xr_order_final:        XR order (or list of orders) of the final evaluation in the optimized state space
     leakage_metric_order:  if given (2, 3 or 4), the final evaluation also includes the leakage-metric ansatz
