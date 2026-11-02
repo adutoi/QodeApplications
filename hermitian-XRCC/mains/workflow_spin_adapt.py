@@ -106,7 +106,8 @@ def run_xr(displacement, max_iter, xr_order_final=0, xr_order_solver=0, dens_fil
                            never.  With few pairs it brings a speed up (Be2 cc-pVDZ, K = 5 of 14: 41.5 -> 36.4 s) and
                            lowers the peak memory; with many pairs it is slower but still lowers the peak memory
                            (cc-pVTZ at 3.0 A, K = 19 of 30, overlap_min_eigval 0.05: 370 -> 432 s, peak 21.1 -> 16.5 GB),
-                           so the default 2.5 switches it off there, and True trades the runtime for the memory
+                           so the default 2.5 switches it off there, and True trades the runtime for the memory.
+                           With bridge_strong > 0 it is always True (the bridge always uses the pair basis)
     pair_rotation:         the final evaluation in the corresponding orbitals of the core-projected valence overlap
                            (S_AB diagonal, strongest pairs as the last active orbitals; fragment A rotated by U, B by V
                            of S_AB = U s V^T), with the optimized states transformed exactly to the rotated orbitals
@@ -327,6 +328,10 @@ def run_xr(displacement, max_iter, xr_order_final=0, xr_order_solver=0, dens_fil
         raise ValueError("the bridge replaces the final evaluation; leakage_metric_order is not used with it")
     if bridge_strong > 0 and not pair_rotation:
         pair_rotation = "first" if selected_run else True
+    if bridge_strong > 0 and leakage_pair_slots is not True:
+        # the bridge always evaluates the overlap-connected free density slots in the pair basis
+        print(f"bridge_strong = {bridge_strong}: leakage_pair_slots {leakage_pair_slots!r} -> True")
+        leakage_pair_slots = True
     if selected_run and pair_rotation and pair_rotation != "first":
         raise ValueError('pair_rotation with selected CI spaces requires pair_rotation="first"')
     frag_mos = None     # (with pair_rotation="first") the MO coefficients of every fragment in its corresponding orbitals
