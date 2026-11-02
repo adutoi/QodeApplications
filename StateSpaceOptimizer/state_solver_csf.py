@@ -74,6 +74,40 @@ def unit_vector_pool(states, n_passes=1, csf_indices=None):
             pool.setdefault(chg, {})[mult] = list(unit_vectors) * n_passes
     return pool
 
+def real_eigenvectors(vals, vecs, degeneracy_tol=1e-7, imag_tol=1e-10):
+    """
+    real, unit-norm eigenvectors (columns) of a real non-symmetric matrix from the (complex) ones of numpy/scipy eig,
+    for real eigenvalues vals: a non-degenerate eigenvector is real up to its phase, which is fixed; the eigenvectors
+    of a degenerate cluster (|E_i - E_j| < degeneracy_tol, e.g. the two components of a Pi state) may be complex
+    mixtures, which are replaced by an orthonormal real basis of the same space (the leading left singular vectors
+    of their real and imaginary parts; any basis of an eigenspace is one of eigenvectors)
+    """
+    vals = np.real(np.asarray(vals))
+    out = np.zeros(vecs.shape)
+    i = 0
+    while i < len(vals):
+        j = i + 1
+        while j < len(vals) and abs(vals[j] - vals[j - 1]) < degeneracy_tol:
+            j += 1
+        block = vecs[:, i:j]
+        vec = block[:, 0] * np.conj(block[np.argmax(np.abs(block[:, 0])), 0])
+        if j - i == 1 and np.linalg.norm(np.imag(vec)) <= imag_tol * np.linalg.norm(vec):
+            out[:, i] = np.real(vec) / np.linalg.norm(np.real(vec))
+        elif j - i == 1:
+            # complex, but no degenerate partner among the given roots (e.g. the list ends within a degenerate
+            # cluster): the dominant real direction of its span
+            print(f"WARNING: the eigenvector of {vals[i]:.8f} is complex (degenerate with a root not solved for?), "
+                  "its dominant real direction is used")
+            U = np.linalg.svd(np.stack([np.real(vec), np.imag(vec)], axis=1), full_matrices=False)[0]
+            out[:, i] = U[:, 0]
+        else:
+            U, s, _ = np.linalg.svd(np.concatenate([np.real(block), np.imag(block)], axis=1), full_matrices=False)
+            if s[j - i - 1] < 1e-8 * s[0]:
+                raise ValueError(f"the eigenvectors of the degenerate roots {vals[i:j]} do not span a real space of their dimension")
+            out[:, i:j] = U[:, :j - i]
+        i = j
+    return out
+
 def save_states(path, states, csf_layout, **info):
     """
     writes the fragment states states[frag][chg][mult] (lists of CSF vectors) together with the CSF layout of their
@@ -147,9 +181,17 @@ def optimize_states(max_iter, xr_order, states, additional_states, ints, build_d
                     exhaust_pool=False, lin_dep_thresh=1e-6, use_gradients=False, grad_level="herm", grad_conv_thresh=1e-5,
                     pool_order="given", embedded=None, use_davidson=False, davidson_tol=1e-5, davidson_max_iter=100,
                     davidson_max_size=40, dm_perturbation=1e-3, davidson_preconditioner=True, dm_vectors="right",
-                    state_weights=None):
+                    state_weights=None, target_weights=None):
     """
     max_iter:              maximum number of enlarge-diagonalize-compress cycles
+    target_state:          index (0: lowest root of the target block) or list of indices of the roots the states are
+                           optimized for (state averaging): the compressions keep the dominant eigenvectors of the
+                           averaged reduced density matrix sum_k w_k rho_k (the Davidson sweeps: of the target roots of
+                           the embedded problem, with the perturbation averaged in the same way); the energies are then
+                           arrays over the target roots, converged if all of them are.  The roots below the highest
+                           target are always solved for (the eigenvectors are found by their order), whether they are
+                           targets or not
+    target_weights:        weights w_k of the target roots (normalized to one; default: equal weights)
     states:                states[frag][chg][mult] = list of CSF vectors (initial guess), modified in place
     additional_states:     same structure, pool of candidate states, which are added successively
     exhaust_pool:          only stop due to convergence once the pool has been passed through completely
@@ -183,8 +225,8 @@ def optimize_states(max_iter, xr_order, states, additional_states, ints, build_d
                            davidson_tol, at most davidson_max_iter iterations, subspace restarted at
                            davidson_max_size), and the fragment's states are replaced by the eigenvectors of its
                            (perturbed, see dm_perturbation) reduced density matrix per sector with eigenvalues above
-                           dens_filter_thresh (at least one, at most max_states_per_sector); a single target state at
-                           XR[0] only
+                           dens_filter_thresh (at least one, at most max_states_per_sector); XR[0] only, several target
+                           roots with a block Davidson (all roots up to the highest target)
     davidson_preconditioner: diagonal (Davidson) preconditioner (D - theta)^-1 with the diagonal D of H^eff
     dm_perturbation:       weight alpha of the density-matrix perturbation of the Davidson sweeps (White's correction
                            of single-site DMRG): rho += alpha sum_t Y_t Y_t^T with Y_t the contributions of the dimer
@@ -206,7 +248,17 @@ def optimize_states(max_iter, xr_order, states, additional_states, ints, build_d
     returns the energy histories of the enlarged and of the compressed state spaces (the latter only if eval_reduced)
     and the optimized states
     """
-    target_states = [target_state] if isinstance(target_state, int) else list(target_state)
+    target_states = [int(target_state)] if np.ndim(target_state) == 0 else [int(k) for k in target_state]
+    if len(set(target_states)) != len(target_states) or min(target_states) < 0:
+        raise ValueError(f"target_state has to be a root index or a list of distinct root indices, not {target_state!r}")
+    if target_weights is None:
+        target_weights = np.full(len(target_states), 1 / len(target_states))
+    else:
+        target_weights = np.asarray(target_weights, dtype=float)
+        if target_weights.shape != (len(target_states),) or np.any(target_weights < 0) or target_weights.sum() <= 0:
+            raise ValueError(f"target_weights {target_weights} do not fit the target states {target_states}")
+        target_weights = target_weights / target_weights.sum()
+    n_roots = max(target_states) + 1     # the roots that are solved for
 
     pool_tracker = [{chg: {mult: 0 for mult in mult_dict} for chg, mult_dict in additional_states[frag].items()} for frag in range(2)]
 
@@ -329,23 +381,20 @@ def optimize_states(max_iter, xr_order, states, additional_states, ints, build_d
                 print(f"frag {frag}, chg {chg}, mult {mult}: pool reordered by first-order importance "
                       f"(largest {importance[order[0]]:.2e}, {len(rest)} remaining)")
 
-    def solve(dens):
+    def solve(dens, roots=None):
+        """energies (a scalar for a single root) and eigenvectors (reshaped to the product dimensions) of the roots
+        (default: the target states) in the product basis of the current states"""
+        roots = target_states if roots is None else roots
         n_states = [count_states(drop_empty_sectors(states[frag])) for frag in range(2)]
         H1, H2 = get_xr_H(ints, dens, xr_order, monomer_charges, target_multiplicity, target_charge=target_charge)
         last.H1 = H1
         # an int target_state allows excitonic.fci to use the sparse eigensolver
         mask = product_basis_mask(dens, monomer_charges, target_charge, target_multiplicity)
-        E, vecs = get_xr_states_from_H(H1, H2, target_state=target_states if len(target_states) > 1 else target_states[0], basis_mask=mask)
+        E, vecs = get_xr_states_from_H(H1, H2, target_state=roots if len(roots) > 1 else roots[0], basis_mask=mask)
         vecs = vecs.reshape(vecs.shape[0], -1)
         dims = [H.shape[0] for H in H1]
-        target_vecs = []
-        for i in range(len(target_states)):
-            vec = vecs[:, i]
-            vec = vec * np.conj(vec[np.argmax(np.abs(vec))]) / np.abs(vec[np.argmax(np.abs(vec))])  # fix (complex) phase
-            if np.linalg.norm(np.imag(vec)) > 1e-10:
-                raise ValueError("imaginary part of eigenvector is not negligible")
-            vec = np.real(vec)
-            target_vecs.append((vec / np.linalg.norm(vec)).reshape(dims))
+        real_vecs = real_eigenvectors(np.atleast_1d(E), vecs)
+        target_vecs = [real_vecs[:, i].reshape(dims) for i in range(len(roots))]
         return np.real(E), target_vecs, n_states
 
     def compress_state_space(target_vecs, n_states):
@@ -355,8 +404,8 @@ def optimize_states(max_iter, xr_order, states, additional_states, ints, build_d
         between different sectors are neglected (they vanish for spin-pure target states, if the
         sectors differ in multiplicity, and always if they differ in charge).
         """
-        dens_mats = [sum(vec @ vec.T for vec in target_vecs) / len(target_vecs),   # contract over frag 1
-                     sum(vec.T @ vec for vec in target_vecs) / len(target_vecs)]   # contract over frag 0
+        dens_mats = [sum(w * vec @ vec.T for w, vec in zip(target_weights, target_vecs)),   # contract over frag 1
+                     sum(w * vec.T @ vec for w, vec in zip(target_weights, target_vecs))]   # contract over frag 0
         for frag in range(2):
             for chg, mult, sl in local_sectors(n_states[frag], monomer_charges[frag]):
                 rho = dens_mats[frag][sl, sl]
@@ -384,63 +433,98 @@ def optimize_states(max_iter, xr_order, states, additional_states, ints, build_d
                     mask[rows, cols] = True
         return mask
 
-    def davidson(emb, x0, E0, transpose=False):
-        """lowest (real) eigenpair of H^eff (transpose: (H^eff)^T, i.e. the left eigenvector) in the allowed sector
-        pairs, starting from x0 (non-symmetric Davidson)"""
+    def davidson(emb, x0s, E0s, transpose=False):
+        """the lowest len(x0s) (real) eigenpairs of H^eff (transpose: (H^eff)^T, i.e. the left eigenvectors) in the
+        allowed sector pairs, ordered by their energy, starting from x0s (non-symmetric block Davidson; the converged
+        roots get no further correction vectors).  Returns (thetas, xs) with unit-norm x[p, b]."""
         mask = allowed_pairs(emb)
         n = int(mask.sum())
+        k = len(x0s)
+        if n < k:
+            raise ValueError(f"the embedded problem has {n} dimensions, fewer than the {k} roots solved for")
         diag = emb.diagonal()[mask] if davidson_preconditioner else None
         sigma = emb.sigma_T if transpose else emb.sigma
+        max_size = min(max(davidson_max_size, 4 * k), n)
         def apply(v):
             x = np.zeros(mask.shape)
             x[mask] = v
             return sigma(x)[mask]
-        v = x0[mask] / np.linalg.norm(x0[mask])
-        V, W = [v], [apply(v)]
-        theta, u = E0, v
+        def orthonormal_add(V, W, ts):
+            """appends the components of ts orthogonal to V (normalized, linearly independent ones only)"""
+            for t in ts:
+                for _ in range(2):
+                    if V:
+                        t = t - np.array(V).T @ (np.array(V) @ t)
+                norm = np.linalg.norm(t)
+                if norm > 1e-10:
+                    V.append(t / norm)
+                    W.append(apply(V[-1]))
+        def ritz(Vm, Wm):
+            """the lowest k Ritz pairs by their real part, the vectors real (phase-fixed) and normalized"""
+            vals, vecs = sp.linalg.eig(Vm.T @ Wm)
+            order = np.argsort(vals.real)[:k]
+            thetas, Y = vals[order], vecs[:, order]
+            for j in range(k):
+                if abs(thetas[j].imag) > 1e-8:
+                    print(f"WARNING: Davidson Ritz value {thetas[j]:.8f} is complex, its real part is used")
+            # (V is orthonormal, so the real basis of y is one of u = V y; complex conjugate Ritz pairs and the complex
+            #  mixtures of degenerate ones are replaced by a real basis of their span)
+            Y = real_eigenvectors(thetas.real, Y, degeneracy_tol=1e-8 + 1e-8 * np.abs(thetas.real).max())
+            return thetas.real, Y
+        V, W = [], []
+        orthonormal_add(V, W, [x0[mask] for x0 in x0s])
+        orthonormal_add(V, W, [np.random.default_rng(len(V)).standard_normal(n) for _ in range(k - len(V))])
+        thetas, res = np.asarray(E0s, dtype=float), np.full(k, np.inf)
         for it in range(davidson_max_iter):
             Vm, Wm = np.array(V).T, np.array(W).T
-            h = Vm.T @ Wm
-            vals, vecs = sp.linalg.eig(h)
-            i = np.argmin(vals.real)
-            theta, y = vals[i].real, np.real(vecs[:, i] * np.conj(vecs[np.argmax(np.abs(vecs[:, i])), i]))
-            y /= np.linalg.norm(Vm @ y)
-            u = Vm @ y
-            r = Wm @ y - theta * u
-            res = np.linalg.norm(r)
-            if res < davidson_tol:
+            thetas, Y = ritz(Vm, Wm)
+            U, R = Vm @ Y, Wm @ Y - (Vm @ Y) * thetas
+            res = np.linalg.norm(R, axis=0)
+            if np.all(res < davidson_tol):
                 break
-            if len(V) >= min(davidson_max_size, n):
-                V, W = [u], [Wm @ y]    # restart with the current Ritz vector
-            if davidson_preconditioner:
-                # diagonal (Davidson) preconditioner, small denominators bounded
-                denom = diag - theta
-                t = -r / np.where(np.abs(denom) < 1e-4, np.copysign(1e-4, denom), denom)
-            else:
-                t = r
-            t = t - np.array(V).T @ (np.array(V) @ t)
-            t -= np.array(V).T @ (np.array(V) @ t)
-            if np.linalg.norm(t) < 1e-12:
+            if len(V) + int(np.sum(res >= davidson_tol)) > max_size:
+                # restart with the current Ritz vectors (orthonormalized, W transformed alike)
+                Q, Rq = np.linalg.qr(U)
+                WQ = (Wm @ Y) @ np.linalg.inv(Rq)
+                V, W = list(Q.T), list(WQ.T)
+            ts = []
+            for j in np.flatnonzero(res >= davidson_tol):
+                if davidson_preconditioner:
+                    # diagonal (Davidson) preconditioner, small denominators bounded
+                    denom = diag - thetas[j]
+                    ts.append(-R[:, j] / np.where(np.abs(denom) < 1e-4, np.copysign(1e-4, denom), denom))
+                else:
+                    ts.append(R[:, j])
+            n_before = len(V)
+            orthonormal_add(V, W, ts)
+            if len(V) == n_before:
                 break
-            t /= np.linalg.norm(t)
-            V.append(t)
-            W.append(apply(t))
-        print(f"Davidson{' (left)' if transpose else ''}: E = {theta:.10f}, residual {res:.2e} after {it + 1} iterations (dimension {n})")
-        x = np.zeros(mask.shape)
-        x[mask] = u
-        return theta, x
+        print(f"Davidson{' (left)' if transpose else ''}: E = {np.array2string(thetas, precision=10)}, residuals "
+              f"{np.array2string(res, precision=2)} after {it + 1} iterations (dimension {n})")
+        xs = []
+        for j in range(k):
+            x = np.zeros(mask.shape)
+            x[mask] = U[:, j] / np.linalg.norm(U[:, j])
+            xs.append(x)
+        return thetas, xs
 
-    def davidson_compress(frag, emb, x, x_left=None):
-        """the fragment's new states: dominant eigenvectors of its (perturbed) reduced density matrix per sector
-        (of the right eigenvector x, and the left one x_left, if given, see dm_vectors)"""
-        vecs = [(x, False)] if x_left is None else [(x, False), (x_left / np.linalg.norm(x_left), True)]
-        rhos = {sec: sum(v[rows] @ v[rows].T for v, _ in vecs) / len(vecs) for sec, rows in emb.rows.items()}
+    def davidson_compress(frag, emb, xs, x_lefts=None):
+        """the fragment's new states: dominant eigenvectors of its (perturbed) reduced density matrix per sector,
+        averaged over the target roots with target_weights (of the right eigenvectors xs, and the left ones x_lefts,
+        if given, see dm_vectors)"""
+        vecs = []
+        for w, x, xl in zip(target_weights, xs, x_lefts if x_lefts is not None else [None] * len(xs)):
+            if xl is None:
+                vecs.append((x, False, w))
+            else:
+                vecs += [(x, False, w / 2), (xl / np.linalg.norm(xl), True, w / 2)]
+        rhos = {sec: sum(w * v[rows] @ v[rows].T for v, _, w in vecs) for sec, rows in emb.rows.items()}
         if dm_perturbation > 0:
             # the dimer-term contributions one at a time (all of them at once: one dim_a x dim_b array per term)
-            for v, tr in vecs:
+            for v, tr, w in vecs:
                 for y in emb.dimer_terms(v, transpose=tr):
                     for sec, rows in emb.rows.items():
-                        rhos[sec] += dm_perturbation / len(vecs) * (y[rows] @ y[rows].T)
+                        rhos[sec] += dm_perturbation * w * (y[rows] @ y[rows].T)
         for (chg, mult), rows in emb.rows.items():
             eigvals, eigvecs = sp.linalg.eigh(rhos[(chg, mult)])
             order = np.argsort(eigvals)[::-1]
@@ -456,25 +540,29 @@ def optimize_states(max_iter, xr_order, states, additional_states, ints, build_d
 
     energies, reduced_energies = [], []
     if use_davidson:
-        if xr_order != 0 or len(target_states) > 1:
-            raise NotImplementedError("the Davidson sweeps are implemented for XR[0] and a single target state")
+        if xr_order != 0:
+            raise NotImplementedError("the Davidson sweeps are implemented for XR[0]")
         if dm_vectors not in ("right", "left_right"):
             raise ValueError(f"unknown dm_vectors {dm_vectors!r}")
+        all_roots = list(range(n_roots))
         for it in range(max_iter):
             for frag in range(2):
                 print(f"\n###### Davidson sweep {it}, fragment {frag} ######")
                 dens = emb = None    # (the previous densities and H^eff are released before building the new ones)
                 dens = [build_dens(f, states[f]) for f in range(2)]
-                E, target_vecs, n_states = solve(dens)
+                E, root_vecs, n_states = solve(dens, roots=all_roots)
                 emb = embedded(frag, dens, last.H1)
-                d = target_vecs[0] if frag == 0 else target_vecs[0].T
-                x0 = emb.states_to_csf(drop_empty_sectors(states[frag]), d)
-                theta, x = davidson(emb, x0, E)
-                energies.append(theta)
-                x_left = davidson(emb, x, theta, transpose=True)[1] if dm_vectors == "left_right" else None
-                davidson_compress(frag, emb, x, x_left)
+                x0s = [emb.states_to_csf(drop_empty_sectors(states[frag]), d if frag == 0 else d.T) for d in root_vecs]
+                thetas, xs = davidson(emb, x0s, np.atleast_1d(E))
+                if dm_vectors == "left_right":
+                    x_lefts = davidson(emb, xs, thetas, transpose=True)[1]
+                    x_lefts = [x_lefts[k] for k in target_states]
+                else:
+                    x_lefts = None
+                energies.append(thetas[target_states] if len(target_states) > 1 else thetas[target_states[0]])
+                davidson_compress(frag, emb, [xs[k] for k in target_states], x_lefts)
                 print(f"History of embedded XR[0] energies (without nuc_rep):", energies)
-            if len(energies) > 2 and abs(energies[-1] - energies[-3]) < conv_thresh:
+            if len(energies) > 2 and np.all(np.abs(energies[-1] - energies[-3]) < conv_thresh):
                 print("Converged!!!")
                 break
         else:

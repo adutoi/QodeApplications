@@ -21,6 +21,11 @@
 # Usage:
 #     python [-u] workflow_spin_adapt.py
 
+import os
+# numpy's mkl_rt defaults to Intel's OpenMP layer, hummr links mkl_gnu_thread + libgomp: one runtime for both (before
+# numpy / MKL are loaded; an explicit export, e.g. in a job script, takes precedence; todo_bridge_performance.md R3)
+os.environ.setdefault("MKL_THREADING_LAYER", "GNU")
+
 from get_ints import get_ints
 from get_xr_result_spin_adapt import get_xr_states, get_leakage_metric_states, build_frag_densities, check_overlap, overlap_matrices, overlap_truncation, local_sectors, dimer_labels
 from state_solver_csf import optimize_states, count_states, unit_vector_pool, save_states, load_states
@@ -40,6 +45,8 @@ np.set_printoptions(legacy="1.21")  # this gets rid of the print update in numpy
 
 class empty(object):  pass
 
+HCI_EPSILON_HUMMR = 1e-5    # hummr's default EpsilonHCI (src/info_objects/ci_info.h), run_xr(hci_epsilon=True)
+
 
 
 def run_xr(displacement, max_iter, xr_order_final=0, xr_order_solver=0, dens_filter_thresh_solver=1e-7, target_state=0,
@@ -53,8 +60,18 @@ def run_xr(displacement, max_iter, xr_order_final=0, xr_order_solver=0, dens_fil
            overlap_max_cycles=4, leakage_metric_order=None, leakage_pair_thresh=None, metric_pair_thresh=None,
            leakage_v_thresh={2: 1e-5}, leakage_pair_slots=2.5, pair_rotation=False, bridge_strong="auto", bridge_out=None,
            bridge_mode="factorized", bridge_pair_thresh=None, bridge_closure_thresh=1e-8,
-           bridge_weak_rtol=1e-4, bridge_sigma_thresh=0.9, bridge_v_thresh=None, transform_chunks=False):
+           bridge_weak_rtol=1e-4, bridge_sigma_thresh=0.9, bridge_v_thresh=None, transform_chunks=False, target_weights=None, eval_states=None):
     """
+    target_state:          root (0: the lowest one of the target block, target_charge and target_multiplicity) or list
+                           of roots, e.g. [0, 1], for which the fragment states are optimized (state averaging: the
+                           solver compresses with the reduced density matrix averaged over the target roots with
+                           target_weights, state_solver_csf.optimize_states) and which the final evaluations return:
+                           with a list, every energy (solver histories, final_en and the bridge energies) is an array
+                           over the target roots.  The roots are counted from the lowest one in every evaluation, also
+                           for the XR orders n >= 1 (a spurious root below the physical ones shifts the count)
+    target_weights:        weights of the target roots in the state averaging (default: equal)
+    eval_states:           the roots of the final evaluations (and of the bridge), if they differ from the target roots of
+                           the optimization (default: target_state), e.g. [0, 1, 2] for states optimized for [0]
     xr_order_final:        XR order (or list of orders) of the final evaluation in the optimized state space
     leakage_metric_order:  if given (2, 3 or 4), the final evaluation also includes the leakage-metric ansatz
                            H0 + (S2^[n])^-1 L^[2] with n = leakage_metric_order and L^[2] = S2H2^[2] - S2^[2] H0
@@ -131,7 +148,9 @@ def run_xr(displacement, max_iter, xr_order_final=0, xr_order_solver=0, dens_fil
     bridge_weak_rtol:      the weak parts of every weak sector are spanned by the singular vectors with a singular value
                            above bridge_weak_rtol times the largest (strong_split.WeakBasis; Be2 cc-pVDZ HCI: 1e-4 keeps
                            29 of 37 and 21 of 31 neutral vectors, the bridge 28 % faster, the energies within 3e-10 Eh of
-                           1e-12)
+                           1e-12).  Keep 1e-4 (or tighter): Be2 cc-pVDZ 3.0 A, K = 1, the bridge order 2 with HCI 1e-3 and
+                           rtol 1e-3 is 86 uEh above FCI, with complete spaces and rtol 1e-4 6.5 uEh below it (the share of
+                           the two thresholds not separated)
     bridge_pair_thresh:    factorized mode: the order-2 terms with the inter-fragment overlap restricted to the
                            corresponding-orbital pairs with a singular value above the threshold (as leakage_pair_thresh
                            for XR[2]: get_ints with pair_thresh, i.e. also in the biorthogonalization, and sigma of the
@@ -162,7 +181,11 @@ def run_xr(displacement, max_iter, xr_order_final=0, xr_order_solver=0, dens_fil
     hci_epsilon:           if given (and selected_cfgs is None), the CI spaces are selected first with this HCI threshold
                            as the union of independent selections (hummr_dens.space_selection.select_spaces) for the
                            actual dimer geometry: the bare fragment, the point charge of the charge-transfer partner
-                           (charged sectors) and the six weak fields +-field_strength along x, y and z
+                           (charged sectors) and the six weak fields +-field_strength along x, y and z.  None (default):
+                           the complete CI spaces; True: hummr's own default threshold HCI_EPSILON_HUMMR (EpsilonHCI 1e-5,
+                           hummr src/info_objects/ci_info.h).  Use 1e-5 ... 1e-4 for production: 1e-3 costs of the order of
+                           1e2 uEh in the bridge already in cc-pVDZ (see bridge_weak_rtol), more in cc-pVTZ; for small
+                           fragments such as Be (at most 3 active electrons) the complete spaces are cheap and preferable
     selection_roots:       number of (lowest) roots per sector each selection run is done for
     field_strength:        strength F (a.u.) of the uniform fields of the selection runs
     selection_dir:         directory of the selection runs and the CFG files of the union (union_c<chg>_m<mult>.cfgs),
@@ -233,6 +256,8 @@ def run_xr(displacement, max_iter, xr_order_final=0, xr_order_solver=0, dens_fil
     tensornet.initialize_timer()
     tensornet.tensorly_backend.initialize_timer()
 
+    if eval_states is None:
+        eval_states = target_state
     n_frag = 2
     def assemble(mos, core):
         """the displaced fragments with the MO coefficients mos[m] and the frozen core MOs core (empty for all-electron
@@ -319,6 +344,8 @@ def run_xr(displacement, max_iter, xr_order_final=0, xr_order_solver=0, dens_fil
         selected_cfgs = read_spaces(selected_spaces_dir, sectors)
         print(f"selected CFGs per sector (read from {selected_spaces_dir}):",
               {chg: {mult: len(cfgs) for mult, cfgs in by_mult.items()} for chg, by_mult in selected_cfgs.items()})
+    if hci_epsilon is True:
+        hci_epsilon = HCI_EPSILON_HUMMR
     if selected_cfgs is None and hci_epsilon is not None:
         # the unique fragment (in the frame of its hummr input) occurs at z = 0 and at z = displacement, its
         # environment is the other one (no partial charges for the neutral Be neighbour, it is nonpolar)
@@ -453,7 +480,8 @@ def run_xr(displacement, max_iter, xr_order_final=0, xr_order_solver=0, dens_fil
                                  use_gradients=use_gradients, grad_level=grad_level, grad_conv_thresh=grad_conv_thresh,
                                  pool_order=pool_order, embedded=embedded, use_davidson=use_davidson, davidson_tol=davidson_tol,
                                  davidson_preconditioner=davidson_preconditioner,
-                                 dm_perturbation=dm_perturbation, dm_vectors=dm_vectors, state_weights=state_weights)
+                                 dm_perturbation=dm_perturbation, dm_vectors=dm_vectors, state_weights=state_weights,
+                                 target_weights=target_weights)
         return result, state_weights
 
     (energies, reduced_energies, states), weights = solve_states(states, dens_filter_thresh_solver, max_iter, additional_states)
@@ -603,12 +631,14 @@ def run_xr(displacement, max_iter, xr_order_final=0, xr_order_solver=0, dens_fil
             np.savez(bridge_out, **out, products=np.array([(kA[0], kA[1], iA, kB[0], kB[1], iB) for kA, iA, kB, iB in products]))
             print(f"bridge matrices (weak orders 0 ... {nmax_b}) of {len(products)} singlet product states written to {bridge_out}")
         if "H_mixed" in out:
-            # E(n): the lowest real eigenvalue of S_n^-1 H_n, S_n and H_n summed up to the weak order n
+            # E(n): the lowest real eigenvalues of S_n^-1 H_n (the target roots), S_n and H_n summed up to the weak order n
             H = out["H_weak"] + out["H_strong"] + out["H_mixed"]
+            roots_b = [eval_states] if np.ndim(eval_states) == 0 else list(eval_states)
             for n in range(len(H)):
                 w_n = np.linalg.eigvals(np.linalg.solve(out["S"][:n + 1].sum(0), H[:n + 1].sum(0)))
-                w_n = w_n[np.abs(w_n.imag) < 1e-8].real
-                bridge_en[n] = (w_n.min() if len(w_n) else np.nan) + E_nuc
+                w_n = np.sort(w_n[np.abs(w_n.imag) < 1e-8].real)
+                E_b = np.array([w_n[k] if k < len(w_n) else np.nan for k in roots_b]) + E_nuc
+                bridge_en[n] = E_b if np.ndim(eval_states) else E_b[0]
                 print(f"final bridge (K = {bridge_strong}) XR[{n}] energy: {bridge_en[n]}")
         assembly = weak_dens = mats = None
         # the bridge is the final evaluation (its orders: those of xr_order_final)
@@ -673,10 +703,15 @@ def run_xr(displacement, max_iter, xr_order_final=0, xr_order_solver=0, dens_fil
         else:
             _, vecs = get_xr_states(ints, dens_t, 0, monomer_charges, target_multiplicity, target_state=target_state,
                                     target_charge=target_charge)
-            vec = np.asarray(vecs).reshape(sectors_t[0][-1][2].stop, sectors_t[1][-1][2].stop)
-            vec = np.real(vec * np.conj(vec.flat[np.argmax(np.abs(vec))]))
-            vec /= np.linalg.norm(vec)
-            w_loc = [np.sum(vec ** 2, axis=1), np.sum(vec ** 2, axis=0)]
+            vecs = np.asarray(vecs).reshape(sectors_t[0][-1][2].stop * sectors_t[1][-1][2].stop, -1)
+            n_t = vecs.shape[1]
+            weights_t = np.full(n_t, 1 / n_t) if target_weights is None else np.asarray(target_weights) / np.sum(target_weights)
+            w_loc = [0, 0]
+            for w_t, vec in zip(weights_t, vecs.T):
+                vec = vec.reshape(sectors_t[0][-1][2].stop, sectors_t[1][-1][2].stop)
+                vec = np.real(vec * np.conj(vec.flat[np.argmax(np.abs(vec))]))
+                vec /= np.linalg.norm(vec)
+                w_loc = [w_loc[0] + w_t * np.sum(vec ** 2, axis=1), w_loc[1] + w_t * np.sum(vec ** 2, axis=0)]
             print("overlap truncation: no solver weights, the XR[0] reduced density matrices are used")
         return S2, labels, [[sl for _, _, sl in sectors_t[frag]] for frag in range(n_frag)], w_loc
 
@@ -726,10 +761,10 @@ def run_xr(displacement, max_iter, xr_order_final=0, xr_order_solver=0, dens_fil
                       leakage_pair_slots=leakage_pair_slots)
         for ev in evs:
             if ev == "metric":
-                E, _ = get_leakage_metric_states(ints, dens, monomer_charges, target_multiplicity, target_state=target_state,
+                E, _ = get_leakage_metric_states(ints, dens, monomer_charges, target_multiplicity, target_state=eval_states,
                                                  target_charge=target_charge, metric_order=leakage_metric_order, **approx)
             else:
-                E, _ = get_xr_states(ints, dens, ev, monomer_charges, target_multiplicity, target_state=target_state,
+                E, _ = get_xr_states(ints, dens, ev, monomer_charges, target_multiplicity, target_state=eval_states,
                                      target_charge=target_charge, **approx)
             final_en[ev] = np.real(E) + E_nuc
             print(f"final {ev_name(ev)} energy: {final_en[ev]}")
@@ -750,7 +785,7 @@ if __name__ == "__main__":
     # frozen 1s, state space optimization at XR[0] starting from the lowest 8 states per sector, then XR[0], XR[1] and
     # XR[2] in the optimized (overlap-truncated) state space and the exact-bridge ansatz of the optimized states;
     # streamed density contractions with an 8 GB cache budget
-    # (for HCI spaces: hci_epsilon, selected_engine="hci", selected_spaces_dir; not yet with the bridge)
+    # (for HCI spaces: hci_epsilon, selected_engine="hci", selected_spaces_dir; also with the bridge)
     # solver = "davidson": Davidson sweeps in the complete (selected) CSF space of one fragment with the other fragment's
     #                      states fixed; per sector, the states with a weight above dens_filter_thresh_solver in the
     #                      (perturbed, dm_perturbation) reduced density matrix are kept; max_iter is the maximum number
@@ -773,15 +808,17 @@ if __name__ == "__main__":
                                              states_in=None, states_out=None,   # e.g. "states_3.0.pkl": read / write the optimized states
                                              overlap_min_eigval=0.15, overlap_max_weight=1e-4, overlap_reoptimize=False,
                                              overlap_check_order=3,
-                                             hci_epsilon=1e-3, selection_dir="selection_be_ccdz_fci_fcore_1e-03_4.5",
-                                             # (with HCI spaces, e.g. hci_epsilon=1e-3, the orbitals are rotated first and
-                                             # the weak parts get a hummr instance of their own, see bridge_closure_thresh)
+                                             hci_epsilon=1e-4,   # (True: hummr's default 1e-5; None: complete spaces)
+                                             # (with HCI spaces the orbitals are rotated first and the weak parts get a
+                                             # hummr instance of their own, see bridge_closure_thresh; the selection is
+                                             # written to selection_<input>_<eps>_<R>, reuse it with selected_spaces_dir)
                                              bridge_strong=1, bridge_out="bridge_ccdz_3.0.npz", bridge_mode="factorized",
-                                             bridge_pair_thresh=0.1, bridge_weak_rtol=1e-3, bridge_closure_thresh=1e-8,
+                                             bridge_pair_thresh=0.1, bridge_weak_rtol=1e-4, bridge_closure_thresh=1e-8,
                                              **solver_args)
     print("solver energies (enlarged state spaces):  ", solver_en)
     print("solver energies (compressed state spaces):", reduced_en)
     for ev, E in final_en.items():
         print(f"final {'leakage-metric' if ev == 'metric' else ev if str(ev).startswith('bridge') else f'XR[{ev}]'} energy:", E)
     #print("ref from HCI with frozen core 6-31G = ", -29.21086186)
-    print("ref from the brute-force product-space reference E_P (cc-pVDZ, 3.0 A, these settings) = ", -29.2336776283)
+    print("ref from the brute-force product-space reference E_P (cc-pVDZ, 3.0 A, complete spaces) = ", -29.2336776283)
+    print("ref psi4 frozen-core FCI (cc-pVDZ, 3.0 A) = ", -29.2336957214)

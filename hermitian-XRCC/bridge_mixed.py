@@ -41,6 +41,9 @@ import itertools
 from collections import OrderedDict
 from functools import lru_cache
 import numpy as np
+import opt_einsum as oe
+
+from hummr_dens import fast_np
 
 
 class ByteLRU(object):
@@ -621,7 +624,10 @@ class MixedEvaluator(object):
             for i, r in enumerate(rs):
                 key = r[:2]
                 e = E[i].reshape(nA, nAk, nB, nBk)
-                Y[key] = Y[key] + e if key in Y else e.copy()
+                if key in Y and Y[key].shape == e.shape:
+                    fast_np.iadd(Y[key], e)          # (in place: the entries own their memory)
+                else:
+                    Y[key] = Y[key] + e if key in Y else e.copy()
     def _contract_hummr(self, f, structs, C, wid, quad, Y, path_bytes):
         """Y[(pair, m)] += sum_w C[row, w] E_w: E_w of the structure (and order) w with the H slots of fragment f
         contracted inside hummr (_contracted_density, cached) and the other fragment's layout density open"""
@@ -675,7 +681,7 @@ class MixedEvaluator(object):
                             # (the S slots, now right after bra and ket, on the coupling pairs only)
                             for ax in range(len(rest) - 2):
                                 Dt = np.take(Dt, self.keep, axis=2 + ax)
-                        Dperm[qf, H_axes] = np.ascontiguousarray(Dt)
+                        Dperm[qf, H_axes] = fast_np.contiguous(Dt)
                     Dp = Dperm[qf, H_axes]
                     n_H = len(H_axes)
                     out_shape = Dp.shape[:Dp.ndim - n_H] + J.shape[n_H:]
@@ -699,10 +705,15 @@ class MixedEvaluator(object):
                         + "".join(r[1] for r in roles[g] if r[0] == "H")
             spec_g = sg + "".join(S_letters[r[1]] if r[0] == "S" else r[1] for r in roles[g])
             S_used = [S_letters[r[1]] for r in roles[f] if r[0] == "S"]
-            E = np.einsum(",".join([spec_F, spec_g] + S_used) + "->aAbB", F, Dg, *([sw] * len(S_used)),
-                          optimize=True)
+            # (opt_einsum with the threaded copies of fast_np instead of np.einsum(optimize=True), whose tensordot
+            #  transposes single-threaded, todo_bridge_performance.md R3)
+            E = oe.contract(",".join([spec_F, spec_g] + S_used) + "->aAbB", F, Dg, *([sw] * len(S_used)),
+                            optimize="greedy", backend="hummr_dens.fast_np" if fast_np.ENABLED else "numpy")
             for rk, c in rows:
-                Y[rk] = Y[rk] + c * E if rk in Y else c * E
+                if rk in Y and Y[rk].shape == E.shape:
+                    fast_np.iadd(Y[rk], E, c)        # (in place: the entries own their memory)
+                else:
+                    Y[rk] = Y[rk] + c * E if rk in Y else c * E
     def _held_density(self, f, kinds, sec):
         """the open density of fragment f, held for the current transition of A (f = 0, within memory_budget / 8 in
         total), otherwise from the cache"""

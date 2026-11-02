@@ -66,6 +66,8 @@ def configure_openmp(n_threads: Optional[int] = None) -> None:
     os.environ["OMP_PLACES"] = "cores"
     os.environ["OMP_DYNAMIC"] = "FALSE"
     os.environ["OMP_WAIT_POLICY"] = "PASSIVE"
+    # numpy's mkl_rt defaults to the Intel OpenMP layer, hummr uses mkl_gnu_thread + libgomp
+    os.environ.setdefault("MKL_THREADING_LAYER", "GNU")
 
 
 def roots_to_text(roots: Mapping[int, Mapping[int, int]]) -> str:

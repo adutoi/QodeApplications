@@ -42,6 +42,8 @@ from collections import OrderedDict
 import numpy as np
 import opt_einsum as oe
 
+from hummr_dens import fast_np
+
 from dens_util import adjoint_name
 from spin_tensors import reversal, cg2
 
@@ -99,7 +101,7 @@ def _matrix_chain(operands, out_labels):
             if a == labels[axis]:
                 tensor = np.moveaxis(np.tensordot(tensor, m, axes=([axis], [0])), -1, axis)
                 labels[axis] = b
-    return np.ascontiguousarray(np.transpose(tensor, [labels.index(l) for l in out_labels]))
+    return fast_np.transpose_copy(tensor, [labels.index(l) for l in out_labels])
 
 class _SlotMatrix(np.ndarray):
     """marks the matrices of contract_transformed (kept by the slicing of _add_term)"""
@@ -146,7 +148,8 @@ def contract_labelled(operands, out_labels):
         return mapping[label]
     subscripts = ",".join("".join(letter(l) for l in labels) for _, labels in operands)
     subscripts += "->" + "".join(letter(l) for l in out_labels)
-    return oe.contract(subscripts, *[array for array, _ in operands], optimize="greedy")
+    return oe.contract(subscripts, *[array for array, _ in operands], optimize="greedy",
+                       backend="hummr_dens.fast_np" if fast_np.ENABLED else "numpy")
 
 
 class StreamedDensities:
@@ -368,10 +371,8 @@ class StreamedDensities:
                 out_eff.append(l)
         act_labels = [orb_labels[s] for s in slot_of]
         term = self._active(name_act, chg_pair, key, state_labels, act_labels, ops, out_eff, swapped)
-        if coef == 1.0:
-            result[tuple(out_index)] += term            # (the active part: no temporary of the output size)
-        else:
-            result[tuple(out_index)] += coef * term
+        # (in place, threaded for large terms: no temporary of the output size)
+        fast_np.iadd(result[tuple(out_index)], term, coef)
 
     # ------------------------------------------------------------------------------------------------------------
     # active densities
@@ -459,7 +460,7 @@ class StreamedDensities:
         """
         array, labels = operand
         free = [l for l in labels if l not in t_labels]
-        T = np.ascontiguousarray(np.transpose(array, [list(labels).index(l) for l in t_labels + free]))
+        T = fast_np.transpose_copy(array, [list(labels).index(l) for l in t_labels + free])
         mats = [matrices.get(l, self._eye) for l in orb_labels]
         bra_sector, ket_sector = (chg_pair[0], channel[0]), (chg_pair[1], channel[1])
         signature = (tuple((m.shape, hash(m.tobytes())) for m in mats), T.shape, hash(T.tobytes()))
@@ -482,7 +483,7 @@ class StreamedDensities:
         for ch, a in data.items():
             a = self._to_cg(name, ch, np.asarray(a))
             a = a.reshape(a.shape[:-1] + tuple(free_shape))
-            results[ch] = np.ascontiguousarray(np.transpose(a, perm))
+            results[ch] = fast_np.transpose_copy(a, perm)
         result = results.pop(channel)
         if results:
             self._chunk_memo[key] = ([T], results)
@@ -519,7 +520,7 @@ class StreamedDensities:
                 self._transform_bytes -= sum(a.nbytes for a in self._transform_memo.popitem(last=False)[1].values())
         labels = list(state_labels) + list(new_labels)
         # (a copy: the callers may scale the result in place)
-        return np.ascontiguousarray(np.transpose(data[channel], [labels.index(l) for l in out]))
+        return fast_np.transpose_copy(data[channel], [labels.index(l) for l in out])
 
     def _transform_chunk_bytes(self):
         return CACHED_DENSITY_FRACTION * self.memory_budget if TRANSFORM_CHUNK_BYTES is None else TRANSFORM_CHUNK_BYTES
