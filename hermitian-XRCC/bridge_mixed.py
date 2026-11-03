@@ -249,6 +249,48 @@ def _layout_density(op, kinds, bsec, ksec, n_w):
             for path, rho in red.items()}
 
 
+def _scaled_pair_contract(spec_a, a, spec_b, b, scale_letters, w, out):
+    """einsum(spec_a, spec_b, w (once per letter of scale_letters) -> out) as one tensordot: the weight vectors are
+    folded into the smaller operand that has the letter (one broadcast product), the remaining letters of only one
+    operand summed out, the common ones contracted with the threaded copies of fast_np.  (opt_einsum, given the three
+    or more operands, contracts the weights as a Hadamard step or keeps their letter as a batch index; neither is a
+    BLAS call, so it falls back to single-threaded numpy.einsum: ~3e3 s of H_mixed in Be2 cc-pVTZ 3.0 A,
+    todo_bridge_performance.md R4.)  Letter patterns other than this (repeated letters in an operand, a common letter
+    in out) take the opt_einsum route."""
+    common = set(spec_a) & set(spec_b)
+    if (len(set(spec_a)) != len(spec_a) or len(set(spec_b)) != len(spec_b) or common & set(out)
+            or any(l not in spec_a and l not in spec_b for l in scale_letters)
+            or sorted(out) != sorted((set(spec_a) | set(spec_b)) - common)):
+        return oe.contract(",".join([spec_a, spec_b] + list(scale_letters)) + "->" + out, a, b,
+                           *([w] * len(scale_letters)), optimize="greedy",
+                           backend="hummr_dens.fast_np" if fast_np.ENABLED else "numpy")
+    ops = {"a": [np.asarray(a), spec_a], "b": [np.asarray(b), spec_b]}
+    factors = {"a": None, "b": None}
+    for l in scale_letters:
+        if l in spec_a and l in spec_b:
+            t = "a" if ops["a"][0].size <= ops["b"][0].size else "b"
+        else:
+            t = "a" if l in spec_a else "b"
+        x, s = ops[t]
+        shape = [1] * x.ndim
+        shape[s.index(l)] = len(w)
+        f = np.reshape(w, shape)
+        factors[t] = f if factors[t] is None else factors[t] * f
+    for t in "ab":
+        if factors[t] is not None:
+            ops[t][0] = ops[t][0] * factors[t]
+    for t, o in (("a", "b"), ("b", "a")):
+        x, s = ops[t]
+        lone = [i for i, l in enumerate(s) if l not in ops[o][1] and l not in out]
+        if lone:
+            ops[t] = [x.sum(axis=tuple(lone)), "".join(l for i, l in enumerate(s) if i not in lone)]
+    (x, sa), (y, sb) = ops["a"], ops["b"]
+    summed = [l for l in sa if l in sb]
+    E = fast_np.tensordot(x, y, axes=([sa.index(l) for l in summed], [sb.index(l) for l in summed]))
+    res = [l for l in sa if l not in summed] + [l for l in sb if l not in summed]
+    return E.transpose([res.index(l) for l in out])
+
+
 def _contracted_density(op, kinds, roles, J, path, bsec, ksec, n_w, keep=None):
     """F (bra, ket, weak orbital of every S slot (layout order), axes of J after the H slots): the layout density
     (path) of the strings with these leg kinds, its H slots contracted with the first axes of J (weak orbitals) inside
@@ -705,10 +747,9 @@ class MixedEvaluator(object):
                         + "".join(r[1] for r in roles[g] if r[0] == "H")
             spec_g = sg + "".join(S_letters[r[1]] if r[0] == "S" else r[1] for r in roles[g])
             S_used = [S_letters[r[1]] for r in roles[f] if r[0] == "S"]
-            # (opt_einsum with the threaded copies of fast_np instead of np.einsum(optimize=True), whose tensordot
-            #  transposes single-threaded, todo_bridge_performance.md R3)
-            E = oe.contract(",".join([spec_F, spec_g] + S_used) + "->aAbB", F, Dg, *([sw] * len(S_used)),
-                            optimize="greedy", backend="hummr_dens.fast_np" if fast_np.ENABLED else "numpy")
+            # (the sigma factors folded into the smaller operand, then one tensordot with the threaded copies of
+            #  fast_np, todo_bridge_performance.md R3/R4)
+            E = _scaled_pair_contract(spec_F, F, spec_g, Dg, S_used, sw, "aAbB")
             for rk, c in rows:
                 if rk in Y and Y[rk].shape == E.shape:
                     fast_np.iadd(Y[rk], E, c)        # (in place: the entries own their memory)

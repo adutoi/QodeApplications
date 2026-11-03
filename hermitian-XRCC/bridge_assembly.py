@@ -143,11 +143,17 @@ class BridgeAssembly(object):
         strong_mo:    MO indices of the K strong orbitals (increasing; the same on both fragments; a number for K = 1),
                       sigma their overlaps
         n_val:        active electrons of the neutral fragment (N of a sector of charge chg: n_val - chg)
+        s_nmax:       the highest weak order of the overlap (nmax ... 4, default nmax): the orders above nmax only enter
+                      S (the metric of the leakage-metric ansatz and the overlap check, see run_xr), never H
     The weak dimer matrices are built only for the pairs of weak sectors the product states reach, one weak spin S_w at a
     time (combined with the bridge tables and released before the next one).
     """
-    def __init__(self, split, bases, weak_dens, ints, strong_mo, sigma, nmax, n_val, pair_slots=2.5, v_thresh=None):
+    def __init__(self, split, bases, weak_dens, ints, strong_mo, sigma, nmax, n_val, pair_slots=2.5, v_thresh=None,
+                 s_nmax=None):
         self.split, self.bases, self.nmax, self.n_val = split, bases, nmax, n_val
+        self.s_nmax = nmax if s_nmax is None else s_nmax
+        if not nmax <= self.s_nmax <= 4:
+            raise ValueError(f"s_nmax has to be in {nmax} ... 4 (the S expansion is implemented up to order 4), not {s_nmax}")
         self.strong_mo = [int(x) for x in np.atleast_1d(strong_mo)]
         self.K = len(self.strong_mo)
         self.tables = BridgeTables(sigma if self.K > 1 else float(np.atleast_1d(sigma)[0]), self.K)
@@ -206,11 +212,17 @@ class BridgeAssembly(object):
     def compute(self, products, hamiltonian=True, n_core=None, n_act=None, orders=None):
         """{"S": [S^(k)], "H_weak": [H^(k)] of the terms without strong-orbital indices (E_core S^(k) contained),
         "H_strong": [H^(k)] of the terms with only strong-orbital indices (with n_core, n_act)}; orders: the weak
-        orders k evaluated (default all, the others are zero)"""
+        orders k evaluated (default all of H, 0 ... nmax, the others are zero).  S has the orders 0 ... s_nmax, H
+        0 ... nmax; orders above nmax are only allowed with hamiltonian=False"""
         orders = sorted(range(self.nmax + 1) if orders is None else orders)
+        if hamiltonian and orders and orders[-1] > self.nmax:
+            raise ValueError(f"the weak orders {[k for k in orders if k > self.nmax]} above nmax = {self.nmax} only enter S "
+                             "(hamiltonian=False)")
+        if orders and orders[-1] > self.s_nmax:
+            raise ValueError(f"weak orders above s_nmax = {self.s_nmax}: {orders}")
         expansion = self._expansion(products)
         n, t = len(products), timer()
-        out = {"S": [np.zeros((n, n)) for _ in range(self.nmax + 1)]}
+        out = {"S": [np.zeros((n, n)) for _ in range(self.s_nmax + 1)]}
         if hamiltonian:
             out["H_weak"] = [np.zeros((n, n)) for _ in range(self.nmax + 1)]
             int_sets = delta_integrals(self.ints, self.ints_w[0].S)
@@ -233,7 +245,7 @@ class BridgeAssembly(object):
                 V[key][o:o + len(xA) * len(xB), P] += c * np.outer(xA, xB).ravel()
             S_blocks = S_term_blocks(self.weak_dens, self.ints_w[0], t, t, S2w + 1)
             weak = {"S": [XR_term.dimer_matrix(S_blocks, {0: D.S0[0]} if k == 0 else {2: D.S2[k]}, (0, 1), pairs, t, symmetric=True)
-                          if k in orders else None for k in range(self.nmax + 1)]}
+                          if k in orders else None for k in range(self.s_nmax + 1)]}
             if hamiltonian:
                 weak["H_weak"] = weak_hamiltonian_terms(self.weak_dens, pairs, self.ints_w[0], int_sets, S2w + 1, self.nmax,
                                                         orders, self.pair_slots, self.v_thresh)
@@ -552,3 +564,54 @@ class GluedAssembly(object):
         for M in weak_hamiltonian_terms(dens, pairs, ints_w[0], int_sets, 1, self.nmax):
             out["H"].append(R.T @ M[:, cols])
         return out
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# overlap check of the bridge (the counterpart of get_xr_result_spin_adapt.check_overlap)
+# ---------------------------------------------------------------------------------------------------------------------
+
+def bridge_overlap_check(S, xr_orders, max_order=None):
+    """
+    The overlap check of check_overlap for the bridge matrices S = [S^(k)] (weak orders k = 0 ... len(S) - 1): in XR the
+    order-0 overlap is the identity, in the bridge it is S^(0) = T_B (x) 1 (the strong pairs exact), whose lowest
+    eigenvalue only reflects the product basis with the exact strong pairs.  The convergence of the weak overlap series
+    is therefore judged by the eigenvalues of S^[n] = sum_{k <= n} S^(k) relative to S^(0) (the generalized problem
+    S^[n] x = l S^(0) x, i.e. S^(0)^-1/2 S^[n] S^(0)^-1/2, = S2^[n] of check_overlap for S^(0) = 1): the weak series is
+    fine while the lowest l stays well above 0; l < 0 makes S^[n] indefinite (the weak corrections are not small
+    against the order 0; Be2 cc-pVTZ 3.0 A, K = 1, pairs with sigma 0.86, 0.70, 0.70, 0.62 in the weak series: -0.09 at
+    n = 2).  Prints the absolute and relative lowest eigenvalues of every n, warns (S_WARN_THRESH, S_CONV_THRESH) for
+    the orders xr_orders as check_overlap, relative to max_order (default the highest one in S).  Returns
+    {n: (lowest absolute, lowest relative, largest relative)}.
+    """
+    from scipy.linalg import eigh
+    from get_xr_result_spin_adapt import S_WARN_THRESH, S_CONV_THRESH
+    max_order = len(S) - 1 if max_order is None else max_order
+    S0 = (S[0] + S[0].T) / 2
+    spectra = {}
+    S_n = np.zeros_like(S0)
+    for n in range(max_order + 1):
+        S_n = S_n + S[n]
+        Sym = (S_n + S_n.T) / 2
+        absolute = np.linalg.eigvalsh(Sym)[0]
+        rel = eigh(Sym, S0, eigvals_only=True) if n > 0 else np.ones(1)
+        spectra[n] = (absolute, rel[0], rel[-1])
+    print("bridge overlap of the product states: lowest eigenvalue of S^[n] (weak orders up to n) / lowest and largest "
+          "eigenvalue relative to S^(0)")
+    for n, (absolute, low, high) in spectra.items():
+        print(f"    n = {n}: {absolute:9.5f} / {low:9.5f} / {high:9.5f}")
+    ref = spectra[max_order][1]
+    if max_order > 0 and ref < S_WARN_THRESH:
+        print(f"WARNING: bridge: the weak overlap expansion is not converged at order {max_order} or the weak product basis "
+              f"is nearly linearly dependent (lowest relative eigenvalue {ref:.5f})")
+    for n in xr_orders:
+        if n < 1 or n > max_order:
+            continue
+        low = spectra[n][1]
+        if low < S_WARN_THRESH:
+            print(f"WARNING: bridge XR[{n}]: S^[{n}] is {'indefinite' if low < 0 else 'nearly singular'} relative to S^(0) "
+                  f"(lowest relative eigenvalue {low:.5f}), E({n}) {'has' if low < 0 else 'may have'} spurious eigenvalues")
+        elif n < max_order and abs(low - ref) > S_CONV_THRESH * abs(ref):
+            print(f"WARNING: bridge XR[{n}]: the lowest relative eigenvalue of S^[{n}] ({low:.5f}) deviates by "
+                  f"{abs(low - ref) / abs(ref):.0%} from the one at order {max_order} ({ref:.5f}), the weak overlap expansion "
+                  f"is not converged at XR[{n}]")
+    return spectra

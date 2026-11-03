@@ -154,3 +154,28 @@ def tensordot(a, b, axes=2):
 
 transpose = np.transpose
 einsum = np.einsum
+
+
+def use_with_tensorly(optimize="auto-hq"):
+    """
+    tensorly's einsum (the Qode tensornet contractions, tensorly_backend.contract) through opt_einsum with this module
+    as the backend: the same path cache as tensorly.plugins.use_opt_einsum (the same optimize), but its tensordot
+    steps with the threaded transposed copies above instead of numpy.tensordot (single-threaded copies, ~2.7e3 s in
+    the pair-basis diagrams of Be2 cc-pVTZ 3.0 A, todo_bridge_performance.md R3).  The plain plugin if not ENABLED.
+    """
+    import tensorly as tl
+    if not ENABLED:
+        tl.plugins.use_opt_einsum(optimize)
+        return
+    import opt_einsum as oe
+    cache = {}
+    def cached_einsum(equation, *args):
+        key = equation + "," + ",".join(f"{np.shape(a)}" for a in args)
+        expression = cache.get(key)
+        if expression is None:
+            expression = cache[key] = oe.contract_expression(equation, *[np.shape(a) for a in args], optimize=optimize)
+        if not all(isinstance(a, np.ndarray) for a in args):
+            return expression(*args)
+        return expression(*args, backend=__name__)
+    tl.plugins.use_opt_einsum(optimize)      # (records tensorly's own einsum for use_default_einsum)
+    tl.backend.BackendManager.register_backend_method("einsum", cached_einsum)

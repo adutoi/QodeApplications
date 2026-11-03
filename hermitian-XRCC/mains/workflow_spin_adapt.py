@@ -35,10 +35,12 @@ from dens_provider import DensBackend
 from hummr_dens.space_selection import selected_csf_indices, project_states, select_spaces, n_csfs, read_spaces
 
 import os
+import time
 import numpy as np
 import tensorly as tl
 
-tl.plugins.use_opt_einsum()
+from hummr_dens import fast_np
+fast_np.use_with_tensorly()    # (tl.plugins.use_opt_einsum with the threaded copies of fast_np, todo_bridge_performance.md R3)
 tensornet.backend_contract_path(False)
 
 np.set_printoptions(legacy="1.21")  # this gets rid of the print update in numpy 2
@@ -60,7 +62,7 @@ def run_xr(displacement, max_iter, xr_order_final=0, xr_order_solver=0, dens_fil
            overlap_max_cycles=4, leakage_metric_order=None, leakage_pair_thresh=None, metric_pair_thresh=None,
            leakage_v_thresh={2: 1e-5}, leakage_pair_slots=2.5, pair_rotation=False, bridge_strong="auto", bridge_out=None,
            bridge_mode="factorized", bridge_pair_thresh=None, bridge_closure_thresh=1e-8,
-           bridge_weak_rtol=1e-4, bridge_sigma_thresh=0.9, bridge_v_thresh=None, transform_chunks=False, target_weights=None, eval_states=None,
+           bridge_weak_rtol=1e-4, bridge_sigma_thresh=0.9, bridge_v_thresh=None, bridge_s_thresh=None, transform_chunks=False, target_weights=None, eval_states=None,
            fold_core=True, integrals="ri", aux_basis="hummr"):
     """
     fold_core:             the frozen core orbitals of both fragments are orthonormalized jointly and folded into the
@@ -101,7 +103,12 @@ def run_xr(displacement, max_iter, xr_order_final=0, xr_order_solver=0, dens_fil
                            H0 + (S2^[n])^-1 L^[2] with n = leakage_metric_order and L^[2] = S2H2^[2] - S2^[2] H0
                            (get_xr_result_spin_adapt.get_leakage_metric_H), as final_en["metric"] (final_en is then
                            a dict, also for an integer xr_order_final); its state space is truncated with the overlap
-                           criterion of S2^[n] (see overlap_min_eigval); requires the densities of xr_level 2
+                           criterion of S2^[n] (see overlap_min_eigval); requires the densities of xr_level 2.
+                           With the bridge (bridge_strong > 0, factorized mode): the same ansatz with the bridge matrices,
+                           S^-1_[n] [H_[m] + (S_[n] - S_[m]) H0], H0 = S^(0)^-1 H^(0) (the strong pairs exact, weak order
+                           0), m = max(xr_order_final) the order of the leakage (n >= m), S^(3), S^(4) the weak orders 3
+                           and 4 of T_B (x) S_w (with metric_pair_thresh, by default with bridge_pair_thresh compressed
+                           as the order 2); as final_en["metric"]
     The approximations leakage_pair_thresh, metric_pair_thresh and leakage_v_thresh apply to the entire computation:
     to the XR orders n >= 1 of the final evaluation (their orders k <= n; XR[n] is then evaluated in the equivalent
     leakage form H0 + (S2^[n])^-1 L^[n], get_xr_result_spin_adapt.get_xr_states), to the leakage-metric ansatz, and
@@ -146,8 +153,8 @@ def run_xr(displacement, max_iter, xr_order_final=0, xr_order_solver=0, dens_fil
                            corresponding-orbital pairs whose overlap sigma (singular value of the core-projected valence
                            overlap S_AB, computed from the orbitals of the hummr input before anything else) exceeds
                            bridge_sigma_thresh.  With K > 0 the final evaluation is the bridge only: its energies E(n)
-                           for the orders n of xr_order_final (weak orders, n <= 2; the normal XR evaluation, the overlap
-                           truncation and check are skipped).  Implemented for K <= 3 (more pairs above the threshold are
+                           for the orders n of xr_order_final (weak orders, n <= 2; the normal XR evaluation and the
+                           overlap truncation are skipped, the overlap check is bridge_overlap_check with the bridge S).  Implemented for K <= 3 (more pairs above the threshold are
                            refused; bridge_mode "glued" only for K = 1).  The strong pairs are the K largest sigma; with a
                            degenerate pair at the boundary (e.g. K = 2 in Be2, one of the two pi pairs) the result depends
                            on the split within the degenerate pairs (the SVD's choice).  Implies pair_rotation (with
@@ -155,6 +162,15 @@ def run_xr(displacement, max_iter, xr_order_final=0, xr_order_solver=0, dens_fil
                            hummr is initialized with the sectors needed to split the states by the occupation of the K
                            strong orbitals (strong_split.required_sectors, not part of the XR basis), and the rotated
                            final states are split (strong_split.py; their weights are printed)
+    bridge_s_thresh:       None, or the bridge energies (factorized mode) also with the overlap S_n of every weak order n
+                           screened: the lowest roots of X^T H_n X, X = U s^-1/2 over the eigenvectors of S_n with
+                           eigenvalues s above bridge_s_thresh (canonical orthogonalization), printed and returned as the
+                           extra final_en entries "bridge XR[n] S>thresh"; the unscreened S_n^-1 H_n energies stay the
+                           final ones.  The lowest eigenvalues of every S_n are printed either way (S_1, and with large
+                           weak bases S_2, can be indefinite).  Be2 cc-pVTZ 3.0 A (weak rtol 1e-4, HCI eps 1e-5, reference
+                           -29.23842049): XR[0] -29.23821 unscreened (S_0 positive, lowest 0.006), -29.22918 with 0.05
+                           (11 vectors dropped): the small-S directions are not noise; XR[2] (S_2 lowest -0.084)
+                           -46.46 unscreened, -29.24040 / -29.23148 with 0.02 / 0.05
     bridge_sigma_thresh:   the threshold of bridge_strong="auto".  Be2 (XR[2] vs FCI in results_xr_order_states.tex):
                            XR[2] deviates by more than about 50 uEh below about 3.4 A, where the largest sigma is 0.80
                            (6-31G), 0.91 (cc-pVDZ) and 0.97 (cc-pVTZ); 0.9 takes the bridge from 3.5 A (cc-pVDZ), 4.2 A
@@ -350,8 +366,9 @@ def run_xr(displacement, max_iter, xr_order_final=0, xr_order_solver=0, dens_fil
                 raise NotImplementedError(f"{bridge_strong} corresponding-orbital pairs have sigma above {bridge_sigma_thresh}; "
                                           "the bridge is implemented for up to three strong pairs (bridge_strong <= 3 or a "
                                           "larger bridge_sigma_thresh)")
-    if bridge_strong > 0 and leakage_metric_order is not None:
-        raise ValueError("the bridge replaces the final evaluation; leakage_metric_order is not used with it")
+    if bridge_strong > 0 and leakage_metric_order is not None and leakage_metric_order < max(final_orders):
+        raise ValueError(f"with the bridge, leakage_metric_order ({leakage_metric_order}) has to be at least the leakage order "
+                         f"max(xr_order_final) = {max(final_orders)}")
     if bridge_strong > 0 and not pair_rotation:
         pair_rotation = "first" if selected_run else True
     if bridge_strong > 0 and leakage_pair_slots is not True:
@@ -567,6 +584,7 @@ def run_xr(displacement, max_iter, xr_order_final=0, xr_order_solver=0, dens_fil
         print(f"pair rotation: sigma = {np.array2string(sigma[::-1], precision=4)} (strongest first, the last active "
               f"orbitals), max deviation of the rotated S_AB from diag(sigma) {dev:.1e}")
     bridge_en = {}     # {n: E(n)} of the exact-bridge ansatz (factorized mode)
+    bridge_en_screened = {}    # the same with the overlap screened (bridge_s_thresh)
     if bridge_strong > 0:
         from strong_split import StrongSplit
         bridge_states, bridge_frag_name = states, frag_name
@@ -626,6 +644,9 @@ def run_xr(displacement, max_iter, xr_order_final=0, xr_order_solver=0, dens_fil
         nmax_b = max(final_orders)
         if nmax_b > 2:
             raise NotImplementedError(f"the bridge is implemented up to the weak order 2, not {nmax_b}")
+        # the overlap up to the weak order of the leakage-metric ansatz and of the overlap check (orders above nmax_b:
+        # S only, with the integrals of metric_pair_thresh)
+        s_nmax_b = min(4, max(nmax_b, leakage_metric_order or 0, overlap_check_order or 0))
         from bridge_assembly import BridgeAssembly, product_states
         products = product_states(states)
         from bridge_assembly import add_extra_densities, GluedAssembly
@@ -643,17 +664,37 @@ def run_xr(displacement, max_iter, xr_order_final=0, xr_order_solver=0, dens_fil
             # the terms without mixed legs of all runs first, then the densities of the weak bases and the cached
             # intermediates of their XR builds are released before the mixed terms (which use neither)
             assemblies = []
+            # with a bridge the weak overlap is always in the pair basis (diagrams/pair_slots.py): the fallback of
+            # leakage_pair_slots = r for r K > n_orb builds the explicit ccaa densities (Be2 cc-pVTZ 2.5 A, K = 2 with 14
+            # weak pairs of 30 orbitals: 3x slower H_weak, +75 GB peak)
+            bridge_pair_slots = True if bridge_strong > 0 else leakage_pair_slots
             for run_ints, run_sigma, orders in runs:
                 strong_mos = [n_core_x + n_act - bridge_strong + i for i in range(bridge_strong)]
                 assembly = BridgeAssembly(split_states, weak_bases, weak_dens, run_ints, strong_mos, sigma[-bridge_strong:], nmax_b,
-                                          hummr_frag._n_act_elec + hummr_frag._input_charge, pair_slots=leakage_pair_slots,
-                                          v_thresh=bridge_v_thresh)
+                                          hummr_frag._n_act_elec + hummr_frag._input_charge, pair_slots=bridge_pair_slots,
+                                          v_thresh=bridge_v_thresh, s_nmax=s_nmax_b)
                 mats = assembly.compute(products, n_core=n_core_x, n_act=n_act, orders=orders)
                 for name in ("S", "H_weak", "H_strong"):
                     mat = np.array(mats[name])
                     out[name] = mat if name not in out else out[name] + mat
                 assembly.weak_dens = mats = None
                 assemblies.append((assembly, run_ints, run_sigma, orders))
+            # the overlap orders above nmax_b (no Hamiltonian terms), grouped by their integrals: those of
+            # metric_pair_thresh, by default the pair-compressed ones of bridge_pair_thresh as the order 2 (with the
+            # exact integrals the order-4 diagram s01s01s10s10 builds the explicit ccaa densities of the weak bases,
+            # ~14 GB per sector pair for Be2 cc-pVTZ with 50 weak states)
+            by_ints = {}
+            for k in range(nmax_b + 1, s_nmax_b + 1):
+                k_ints = metric_ints[k] if k in metric_ints else pair_ints(bridge_pair_thresh)
+                by_ints.setdefault(id(k_ints), (k_ints, []))[1].append(k)
+            for k_ints, ks in by_ints.values():
+                t_s = time.time()
+                s_assembly = BridgeAssembly(split_states, weak_bases, weak_dens, k_ints, strong_mos, sigma[-bridge_strong:],
+                                            nmax_b, hummr_frag._n_act_elec + hummr_frag._input_charge,
+                                            pair_slots=bridge_pair_slots, s_nmax=s_nmax_b)
+                out["S"] = out["S"] + np.array(s_assembly.compute(products, hamiltonian=False, orders=ks)["S"])
+                s_assembly = None
+                print(f"bridge overlap, weak orders {ks}: {time.time() - t_s:.1f} s")
             weak_dens = None
             release_xr_caches(hummr_frag, budget)
             for assembly, run_ints, run_sigma, orders in assemblies:
@@ -682,17 +723,43 @@ def run_xr(displacement, max_iter, xr_order_final=0, xr_order_solver=0, dens_fil
             # E(n): the lowest real eigenvalues of S_n^-1 H_n (the target roots), S_n and H_n summed up to the weak order n
             H = out["H_weak"] + out["H_strong"] + out["H_mixed"]
             roots_b = [eval_states] if np.ndim(eval_states) == 0 else list(eval_states)
+            def lowest_roots(w):
+                w = np.sort(w[np.abs(w.imag) < 1e-8].real)
+                E = np.array([w[k] if k < len(w) else np.nan for k in roots_b]) + E_nuc
+                return E if np.ndim(eval_states) else E[0]
             for n in range(len(H)):
-                w_n = np.linalg.eigvals(np.linalg.solve(out["S"][:n + 1].sum(0), H[:n + 1].sum(0)))
-                w_n = np.sort(w_n[np.abs(w_n.imag) < 1e-8].real)
-                E_b = np.array([w_n[k] if k < len(w_n) else np.nan for k in roots_b]) + E_nuc
-                bridge_en[n] = E_b if np.ndim(eval_states) else E_b[0]
-                print(f"final bridge (K = {bridge_strong}) XR[{n}] energy: {bridge_en[n]}")
+                S_n, H_n = out["S"][:n + 1].sum(0), H[:n + 1].sum(0)
+                bridge_en[n] = lowest_roots(np.linalg.eigvals(np.linalg.solve(S_n, H_n)))
+                s_ev, s_U = np.linalg.eigh((S_n + S_n.T) / 2)
+                print(f"final bridge (K = {bridge_strong}) XR[{n}] energy: {bridge_en[n]}  (S: lowest eigenvalues "
+                      f"{np.array2string(s_ev[:3], precision=3)}, {int((s_ev <= 0).sum())} not positive)")
+                if bridge_s_thresh is not None:
+                    keep = s_ev > bridge_s_thresh
+                    X = s_U[:, keep] / np.sqrt(s_ev[keep])
+                    bridge_en_screened[n] = lowest_roots(np.linalg.eigvals(X.T @ H_n @ X))
+                    print(f"final bridge (K = {bridge_strong}) XR[{n}] energy, S eigenvalues above {bridge_s_thresh} "
+                          f"({int((~keep).sum())} of {len(s_ev)} dropped): {bridge_en_screened[n]}")
+            if overlap_check_order:
+                from bridge_assembly import bridge_overlap_check
+                bridge_overlap_check(out["S"], sorted(set(final_orders) | ({leakage_metric_order} if leakage_metric_order else set())),
+                                     max_order=min(overlap_check_order, len(out["S"]) - 1))
+            if leakage_metric_order is not None:
+                # leakage-metric ansatz: S_[n]^-1 [H_[m] + (S_[n] - S_[m]) H0], H0 = S^(0)^-1 H^(0); for n = m this is E(m)
+                S_n, S_m, H_m = out["S"][:leakage_metric_order + 1].sum(0), out["S"][:nmax_b + 1].sum(0), H[:nmax_b + 1].sum(0)
+                H0 = np.linalg.solve(out["S"][0], H[0])
+                bridge_en["metric"] = lowest_roots(np.linalg.eigvals(np.linalg.solve(S_n, H_m + (S_n - S_m) @ H0)))
+                print(f"final bridge (K = {bridge_strong}) leakage-metric energy (S^[{leakage_metric_order}], leakage order "
+                      f"{nmax_b}): {bridge_en['metric']}")
+                H0 = S_n = S_m = H_m = None
         assembly = weak_dens = mats = None
         # the bridge is the final evaluation (its orders: those of xr_order_final)
-        final_en = {ev: bridge_en[ev] for ev in final_orders if ev in bridge_en}
-        if isinstance(xr_order_final, int) and xr_order_final in final_en:
+        final_en = {ev: bridge_en[ev] for ev in evaluations if ev in bridge_en}
+        if isinstance(xr_order_final, int) and xr_order_final in final_en and leakage_metric_order is None:
             final_en = final_en[xr_order_final]
+        else:
+            # (the screened energies as extra entries, the unscreened ones stay the final ones)
+            final_en.update({f"bridge XR[{ev}] S>{bridge_s_thresh}": bridge_en_screened[ev] for ev in final_orders
+                             if ev in bridge_en_screened})
         dens_builder.finalize_all()
         return [np.real(E) + E_nuc for E in energies], [np.real(E) + E_nuc for E in reduced_energies], final_en
     # the state space of every final order: the complete one, or the one truncated (and reoptimized) by the overlap
@@ -842,7 +909,7 @@ if __name__ == "__main__":
     # solver = "cipsi":    passes through all CSFs (pool="csf"), the remaining CSFs reordered by their first-order
     #                      importance after every solve
     solver = "davidson"
-    solver_args = {"davidson": dict(pool="none", use_davidson=True, dens_filter_thresh_solver=1e-8, dm_perturbation=1e-2,
+    solver_args = {"davidson": dict(pool="none", use_davidson=True, dens_filter_thresh_solver=1e-7, dm_perturbation=1e-2,
                                      davidson_tol=1e-5),
                    "cipsi":    dict(pool="csf", pool_order="cipsi", dens_filter_thresh_solver=1e-7)}[solver]
     # Be2 cc-pVDZ at 3.0 A: Davidson-XR[0] state optimization in the complete (FCI) CSF spaces, then the exact-bridge
@@ -850,8 +917,8 @@ if __name__ == "__main__":
     # (the normal XR evaluation is skipped with bridge_strong > 0; bridge_strong="auto" would pick K from the pair overlaps
     # sigma > bridge_sigma_thresh), with the order-2 terms restricted to the corresponding-orbital pairs above 0.1
     # (results_xr_order_states.tex, step 5: bridge order 2 within 29 uEh of the exact bridge)
-    solver_en, reduced_en, final_en = run_xr(3.0, 50, xr_order_final=[0, 1, 2], n_init_states=8, max_states_per_sector=20,
-                                             eval_reduced=True, hummr_input="/home/marco/hummr_tests/scratch/be_ccdz_fci_fcore.inp",
+    solver_en, reduced_en, final_en = run_xr(3.0, 50, xr_order_final=[0, 1, 2], n_init_states=8, max_states_per_sector=30,
+                                             eval_reduced=True, hummr_input="/cfs/klemming/home/m/mmbau/hummr_tests/scratch/be_ccdz_fci_fcore.inp",
                                              basis="cc-pvdz", use_gradients=False, streamed=True, memory_budget=8e9,
                                              states_in=None, states_out=None,   # e.g. "states_3.0.pkl": read / write the optimized states
                                              overlap_min_eigval=0.15, overlap_max_weight=1e-4, overlap_reoptimize=False,
