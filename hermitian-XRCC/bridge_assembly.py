@@ -387,9 +387,9 @@ def add_extra_densities(fragment, basis, rho):
                             dens_inp.setdefault(name, {}).setdefault((chg_b, chg_k), {})[channel] = np.asarray(data)
     if dens_inp:
         if provider is None:
-            extra = wrap_dens_and_build_transpose(dens_inp, n_core=fragment.n_core, n_mo=fragment.orbitals.shape[1])
+            extra = wrap_dens_and_build_transpose(dens_inp, n_core=fragment.xr_n_core, n_mo=fragment.xr_n_mo)
         else:
-            extra, active = wrap_dens_and_build_transpose(dens_inp, n_core=fragment.n_core, n_mo=fragment.orbitals.shape[1],
+            extra, active = wrap_dens_and_build_transpose(dens_inp, n_core=fragment.xr_n_core, n_mo=fragment.xr_n_mo,
                                                           keep_active=True)
             for small in {id(d): d for d in provider.active_small.values()}.values():
                 for name, by_chg in active.items():
@@ -435,7 +435,7 @@ def add_extra_densities_rect(fragment, bra, ket, rho):
                                                                          list(bvecs), list(kvecs)).items():
                                 dens_inp.setdefault(name, {}).setdefault((chg_b, chg_k), {})[channel] = np.asarray(data)
         if dens_inp:
-            extra = wrap_dens_and_build_transpose(dens_inp, n_core=fragment.n_core, n_mo=fragment.orbitals.shape[1],
+            extra = wrap_dens_and_build_transpose(dens_inp, n_core=fragment.xr_n_core, n_mo=fragment.xr_n_mo,
                                                   overlaps=overlaps(X, Y), parts=parts)
             for name, by_chg in extra.items():
                 for chg_pair, by_channel in by_chg.items():

@@ -781,3 +781,162 @@ def test_xr2_exact_for_two_electrons():
     E = {o: np.real(G.get_xr_states(ints, [rho, rho], o, [chgs, chgs], 1, target_charge=0)[0]) for o in (0, 1, 2)}
     assert abs(E[2] - E_exact) < 1e-10, (E[2], E_exact)
     assert abs(E[0] - E_exact) > 1e-6 and abs(E[1] - E_exact) > 1e-6, (E, E_exact)
+
+
+# ----------------------------------------------------------------------------------------------------------------------
+# frozen core folded into the one-electron operator (get_ints fold_core), RI integrals (integrals="ri"), basis check
+# ----------------------------------------------------------------------------------------------------------------------
+
+def _be2_frags(mo, dist, n_core=1, basis="STO-3G"):
+    frags = []
+    for m in range(2):
+        f = empty()
+        f.atoms = [["Be", [0, 0, m * dist]]]
+        f.n_elec_ref = 4
+        f.basis = empty()
+        f.basis.n_spatial_orb, f.basis.AOcode, f.basis.core, f.basis.MOcoeffs = mo.shape[1], basis, list(range(n_core)), mo
+        frags.append(f)
+    return frags
+
+def _lowdin_mos(basis="STO-3G"):
+    """orthonormal orbitals of a Be atom (Loewdin orthonormalized AOs, the first one 1s-like)"""
+    sys.path.insert(0, os.path.join(os.path.dirname(__import__("qode").__file__), "atoms", "integrals", "external_engines"))
+    import pylible_ints as pli
+    S, _ = pli.overlap_and_kinetic([("Be", 0.0, 0.0, 0.0, False)], basis)
+    w, v = np.linalg.eigh(S)
+    return (v / np.sqrt(w)) @ v.T
+
+def _supermatrices(S, T, U, V, n, nuc):
+    """raw supersystem S, h = T + sum U, <pq|rs> = 2 V and the total nuclear (+ core) energy of fragment-blocked integrals"""
+    from qode.math.tensornet import raw
+    r = lambda x: np.asarray(raw(x)) if hasattr(x, "_raw") else np.asarray(x)
+    blk = lambda f: np.block([[f(a, b) for b in range(2)] for a in range(2)])
+    s = blk(lambda a, b: r(S[a, b]))
+    h = blk(lambda a, b: r(T[a, b]) + sum(r(U[m, a, b]) for m in range(2)))
+    G = np.zeros((2 * n,) * 4)
+    for k in itertools.product(range(2), repeat=4):
+        G[tuple(slice(i * n, (i + 1) * n) for i in k)] = 2 * r(V[k])
+    return s, h, G, sum(nuc[m1, m2] for m1 in range(2) for m2 in range(m1 + 1))
+
+def _closed_shell_energy(s, h, G, occ, frozen=()):
+    """energy of the determinant of the doubly occupied orbitals frozen + occ, the others Loewdin orthonormalized"""
+    n = s.shape[0]
+    rest = [i for i in range(n) if i not in frozen]
+    w, v = np.linalg.eigh(s[np.ix_(rest, rest)])
+    X = np.eye(n)
+    X[np.ix_(rest, rest)] = (v / np.sqrt(w)) @ v.T
+    h, G = X.T @ h @ X, np.einsum("pqrs,pa,qb,rc,sd->abcd", G, X, X, X, X, optimize=True)
+    o = list(frozen) + list(occ)
+    return sum(2 * h[i, i] for i in o) + sum(2 * G[i, j, i, j] - G[i, j, j, i] for i in o for j in o)
+
+def test_fold_core_determinant_energies():
+    """
+    Be2/STO-3G at 2.0 A (1s frozen): for closed-shell determinants with the (jointly orthonormalized) cores doubly
+    occupied, the energy from the integrals of all orbitals equals the one from the folded integrals of the active
+    orbitals (core potentials in U[m], core energies in the nuclear repulsion matrix), get_ints.fold_frozen_core
+    """
+    from get_ints import direct_CoreProj, fold_frozen_core
+    from qode.atoms.integrals.fragments import AO_integrals, fragMO_integrals, bra_transformed, ket_transformed, Nuc_repulsion
+    mo = _lowdin_mos()
+    frags = _be2_frags(mo, 2.0)
+    n = mo.shape[1]
+    ints = fragMO_integrals(AO_integrals(frags, backend="lible"), [f.basis.MOcoeffs for f in frags], cache=True)
+    Left, Right = direct_CoreProj(frags, ints.S, True, orthonormalize_core=True)
+    ints = ket_transformed(Right, bra_transformed(Left, ints, cache=True), cache=True)
+    nuc = Nuc_repulsion(frags).matrix
+    full = _supermatrices(ints.S, ints.T, ints.U, ints.V, n, nuc)
+    cores = [0, n]
+    assert np.abs(full[0][np.ix_(cores, cores)] - np.eye(2)).max() < 1e-12
+    _, folded, nuc_f = fold_frozen_core(frags, ints, nuc)
+    fold = _supermatrices(folded.S, folded.T, folded.U, folded.V, n - 1, nuc_f)
+    for a, b in [(0, 0), (0, 1), (2, 3), (1, 1)]:
+        E_full = _closed_shell_energy(*full[:3], [1 + a, n + 1 + b], frozen=cores) + full[3]
+        E_fold = _closed_shell_energy(*fold[:3], [a, n - 1 + b]) + fold[3]
+        assert abs(E_full - E_fold) < 1e-10, ((a, b), E_full, E_fold)
+
+def test_ri_integrals():
+    """
+    RI (lible RIEngine, Qode pybind_lible_ints.RI_factors) through get_ints integrals="ri" (with fold_core): the
+    one-electron integrals are the exact ones, the two-electron integrals agree to the fitting error, which shrinks
+    with a larger auxiliary basis
+    """
+    from get_ints import get_ints
+    from qode.util import timer
+    from qode.math.tensornet import raw
+    mo = _lowdin_mos()
+    exact = get_ints(_be2_frags(mo, 2.0), True, timer(), spin_ints=False, backend="lible", fold_core=True)
+    errors = []
+    for aux in ("def2-universal-jkfit", "cc-pv5z-rifit"):
+        ri = get_ints(_be2_frags(mo, 2.0), True, timer(), spin_ints=False, backend="lible", fold_core=True,
+                      integrals="ri", aux_basis=aux)
+        for k in itertools.product(range(2), repeat=2):
+            assert np.abs(np.asarray(raw(ri[0].S[k])) - np.asarray(raw(exact[0].S[k]))).max() < 1e-12
+            assert np.abs(np.asarray(raw(ri[0].T[k])) - np.asarray(raw(exact[0].T[k]))).max() < 1e-12
+        errors.append(max(np.abs(np.asarray(raw(ri[0].V[k])) - np.asarray(raw(exact[0].V[k]))).max()
+                          for k in itertools.product(range(2), repeat=4)))
+    assert errors[0] < 2e-3 and errors[1] < errors[0] / 3, errors
+
+def test_basis_check():
+    """check_basis_consistency: the XR basis (and auxiliary basis for RI) has to be the one of the hummr input"""
+    from hummr_dens.pybind_interface import check_basis_consistency, hummr_basis_info
+    inp = os.path.join(here, "be_sto3g_fcore.inp")    # Basis STO-3G, Ints RI, AuxBasis def2-JK
+    info = hummr_basis_info(inp)
+    assert (info["basis"], info["aux_basis"], info["ints"]) == ("sto-3g", "def2-universal-jkfit", "RI"), info
+    mo = np.eye(5)
+    check_basis_consistency(_be2_frags(mo, 2.0), [inp, inp], integrals="ri", aux_basis="def2-JK", printout=lambda *a: None)
+    check_basis_consistency(_be2_frags(mo, 2.0), [inp, inp], printout=lambda *a: None)    # exact in XR: reported only
+    with pytest.raises(ValueError, match="auxiliary basis"):
+        check_basis_consistency(_be2_frags(mo, 2.0), [inp, inp], integrals="ri", aux_basis="cc-pvdz-rifit", printout=lambda *a: None)
+    frags = _be2_frags(mo, 2.0)
+    frags[1].basis.AOcode = "6-31G"
+    with pytest.raises(ValueError, match="fragment 1: XR basis"):
+        check_basis_consistency(frags, [inp, inp], printout=lambda *a: None)
+
+def test_fold_core_xr():
+    """
+    Be2/STO-3G at 2.5 A, 1s frozen, complete sectors (charges 0, +1, -1), the same hummr states: XR with the core
+    embedded into the densities vs XR with the core folded into the integrals (active-space densities).  XR[0] is
+    invariant (the biorthogonal core terms are exact at order 0), XR[1] and XR[2] differ only by the core-core overlap
+    terms the embedded S expansion truncates (decreasing with the order)
+    """
+    result = subprocess_fold_core()
+    E_emb, E_fold = result["embedded"], result["folded"]
+    assert abs(E_emb["0"] - E_fold["0"]) < 1e-9, result
+    assert abs(E_emb["2"] - E_fold["2"]) < 1e-5, result
+    assert abs(E_emb["2"] - E_fold["2"]) <= abs(E_emb["1"] - E_fold["1"]) + 1e-9, result
+
+@functools.lru_cache(maxsize=None)
+def subprocess_fold_core():
+    import json, subprocess
+    out = subprocess.run([sys.executable, os.path.abspath(__file__), "fold_core"], capture_output=True, text=True,
+                         env=dict(os.environ, PYTHONPATH=os.pathsep.join([here] + sys.path)))
+    lines = [l for l in out.stdout.splitlines() if l.startswith("FOLD_CORE ")]
+    assert lines, out.stdout[-3000:] + out.stderr[-3000:]
+    return json.loads(lines[-1][len("FOLD_CORE "):])
+
+if __name__ == "__main__" and sys.argv[1:2] == ["fold_core"]:
+    import json
+    from math import comb
+    from dens_provider import DensBackend
+    from get_ints import get_ints
+    import get_xr_result_spin_adapt as G
+    from qode.util import timer
+    n_orb, n_core, n_ref, chgs = 5, 1, 4, [0, 1, -1]
+    def n_csf(N, S2):
+        n = n_orb - n_core
+        k = (N - S2) // 2
+        return (S2 + 1) * comb(n + 1, k) * comb(n + 1, N - k + 1) // (n + 1)
+    roots = {c: {S2 + 1: n_csf(n_ref - 2 * n_core - c, S2) for S2 in range((n_ref - c) % 2, n_ref - 2 * n_core - c + 1, 2)}
+             for c in chgs}
+    hummr = DensBackend("hummr")
+    mo, states = hummr.init_backend([["Be", os.path.join(here, "be_sto3g_fcore.inp"), roots, 2]])[0]
+    frag = hummr.engine.fragments["Be"]
+    out = {}
+    for label, fold in (("embedded", False), ("folded", True)):
+        frag.fold_core = fold
+        ints = get_ints(_be2_frags(np.array(mo), 2.5), True, timer(), spin_ints=False, backend="lible", fold_core=fold)
+        rho = G.build_frag_densities(hummr, "Be", states, 2, n_ref)
+        E_nuc = sum(ints[2][m1, m2] for m1 in range(2) for m2 in range(m1 + 1))
+        out[label] = {str(o): float(np.real(G.get_xr_states(ints, [rho, rho], o, [chgs, chgs], 1, target_charge=0)[0]) + E_nuc)
+                      for o in (0, 1, 2)}
+    print("FOLD_CORE " + json.dumps(out))

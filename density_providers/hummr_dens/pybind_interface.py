@@ -325,6 +325,83 @@ def wrap_dens_and_build_transpose(dens_inp, n_core=0, n_mo=None, overlaps=None, 
     return dens_out
 
 
+def _input_blocks(input_file):
+    """{block name: [keyword lines (lists of words)]} of a hummr input (blocks end with End; comments with #)"""
+    blocks, block = {}, None
+    for line in Path(input_file).read_text().splitlines():
+        words = line.split()
+        if not words or words[0].startswith("#"):
+            continue
+        if block is None:
+            block = words[0]
+            blocks.setdefault(block, [])
+        elif words[0].lower() == "end":
+            block = None
+        else:
+            blocks[block].append(words)
+    return blocks
+
+
+def hummr_basis_info(input_file):
+    """
+    The basis sets and the integral treatment of a hummr input, with the names as hummr resolves them for lible
+    (hummr::ints::translateBasis2Lible): {"basis": lible name, "aux_basis": lible name or None (no AuxBasis; "auto"
+    for hummr's AutoAux, which lible has no counterpart for), "ints": "NORI" (hummr's default), "RI" or "RI-THC",
+    "user_defined": True for a user-defined basis file (cannot be checked)}.  Keywords are case insensitive, as in
+    hummr.
+    """
+    from qode.atoms.integrals.external_engines.pybind_lible_ints import lible_basis_name
+    general = {w[0].upper(): w[1:] for w in _input_blocks(input_file).get("General", [])}
+    info = {"basis": None, "aux_basis": None, "ints": "NORI", "user_defined": False}
+    if "BASIS" in general:
+        info["user_defined"] |= len(general["BASIS"]) > 1
+        info["basis"] = lible_basis_name(general["BASIS"][0]) or general["BASIS"][0].lower()
+    if "AUXBASIS" in general:
+        name = general["AUXBASIS"][0]
+        info["user_defined"] |= len(general["AUXBASIS"]) > 1
+        info["aux_basis"] = "auto" if name.upper() == "AUTO" else (lible_basis_name(name, aux=True) or name.lower())
+    if "INTS" in general:
+        info["ints"] = general["INTS"][0].upper()
+    return info
+
+
+def check_basis_consistency(fragments, hummr_inputs, integrals="exact", aux_basis=None, printout=print):
+    """
+    Checks per fragment that the integrals of XR (Qode with lible: fragments[m].basis.AOcode and, for integrals="ri",
+    aux_basis) use the basis (and auxiliary basis) of the hummr input the fragment's orbitals and states come from
+    (hummr_inputs[m]; the fragments may in principle have different inputs, bases and methods).  Errors: a different
+    main basis (hummr's MO coefficients would be used with other AOs), and with RI in XR and in hummr a different
+    auxiliary basis or hummr's AutoAux.  Reported only: a different two-electron treatment (exact vs RI), then the
+    fragment states are eigenstates of a slightly different Hamiltonian than the one XR evaluates (they are only the
+    basis of XR, but their energies do not match XR's monomer Hamiltonian).
+    """
+    from qode.atoms.integrals.external_engines.pybind_lible_ints import lible_basis_name
+    errors = []
+    for m, (frag, inp) in enumerate(zip(fragments, hummr_inputs)):
+        info = hummr_basis_info(inp)
+        xr_basis = lible_basis_name(frag.basis.AOcode) or frag.basis.AOcode.lower()
+        if info["user_defined"]:
+            printout(f"basis check, fragment {m}: user-defined basis in {inp}, not checked")
+            continue
+        if info["basis"] != xr_basis:
+            errors.append(f"fragment {m}: XR basis {xr_basis!r}, hummr basis {info['basis']!r} ({inp})")
+        hummr_ri = info["ints"] in ("RI", "RI-THC")
+        xr_aux = None
+        if integrals == "ri":
+            xr_aux = lible_basis_name(aux_basis, aux=True) or aux_basis.lower()
+            if hummr_ri and info["aux_basis"] == "auto":
+                errors.append(f"fragment {m}: hummr uses AutoAux ({inp}), XR the auxiliary basis {xr_aux!r} (lible has no AutoAux)")
+            elif hummr_ri and info["aux_basis"] != xr_aux:
+                errors.append(f"fragment {m}: XR auxiliary basis {xr_aux!r}, hummr auxiliary basis {info['aux_basis']!r} ({inp})")
+        msg = (f"basis check, fragment {m}: basis {xr_basis} (XR and hummr), two-electron integrals XR "
+               f"{'RI/' + xr_aux if xr_aux else 'exact'}, hummr {info['ints']}" + (f"/{info['aux_basis']}" if hummr_ri else ""))
+        if hummr_ri != (integrals == "ri"):
+            msg += " (different two-electron treatment: the fragment states are eigenstates of a slightly different Hamiltonian)"
+        printout(msg)
+    if errors:
+        raise ValueError("basis mismatch between XR (Qode/lible) and hummr:\n  " + "\n  ".join(errors))
+
+
 def frozen_core_from_input(input_file, n_mo):
     """
     Number of doubly occupied (frozen) core orbitals of a hummr CASSCF/CASCI input, i.e.
@@ -381,9 +458,22 @@ class HummrXRFragment:
         self._engine = None
         self.input_file: Optional[Path] = None
         self.orbitals: Optional[np.ndarray] = None
-        # frozen core: densities are embedded into the full MO space with doubly occupied core
+        # frozen core: densities are embedded into the full MO space with doubly occupied core, unless fold_core is
+        # set (the core is then folded into the integrals, get_ints fold_core, and the densities are the ones of the
+        # active space; see xr_n_core / xr_n_mo)
         self.n_core = 0
         self.n_act = None
+        self.fold_core = False
+
+    @property
+    def xr_n_core(self):
+        """the core orbitals of the XR orbital space of the densities (0 with fold_core)"""
+        return 0 if self.fold_core else self.n_core
+
+    @property
+    def xr_n_mo(self):
+        """the orbitals of the XR orbital space of the densities: all MOs, or the active ones with fold_core"""
+        return self.n_act if self.fold_core else self.orbitals.shape[1]
 
     def prepare_input(
         self,
@@ -609,7 +699,7 @@ class HummrXRFragment:
         if streamed and not 0 <= max_ops < STREAMED_MIN_OPS:
             return self._compute_densities_streamed(bra, ket, xr_level, memory_budget)
 
-        n_mo = self.orbitals.shape[1]
+        n_mo = self.xr_n_mo
         if bra is ket:
             return wrap_dens_and_build_transpose(
                 self._engine.compute_densities(
@@ -618,7 +708,7 @@ class HummrXRFragment:
                     xr_level,
                     max_ops
                 ),
-                n_core=self.n_core,
+                n_core=self.xr_n_core,
                 n_mo=n_mo,
             )
 
@@ -631,9 +721,9 @@ class HummrXRFragment:
                     overlaps[(chg, mult)] = np.array(vecs, dtype=float) @ np.array(ket[chg][mult], dtype=float).T
         overlaps_T = {key: S.T for key, S in overlaps.items()}
         dens = wrap_dens_and_build_transpose(self._engine.compute_densities(bra, ket, xr_level, max_ops),
-                                             n_core=self.n_core, n_mo=n_mo, overlaps=overlaps, parts="direct")
+                                             n_core=self.xr_n_core, n_mo=n_mo, overlaps=overlaps, parts="direct")
         partners = wrap_dens_and_build_transpose(self._engine.compute_densities(ket, bra, xr_level, max_ops),
-                                                 n_core=self.n_core, n_mo=n_mo, overlaps=overlaps_T, parts="reversed")
+                                                 n_core=self.xr_n_core, n_mo=n_mo, overlaps=overlaps_T, parts="reversed")
         for dens_name, by_chg in partners.items():
             for charge_pair, by_channel in by_chg.items():
                 for channel, data in by_channel.items():
@@ -642,11 +732,11 @@ class HummrXRFragment:
 
     def _compute_densities_streamed(self, bra, ket, xr_level, memory_budget):
         from hummr_dens.streamed import StreamedDensities, StreamedDensityType, STREAMED_MIN_OPS
-        n_mo = self.orbitals.shape[1]
+        n_mo = self.xr_n_mo
         max_ops = STREAMED_MIN_OPS - 1
         if bra is ket:
             dens, active = wrap_dens_and_build_transpose(self._engine.compute_densities(bra, ket, xr_level, max_ops),
-                                                         n_core=self.n_core, n_mo=n_mo, keep_active=True)
+                                                         n_core=self.xr_n_core, n_mo=n_mo, keep_active=True)
             active_small, overlaps = {False: active, True: active}, None
         else:
             overlaps = {}
@@ -656,10 +746,10 @@ class HummrXRFragment:
                         overlaps[(chg, mult)] = np.array(vecs, dtype=float) @ np.array(ket[chg][mult], dtype=float).T
             overlaps_T = {key: S.T for key, S in overlaps.items()}
             dens, active = wrap_dens_and_build_transpose(self._engine.compute_densities(bra, ket, xr_level, max_ops),
-                                                         n_core=self.n_core, n_mo=n_mo, overlaps=overlaps,
+                                                         n_core=self.xr_n_core, n_mo=n_mo, overlaps=overlaps,
                                                          parts="direct", keep_active=True)
             partners, active_swapped = wrap_dens_and_build_transpose(
-                self._engine.compute_densities(ket, bra, xr_level, max_ops), n_core=self.n_core, n_mo=n_mo,
+                self._engine.compute_densities(ket, bra, xr_level, max_ops), n_core=self.xr_n_core, n_mo=n_mo,
                 overlaps=overlaps_T, parts="reversed", keep_active=True)
             for dens_name, by_chg in partners.items():
                 for charge_pair, by_channel in by_chg.items():

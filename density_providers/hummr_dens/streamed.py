@@ -168,8 +168,9 @@ class StreamedDensities:
         self.kernel = kernel
         self.calls = {"kernel": 0, "explicit": 0}    # active contractions of the large types
         self.fragment, self.bra, self.ket = fragment, bra, ket
-        self.n_core, self.n_act = fragment.n_core, fragment.n_act
-        self.n_mo = fragment.orbitals.shape[1]
+        # (the XR orbital space: all MOs with the frozen core embedded, or the active orbitals with fold_core)
+        self.n_core, self.n_act = fragment.xr_n_core, fragment.n_act
+        self.n_mo = fragment.xr_n_mo
         self.active_small, self.overlaps = active_small, overlaps
         # the budget is shared by the explicit densities cached here and the density engines hummr keeps between
         # the calls (ket sides, block operators, normal-ordering rest densities; without a budget hummr's default)

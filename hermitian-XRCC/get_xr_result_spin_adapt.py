@@ -173,7 +173,7 @@ def build_frag_densities(dens_builder, frag_name, states, xr_level, n_elec_ref, 
     options = {}
     if hasattr(dens_builder, "engine"):    # hummr backend (the reference backend of the tests has no such options)
         fragment = dens_builder.engine.fragments[frag_name]
-        memory_budget = apply_memory_budget(resolve_memory_budget(memory_budget, fragment.orbitals.shape[1], fragment.n_act,
+        memory_budget = apply_memory_budget(resolve_memory_budget(memory_budget, fragment.xr_n_mo, fragment.n_act,
                                                                   xr_level, states))
         options = dict(streamed=streamed, memory_budget=memory_budget)
     if bra_states is None:

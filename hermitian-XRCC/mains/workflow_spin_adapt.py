@@ -26,7 +26,7 @@ import os
 # numpy / MKL are loaded; an explicit export, e.g. in a job script, takes precedence; todo_bridge_performance.md R3)
 os.environ.setdefault("MKL_THREADING_LAYER", "GNU")
 
-from get_ints import get_ints
+from get_ints import get_ints, projected_overlap
 from get_xr_result_spin_adapt import get_xr_states, get_leakage_metric_states, build_frag_densities, check_overlap, overlap_matrices, overlap_truncation, local_sectors, dimer_labels
 from state_solver_csf import optimize_states, count_states, unit_vector_pool, save_states, load_states
 import qode.math.tensornet as tensornet
@@ -60,8 +60,32 @@ def run_xr(displacement, max_iter, xr_order_final=0, xr_order_solver=0, dens_fil
            overlap_max_cycles=4, leakage_metric_order=None, leakage_pair_thresh=None, metric_pair_thresh=None,
            leakage_v_thresh={2: 1e-5}, leakage_pair_slots=2.5, pair_rotation=False, bridge_strong="auto", bridge_out=None,
            bridge_mode="factorized", bridge_pair_thresh=None, bridge_closure_thresh=1e-8,
-           bridge_weak_rtol=1e-4, bridge_sigma_thresh=0.9, bridge_v_thresh=None, transform_chunks=False, target_weights=None, eval_states=None):
+           bridge_weak_rtol=1e-4, bridge_sigma_thresh=0.9, bridge_v_thresh=None, transform_chunks=False, target_weights=None, eval_states=None,
+           fold_core=True, integrals="ri", aux_basis="hummr"):
     """
+    fold_core:             the frozen core orbitals of both fragments are orthonormalized jointly and folded into the
+                           one-electron operator (get_ints fold_core, fold_frozen_core): the core potential of fragment m
+                           becomes part of its nuclear attraction U[m], the core energies part of the nuclear repulsion,
+                           and all integrals, densities (hummr fragment fold_core: active-space densities, no frozen-core
+                           embedding) and XR contractions run over the active orbitals only.  Exact for the frozen core
+                           (no core-core overlap terms in the S expansion), and the densities no longer grow with the
+                           core (n_core + n_act orbitals per fragment and the core terms of the streamed types otherwise).
+                           False: the core is embedded into the densities and treated by the XR expansion (the results
+                           of results_xr_order_states.tex before the folding)
+    integrals:             "exact": the two-electron integrals from the AO four-index tensor of lible (transformed to the
+                           fragment orbitals, the complete AO tensor is held); "ri": RI (density fitting) with aux_basis,
+                           built by lible in batches directly in the (core-projected) fragment orbitals (get_ints
+                           integrals="ri", Qode pybind_lible_ints.RI_factors); with fold_core only the core and active
+                           orbitals are transformed, which makes large molecules (e.g. acene dimers) possible
+    aux_basis:             the auxiliary basis of integrals="ri" (lible name or hummr name, e.g. def2-JK), or "hummr": the
+                           AuxBasis of the hummr input (which then has to use Ints RI)
+    Basis check: the basis of the integrals (basis, Qode/lible) and of hummr (the Basis of hummr_input, from which the
+    orbitals and states of every fragment come) have to agree, also the auxiliary basis if both use RI.  Every fragment
+    is checked against the input it is initialized from (fragments could in principle have different bases and
+    methods; here both are the same molecule, B possibly with its own rotated input), see
+    hummr_dens.pybind_interface.check_basis_consistency: a different main or auxiliary basis is an error, a different
+    two-electron treatment (exact in XR, RI in hummr, or vice versa) is reported.  hummr itself is initialized from its
+    input file only, so the check reads the General block of these files (user-defined basis files are not checked).
     target_state:          root (0: the lowest one of the target block, target_charge and target_multiplicity) or list
                            of roots, e.g. [0, 1], for which the fragment states are optimized (state averaging: the
                            solver compresses with the reduced density matrix averaged over the target roots with
@@ -260,7 +284,7 @@ def run_xr(displacement, max_iter, xr_order_final=0, xr_order_solver=0, dens_fil
     if eval_states is None:
         eval_states = target_state
     n_frag = 2
-    def assemble(mos, core):
+    def assemble(mos, core, active=None):
         """the displaced fragments with the MO coefficients mos[m] and the frozen core MOs core (empty for all-electron
         inputs; projected out of the valence in get_ints, the densities already include the doubly occupied core, see
         density_providers/hummr_dens embed_frozen_core)"""
@@ -275,6 +299,8 @@ def run_xr(displacement, max_iter, xr_order_final=0, xr_order_solver=0, dens_fil
             Be.basis.AOcode = basis
             Be.basis.core = core
             Be.basis.MOcoeffs = mos[m]
+            if active is not None:
+                Be.basis.active = list(active)    # (the orbitals kept by get_ints fold_core; default: all non-core)
             frags.append(Be)
         return frags
     # the core projection (get_ints.direct_CoreProj) alone does not retain the orthonormality of the valence orbitals
@@ -312,7 +338,7 @@ def run_xr(displacement, max_iter, xr_order_final=0, xr_order_solver=0, dens_fil
         from hummr_dens.pybind_interface import frozen_core_from_input
         mo_scf = read_orbitals(orbital_file(hummr_input))
         n_core_in, n_act_in = frozen_core_from_input(hummr_input, mo_scf.shape[1])[:2]
-        ints_scf = get_ints(assemble([mo_scf, mo_scf], list(range(n_core_in))), True, timer(), spin_ints=False, backend="lible")
+        ints_scf = projected_overlap(assemble([mo_scf, mo_scf], list(range(n_core_in))), timer(), backend="lible")
         S_val = valence_overlap(ints_scf, (0, 1), n_core_in, n_act_in)
         ints_scf = None
         early = (mo_scf, n_core_in, S_val) + tuple(corresponding_rotations(S_val))
@@ -427,17 +453,31 @@ def run_xr(displacement, max_iter, xr_order_final=0, xr_order_solver=0, dens_fil
     # "Assemble" the supersystem for the displaced fragments and get integrals
     #########
 
-    BeN = assemble(frag_mos or [mo_coeffs] * n_frag, dens_builder.frozen_core(frag_name))
+    hummr_main = dens_builder.engine.fragments[frag_name]
+    hummr_main.fold_core = fold_core    # active-space densities without the frozen-core embedding (get_ints fold_core)
+    BeN = assemble(frag_mos or [mo_coeffs] * n_frag, dens_builder.frozen_core(frag_name),
+                   range(hummr_main.n_core, hummr_main.n_core + hummr_main.n_act))
+    # the basis (and auxiliary basis) of the integrals has to be the one of the hummr input of every fragment (B: its
+    # own rotated input with pair_rotation="first", otherwise A's); hummr is initialized from these files only
+    from hummr_dens.pybind_interface import check_basis_consistency, hummr_basis_info
+    if integrals == "ri" and aux_basis == "hummr":
+        aux_basis = hummr_basis_info(hummr_input)["aux_basis"]
+        if aux_basis in (None, "auto"):
+            raise ValueError(f'integrals="ri" with aux_basis="hummr" requires an explicit AuxBasis in {hummr_input}')
+    check_basis_consistency(BeN, [hummr_input, hummr_input_B if frag_mos is not None else hummr_input],
+                            integrals=integrals, aux_basis=aux_basis)
+    int_args = dict(spin_ints=False, backend="lible", fold_core=fold_core, integrals=integrals,
+                    aux_basis=aux_basis if integrals == "ri" else None)
 
     int_timer = timer()
-    ints = get_ints(BeN, project_core, int_timer, spin_ints=False, backend="lible")
+    ints = get_ints(BeN, project_core, int_timer, **int_args)
     pair_ints_cache = {}
     def pair_ints(thresh):
         """the integrals with the inter-fragment overlap restricted to the orbital pairs above thresh (None: ints)"""
         if thresh is None:
             return ints
         if thresh not in pair_ints_cache:
-            pair_ints_cache[thresh] = get_ints(BeN, project_core, int_timer, spin_ints=False, backend="lible", pair_thresh=thresh)
+            pair_ints_cache[thresh] = get_ints(BeN, project_core, int_timer, pair_thresh=thresh, **int_args)
         return pair_ints_cache[thresh]
     # the integrals of the approximated orders (see leakage_pair_thresh, metric_pair_thresh), for all evaluations
     leakage_ints = {k: pair_ints(th) for k, th in (leakage_pair_thresh or {}).items()}
@@ -505,7 +545,8 @@ def run_xr(displacement, max_iter, xr_order_final=0, xr_order_solver=0, dens_fil
     if pair_rotation == "first":
         hummr_frag = dens_builder.engine.fragments[frag_name]
         n_core, n_act = hummr_frag.n_core, hummr_frag.n_act
-        dev = np.abs(valence_overlap(ints, (0, 1), n_core, n_act) - np.diag(sigma)).max()
+        n_core_x = hummr_frag.xr_n_core    # the offset of the active orbitals in the integrals (0 with fold_core)
+        dev = np.abs(valence_overlap(ints, (0, 1), n_core_x, n_act) - np.diag(sigma)).max()
         print(f"pair rotation (first): max deviation of S_AB from diag(sigma) {dev:.1e}")
     elif pair_rotation:
         from pair_rotation import corresponding_rotations, valence_overlap, rotated_mo_coeffs, StateRotation
@@ -513,15 +554,16 @@ def run_xr(displacement, max_iter, xr_order_final=0, xr_order_solver=0, dens_fil
             raise NotImplementedError('pair_rotation after the optimization requires the complete CSF spaces (use "first")')
         hummr_frag = dens_builder.engine.fragments[frag_name]
         n_core, n_act = hummr_frag.n_core, hummr_frag.n_act
-        R_A, R_B, sigma = corresponding_rotations(valence_overlap(ints, (0, 1), n_core, n_act))
+        n_core_x = hummr_frag.xr_n_core    # the offset of the active orbitals in the integrals (0 with fold_core)
+        R_A, R_B, sigma = corresponding_rotations(valence_overlap(ints, (0, 1), n_core_x, n_act))
         for frag, R in enumerate((R_A, R_B)):
             BeN[frag].basis.MOcoeffs = rotated_mo_coeffs(BeN[frag].basis.MOcoeffs, n_core, R)
             states[frag] = StateRotation(hummr_frag, R)(states[frag])
-        ints = get_ints(BeN, project_core, int_timer, spin_ints=False, backend="lible")
+        ints = get_ints(BeN, project_core, int_timer, **int_args)
         pair_ints_cache.clear()
         leakage_ints = {k: pair_ints(th) for k, th in (leakage_pair_thresh or {}).items()}
         metric_ints = {k: pair_ints(th) for k, th in (metric_pair_thresh or {}).items()}
-        dev = np.abs(valence_overlap(ints, (0, 1), n_core, n_act) - np.diag(sigma)).max()
+        dev = np.abs(valence_overlap(ints, (0, 1), n_core_x, n_act) - np.diag(sigma)).max()
         print(f"pair rotation: sigma = {np.array2string(sigma[::-1], precision=4)} (strongest first, the last active "
               f"orbitals), max deviation of the rotated S_AB from diag(sigma) {dev:.1e}")
     bridge_en = {}     # {n: E(n)} of the exact-bridge ansatz (factorized mode)
@@ -547,6 +589,7 @@ def run_xr(displacement, max_iter, xr_order_final=0, xr_order_solver=0, dens_fil
             weak_layout = dens_builder.csf_layout(bridge_frag_name)
             bridge_states = [map_states(states[frag], layout, weak_layout) for frag in range(n_frag)]
             hummr_frag = dens_builder.engine.fragments[bridge_frag_name]
+            hummr_frag.fold_core = fold_core
         splitter = StrongSplit(hummr_frag, range(n_act - bridge_strong, n_act), selected=selected_cfgs is not None)
         # {(chg, mult): {path: (sector, weak parts (n_states, dim))}} per fragment (the input of the bridge densities)
         split_states = [{(chg, mult): splitter(chg, mult, vecs) for chg, by_mult in bridge_states[frag].items()
@@ -592,7 +635,7 @@ def run_xr(displacement, max_iter, xr_order_final=0, xr_order_solver=0, dens_fil
             from bridge_mixed import WeakOperators, MixedEvaluator
             weak_dens = [add_extra_densities(hummr_frag, weak_bases[frag], weak_densities(frag, 2)) for frag in range(n_frag)]
             from get_xr_result_spin_adapt import resolve_memory_budget
-            budget = resolve_memory_budget(memory_budget, hummr_frag.orbitals.shape[1], n_act, 2, weak_bases[0].states())
+            budget = resolve_memory_budget(memory_budget, hummr_frag.xr_n_mo, n_act, 2, weak_bases[0].states())
             # the order 2 with the overlap restricted to the pairs above bridge_pair_thresh (all of its terms, also
             # the biorthogonalization and sigma of the mixed terms), the orders 0 and 1 exact
             runs = [(ints, sigma, None)] if bridge_pair_thresh is None or nmax_b < 2 else \
@@ -601,11 +644,11 @@ def run_xr(displacement, max_iter, xr_order_final=0, xr_order_solver=0, dens_fil
             # intermediates of their XR builds are released before the mixed terms (which use neither)
             assemblies = []
             for run_ints, run_sigma, orders in runs:
-                strong_mos = [n_core + n_act - bridge_strong + i for i in range(bridge_strong)]
+                strong_mos = [n_core_x + n_act - bridge_strong + i for i in range(bridge_strong)]
                 assembly = BridgeAssembly(split_states, weak_bases, weak_dens, run_ints, strong_mos, sigma[-bridge_strong:], nmax_b,
                                           hummr_frag._n_act_elec + hummr_frag._input_charge, pair_slots=leakage_pair_slots,
                                           v_thresh=bridge_v_thresh)
-                mats = assembly.compute(products, n_core=n_core, n_act=n_act, orders=orders)
+                mats = assembly.compute(products, n_core=n_core_x, n_act=n_act, orders=orders)
                 for name in ("S", "H_weak", "H_strong"):
                     mat = np.array(mats[name])
                     out[name] = mat if name not in out else out[name] + mat
@@ -614,7 +657,7 @@ def run_xr(displacement, max_iter, xr_order_final=0, xr_order_solver=0, dens_fil
             weak_dens = None
             release_xr_caches(hummr_frag, budget)
             for assembly, run_ints, run_sigma, orders in assemblies:
-                M_act, G_act = active_integrals(run_ints, n_core, n_act)
+                M_act, G_act = active_integrals(run_ints, n_core_x, n_act)
                 mixed = MixedEvaluator(assembly, [WeakOperators(hummr_frag, weak_bases[frag], assembly.n_val) for frag in range(n_frag)],
                                        M_act, G_act, run_sigma, n_act, nmax_b, memory_budget=budget,
                                        orders=orders).compute(products)
@@ -628,7 +671,7 @@ def run_xr(displacement, max_iter, xr_order_final=0, xr_order_solver=0, dens_fil
             def build_rect(frag, ket, bra):
                 return build_frag_densities(dens_builder, frag_name, ket, 2, BeN[frag].n_elec_ref, bra_states=bra,
                                             streamed=streamed, memory_budget=memory_budget)
-            glued = GluedAssembly(splitter, split_states, weak_bases, states, build_rect, ints, n_core + n_act - 1,
+            glued = GluedAssembly(splitter, split_states, weak_bases, states, build_rect, ints, n_core_x + n_act - 1,
                                   sigma[-1], nmax_b, hummr_frag._n_act_elec + hummr_frag._input_charge).compute(products)
             out.update(S_A=np.array(glued["S"]), H_A=np.array(glued["H"]))
             glued = None
@@ -819,6 +862,12 @@ if __name__ == "__main__":
                                              # written to selection_<input>_<eps>_<R>, reuse it with selected_spaces_dir)
                                              bridge_strong=1, bridge_out="bridge_ccdz_3.0.npz", bridge_mode="factorized",
                                              bridge_pair_thresh=0.1, bridge_weak_rtol=1e-4, bridge_closure_thresh=1e-8,
+                                             # frozen 1s folded into the one-electron operator (exact for the frozen core,
+                                             # active-space densities); integrals="ri" for RI with the AuxBasis of the
+                                             # hummr input.  basis (Qode/lible integrals) and the Basis (and AuxBasis, if
+                                             # both use RI) of hummr_input must agree: hummr reads them from its input
+                                             # file, run_xr checks every fragment against its input (check_basis_consistency)
+                                             fold_core=True, integrals="ri",
                                              **solver_args)
     print("solver energies (enlarged state spaces):  ", solver_en)
     print("solver energies (compressed state spaces):", reduced_en)
